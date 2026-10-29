@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kapa Trader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #071026; --bg-2: #0a1530; --panel: #0d1a3a; --panel-2: #102148; --line: #1d2e5c; --line-2: #2a3f78;
+    --text: #eef2ff; --muted: #93a3cc; --gold: #f5c542; --gold-2: #e0a91a; --lime: #c9e265;
+    --blue: #2563eb; --blue-2: #1d4fd8; --blue-glow: #3b82f6; --green: #18b26b; --green-2: #22c57a; --red: #ef4458;
+    --teal: #0f5f7a; --radius: 16px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Outfit", system-ui, -apple-system, sans-serif; }
+  body { min-height: 100vh; background: radial-gradient(900px 500px at 50% 120px, #11255c 0%, var(--bg) 70%) fixed; overscroll-behavior-y: none; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .hidden { display: none !important; }
+  .app { max-width: 760px; margin: 0 auto; padding-bottom: 96px; }
+
+  /* ---------- Header ---------- */
+  .hdr { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 14px; padding: 10px 16px;
+    background: #081127; border-bottom: 1px solid var(--line); }
+  .burger { background: none; border: 0; padding: 4px; display: grid; gap: 4px; }
+  .burger i { display: block; width: 18px; height: 2px; background: #c9d3f0; border-radius: 2px; }
+  .acct { flex: 1; min-width: 0; line-height: 1.15; }
+  .acct-btn { background: none; border: 0; padding: 0; text-align: left; display: block; }
+  .acct-kind { font-size: 13px; color: var(--green-2); display: inline-flex; align-items: center; gap: 4px; }
+  .acct-kind.demo { color: var(--gold); }
+  .acct-kind svg { width: 12px; height: 12px; }
+  .acct-bal { font-size: 17px; font-weight: 600; letter-spacing: .2px; }
+  .transfer { background: #0f1b3d; border: 1px solid var(--line); border-radius: 12px; padding: 9px 16px; font-weight: 700; text-decoration: none; color: var(--text); }
+  .acct-menu { position: absolute; top: 58px; left: 50px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; padding: 6px; min-width: 240px; box-shadow: 0 20px 40px rgba(0,0,0,.5); }
+  .acct-menu button { display: flex; justify-content: space-between; width: 100%; background: none; border: 0; padding: 10px 12px; border-radius: 8px; text-align: left; }
+  .acct-menu button:hover, .acct-menu button.on { background: var(--panel-2); }
+
+  /* ---------- Pill nav ---------- */
+  .navwrap { position: sticky; top: 59px; z-index: 25; padding: 12px 16px 14px; background: linear-gradient(180deg, #081127 0%, rgba(8,17,39,.92) 100%); }
+  .nav { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 8px 10px; border-radius: 14px;
+    background: linear-gradient(90deg, #0f1d44 0%, #13307c 55%, var(--blue) 100%); box-shadow: inset 0 -4px 0 var(--blue); }
+  .nav::-webkit-scrollbar { display: none; }
+  .pill { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; white-space: nowrap;
+    background: rgba(10,20,50,.85); border: 1px solid #2b3d74; font-weight: 600; font-size: 14.5px; }
+  .pill svg { width: 18px; height: 18px; }
+  .pill.on { background: linear-gradient(180deg, #2f6ff5, #1f55e0); border-color: #5b8cff; box-shadow: 0 0 0 2px rgba(91,140,255,.25), 0 6px 18px rgba(37,99,235,.45); }
+  .pill .chip { font-size: 10px; font-weight: 800; border: 1.5px solid currentColor; border-radius: 6px; padding: 1px 4px; }
+
+  /* ---------- Orb ---------- */
+  .orb { position: fixed; z-index: 28; right: max(16px, calc(50% - 364px)); top: 262px; width: 66px; height: 66px; border-radius: 50%; border: 0;
+    background: radial-gradient(circle at 35% 30%, #6aa2ff 0%, #2b62e8 45%, #163a9e 100%);
+    box-shadow: 0 0 0 3px rgba(245,197,66,.75), 0 0 0 6px rgba(37,99,235,.25), 0 0 26px rgba(59,130,246,.8);
+    color: #fff; font-weight: 800; font-size: 24px; letter-spacing: .5px; display: grid; place-items: center; }
+  .orb::after { content: ""; position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; border-radius: 50%; background: #9aa5c0; border: 2px solid #fff; }
+  .orb.live::after { background: #2ee58a; }
+  .orb .badge { position: absolute; right: -16px; bottom: 2px; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px;
+    background: var(--gold); color: #2a1d00; letter-spacing: .5px; }
+
+  /* ---------- Generic card ---------- */
+  .page { padding: 0 16px; }
+  .card { position: relative; background: linear-gradient(180deg, rgba(17,33,74,.85), rgba(10,21,48,.9)); border: 1px solid var(--line);
+    border-radius: 22px; padding: 26px 20px 22px; margin-bottom: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .eyebrow { text-align: center; color: var(--gold); font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .title { text-align: center; font-size: 34px; font-weight: 600; margin: 4px 0 6px; letter-spacing: -.5px; }
+  .lede { text-align: center; color: var(--muted); margin: 0 auto 20px; max-width: 430px; font-size: 15.5px; }
+  .fld { margin-bottom: 16px; }
+  .fld label { display: block; font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+  .inp { width: 100%; background: #071029; border: 1px solid var(--line-2); border-radius: 12px; padding: 13px 16px; font-size: 18px; font-weight: 600; }
+  .inp:focus { outline: none; border-color: #4b7bff; box-shadow: 0 0 0 3px rgba(75,123,255,.2); }
+  .inp.sm { font-size: 15px; padding: 11px 14px; font-weight: 500; }
+  .err-line { color: var(--red); text-align: center; font-size: 14px; margin: -4px 0 10px; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+
+  /* ---------- Scanner ---------- */
+  .scanner { position: relative; width: 250px; height: 250px; margin: 18px auto 8px; display: grid; place-items: center; border: 0; background: none; padding: 0; }
+  .scanner .ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px dashed rgba(245,197,66,.85); }
+  .scanner .ring2 { position: absolute; inset: 26px; border-radius: 50%; border: 1px dotted rgba(91,140,255,.65); }
+  .scanner .arc { position: absolute; inset: 48px; border-radius: 50%; background: conic-gradient(from 0deg, rgba(245,197,66,0) 0deg, rgba(245,197,66,.55) 50deg, rgba(245,197,66,0) 95deg); opacity: 0; }
+  .scanner .core { position: relative; width: 150px; height: 150px; border-radius: 50%; display: grid; place-content: center; text-align: center;
+    background: radial-gradient(circle at 50% 40%, #12224c, #081330); border: 2px solid rgba(245,197,66,.65); box-shadow: inset 0 0 30px rgba(0,0,0,.6), 0 0 0 8px rgba(13,26,58,.8); }
+  .scanner .core b { font-size: 21px; color: var(--gold); line-height: 1.1; }
+  .scanner .core small { color: #d7def5; font-size: 13px; margin-top: 6px; font-weight: 600; }
+  .scanner.busy .ring { animation: spin 10s linear infinite; border-color: rgba(147,163,204,.35); }
+  .scanner.busy .arc { opacity: 1; animation: spin 1.6s linear infinite; }
+  .scanner.busy .core { border-color: rgba(147,163,204,.25); }
+  .scanner.busy .core b { color: #6f7ea6; } .scanner.busy .core small { color: #6f7ea6; }
+  .scanner.off { opacity: .5; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .scan-msg { text-align: center; color: #d7def5; font-size: 15px; min-height: 22px; margin: 6px 0 4px; }
+
+  .sig { background: linear-gradient(180deg, #0f1d42, #0a1532); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; margin-top: 16px; }
+  .sig.best { border-color: rgba(245,197,66,.55); box-shadow: 0 0 0 1px rgba(245,197,66,.15) inset; }
+  .sig .rank { font-size: 12.5px; letter-spacing: .5px; color: #cdd6f2; }
+  .sig .rank .tag { color: #201600; background: var(--gold); border-radius: 6px; padding: 2px 6px; font-weight: 800; margin-right: 6px; font-size: 11px; }
+  .sig h4 { margin: 6px 0 2px; font-size: 19px; font-weight: 500; }
+  .sig .pct { color: var(--gold); font-size: 27px; font-weight: 700; }
+  .sig p { margin: 2px 0; font-size: 13.5px; color: #dfe5f7; }
+  .sig p.dim { color: var(--muted); }
+  .sig .neg { color: #ff8a97; } .sig .pos { color: #5fe3a1; }
+  .use { margin-top: 14px; width: 100%; text-align: left; background: #120f05; border: 1px solid #4a3d14; color: var(--gold); border-radius: 12px; padding: 12px 14px; font-weight: 700; font-size: 14px; }
+
+  /* ---------- Bot builder (block style) ---------- */
+  .ws { display: flex; gap: 0; background: #05070d; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); min-height: 60vh; margin: 0 -16px; }
+  .tools { width: 46px; flex: none; background: #0b1328; display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 18px 0; color: #c7d1ee; }
+  .tools button { background: none; border: 0; padding: 0; color: inherit; }
+  .tools svg { width: 22px; height: 22px; }
+  .canvas { flex: 1; min-width: 0; padding: 16px 12px 30px; overflow-x: auto;
+    background-image: radial-gradient(#1a2238 1px, transparent 1px); background-size: 22px 22px; }
+  .qs { display: inline-block; background: linear-gradient(180deg, #2f6ff5, #1f55e0); border: 0; border-radius: 12px; padding: 11px 20px; font-weight: 700; margin-bottom: 16px; box-shadow: 0 6px 18px rgba(37,99,235,.45); }
+  .blk { background: var(--teal); border-radius: 6px 6px 6px 0; padding: 8px 12px; font-size: 14.5px; color: #e9f5fb; display: inline-flex; align-items: center; gap: 8px; min-width: 300px; }
+  .blk-body { border-left: 14px solid var(--teal); padding: 6px 0 6px 0; display: flex; flex-direction: column; gap: 6px; }
+  .row-blk { background: #eef1f6; color: #1e2435; border-radius: 6px; padding: 6px 10px; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13.5px; width: max-content; max-width: 100%; }
+  .row-blk.set { background: #fff; }
+  .row-blk .var { background: #1b1b1b; color: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12.5px; }
+  .row-blk select, .row-blk input { background: #1b1b1b; color: #fff; border: 0; border-radius: 999px; padding: 4px 10px; font-size: 12.5px; max-width: 170px; }
+  .row-blk input { width: 84px; text-align: center; }
+  .row-blk input:disabled, .row-blk select:disabled { opacity: .6; }
+  .run-once { background: var(--teal); border-radius: 0 6px 6px 0; padding: 7px 12px; font-size: 14.5px; color: #e9f5fb; width: max-content; min-width: 300px; }
+  .blk-end { background: var(--teal); height: 12px; width: 300px; border-radius: 0 0 6px 6px; }
+
+  /* ---------- Dashboard ---------- */
+  .dash-top { display: flex; align-items: center; justify-content: center; position: relative; padding: 8px 0; background: #0b1631; margin: 0 -16px; border-bottom: 1px solid var(--line); }
+  .dash-top .chev { width: 26px; height: 26px; color: #c7d1ee; }
+  .dash-top .reset { position: absolute; right: 16px; background: #0a1430; border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 16px; font-weight: 700; color: #d9e0f5; }
+  .dash-top .reset:disabled { color: #5c6a91; }
+  .segs { display: grid; grid-template-columns: repeat(3, 1fr); background: #0b1631; border: 1px solid var(--line); border-radius: 16px; padding: 6px; margin: 14px 0; }
+  .seg { background: none; border: 0; border-radius: 12px; padding: 10px 0; color: #c2cbe6; font-size: 16px; position: relative; }
+  .seg.on { background: linear-gradient(180deg, #16295c, #12234e); color: #fff; font-weight: 700; }
+  .seg.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 3px; background: var(--blue-glow); border-radius: 2px; }
+  .dl-row { display: flex; gap: 12px; padding: 4px 0 14px; border-bottom: 1px solid var(--line); }
+  .ghost { background: transparent; border: 1px solid #3a4e86; border-radius: 6px; padding: 7px 18px; font-weight: 700; color: #fff; }
+  .ghost:disabled { color: #56648c; border-color: #26365f; }
+  .tx-head, .tx-row { display: grid; grid-template-columns: 70px 1fr 1fr; gap: 8px; align-items: center; padding: 14px 4px; }
+  .tx-head { color: #dfe5f7; font-weight: 600; font-size: 15px; border-bottom: 1px solid var(--line); }
+  .tx-head span:nth-child(2) { text-align: center; } .tx-head span:nth-child(3) { text-align: right; }
+  .tx-list { min-height: 300px; max-height: 52vh; overflow: auto; }
+  .tx-row { border-bottom: 1px solid #14234a; font-size: 14px; cursor: pointer; }
+  .tx-row.sel { background: rgba(37,99,235,.12); }
+  .tx-row .ico { display: flex; gap: 12px; align-items: center; }
+  .tx-row .ico svg { width: 22px; height: 22px; }
+  .tx-row .spots { display: grid; gap: 6px; justify-content: center; }
+  .tx-row .spots div { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+  .tx-row .spots i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .tx-row .spots .en { background: #ff3b50; box-shadow: 0 0 0 2px #fff inset; border: 1px solid #ff3b50; }
+  .tx-row .spots .ex { border: 1.5px solid #c7d1ee; }
+  .tx-row .px { text-align: right; font-variant-numeric: tabular-nums; }
+  .tx-row .px div:last-child { margin-top: 6px; font-size: 13px; }
+  .up { color: var(--green-2); } .down { color: var(--red); }
+  .empty { text-align: center; padding: 60px 10px 30px; color: #dfe5f7; }
+  .empty svg { width: 54px; height: 54px; color: #8e9bc0; margin-bottom: 14px; }
+  .empty b { display: block; font-size: 16px; margin-bottom: 8px; }
+  .empty small { color: var(--muted); }
+  .empty ul { display: inline-block; text-align: left; color: #dfe5f7; margin: 10px 0 0; padding-left: 20px; }
+  .journal { font-size: 13px; max-height: 55vh; overflow: auto; }
+  .journal div { padding: 9px 4px; border-bottom: 1px solid #14234a; }
+  .journal time { color: var(--muted); margin-right: 8px; font-variant-numeric: tabular-nums; }
+  .journal .s { color: var(--green-2); } .journal .e { color: #ff8a97; } .journal .w { color: var(--gold); }
+  .summary-box { padding: 8px 4px; }
+  .summary-box dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+  .summary-box dt { color: var(--muted); } .summary-box dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .whats { text-align: right; padding: 10px 6px 6px; } .whats button { background: none; border: 0; color: #dfe5f7; text-decoration: underline; font-weight: 600; font-size: 13.5px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 -10px; }
+  .stats div { background: #0c1734; border: 1px solid var(--line); border-radius: 6px; padding: 10px 4px; text-align: center; }
+  .stats small { display: block; font-weight: 600; font-size: 14px; color: #dfe5f7; margin-bottom: 4px; }
+  .stats b { font-weight: 400; font-size: 14px; color: #c2cbe6; font-variant-numeric: tabular-nums; }
+
+  /* ---------- Run bar ---------- */
+  .runbar { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; background: #091228; border-top: 1px solid var(--line); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .runbar-in { max-width: 728px; margin: 0 auto; display: flex; gap: 0; align-items: stretch; }
+  .runbtn { display: inline-flex; align-items: center; gap: 10px; border: 0; border-radius: 4px 0 0 4px; padding: 0 22px; min-height: 54px; font-size: 18px; font-weight: 600; color: #fff; background: var(--green); }
+  .runbtn svg { width: 22px; height: 22px; }
+  .runbtn.stop { background: var(--blue-2); }
+  .runbtn:disabled { opacity: .6; }
+  .runstat { flex: 1; min-width: 0; border: 1px solid #26365f; border-left: 0; border-radius: 0 4px 4px 0; position: relative; display: grid; place-items: center; padding: 0 12px; overflow: hidden; }
+  .runstat span { position: relative; z-index: 1; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .runstat .fill { position: absolute; inset: 0; width: 0; }
+  .runstat.won .fill { width: 100%; background: #0f3a2a; } .runstat.won span { color: #31e08e; }
+  .runstat.lost .fill { width: 100%; background: #3b1220; } .runstat.lost span { color: #ff6b7d; }
+  .prog { position: absolute; left: 14px; right: 14px; bottom: 10px; height: 4px; border-radius: 2px; background: #1b2747; }
+  .prog b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px; background: linear-gradient(90deg, #ef4458, #1bb98a); transition: width .5s; }
+  .prog i { position: absolute; top: -3px; width: 10px; height: 10px; border-radius: 50%; background: #2a3a66; transform: translateX(-50%); }
+  .prog i.on { background: #1bb98a; } .prog i.st { background: #ef4458; }
+  .runstat.won .prog, .runstat.lost .prog { display: none; }
+
+  /* ---------- Floating warn, toast, modals ---------- */
+  .warn-fab { position: fixed; z-index: 29; left: max(14px, calc(50% - 366px)); bottom: 100px; width: 46px; height: 46px; border-radius: 50%; border: 0;
+    background: #fff4dc; color: #e09b00; display: grid; place-items: center; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+  .warn-fab svg { width: 22px; height: 22px; }
+  .toasts { position: fixed; z-index: 60; left: 0; right: 0; bottom: 92px; display: grid; justify-items: center; gap: 8px; pointer-events: none; padding: 0 12px; }
+  .toast { pointer-events: auto; background: #fff; color: #161b2b; border-radius: 8px; padding: 12px 14px; max-width: 520px; width: 100%; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 14.5px; animation: up .25s ease-out; }
+  .toast span { flex: 1; } .toast a { color: #111; font-weight: 700; margin-left: 4px; }
+  .toast button { background: none; border: 0; font-size: 20px; line-height: 1; color: #222; padding: 0 2px; }
+  @keyframes up { from { transform: translateY(10px); opacity: 0; } }
+
+  .mask { position: fixed; inset: 0; z-index: 70; background: rgba(2,6,18,.78); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; padding: 16px; }
+  .mask.show { display: flex; }
+  .mbox { position: relative; width: 100%; max-width: 440px; border-radius: 20px; border: 1.5px solid rgba(245,197,66,.55); background: linear-gradient(180deg, #0f1c40, #0a132d); padding: 22px 20px 20px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .mclose { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid #3a4e86; background: rgba(10,20,50,.8); color: #fff; font-size: 18px; }
+  .mtitle { text-align: center; color: #fff; font-size: 22px; font-weight: 800; letter-spacing: 1px; margin: 4px 0 10px; }
+  .mtext { text-align: center; color: #c8d1ec; font-size: 14.5px; margin: 0 0 16px; }
+  .mbtn { width: 100%; border: 0; border-radius: 12px; padding: 14px; font-weight: 700; font-size: 16px; margin-top: 10px; }
+  .mbtn.gold { background: linear-gradient(90deg, #f7d64a, #eab308); color: #1f1600; }
+  .mbtn.lime { background: linear-gradient(90deg, #f8e46a, #c9e265); color: #1f1600; }
+  .mbtn.line { background: transparent; border: 1px solid #3a4e86; color: #fff; }
+  .hero { position: relative; height: 210px; border-radius: 14px; overflow: hidden; display: grid; place-items: center; margin-bottom: 14px;
+    background: radial-gradient(circle at 50% 55%, #1e4fc9 0%, #0b1b4a 45%, #050b1e 100%); }
+  .hero::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(91,140,255,.08) 0 1px, transparent 1px 26px), repeating-linear-gradient(0deg, rgba(91,140,255,.08) 0 1px, transparent 1px 26px); }
+  .hero .big { position: relative; font-size: 92px; font-weight: 800; color: #b9f3ff; text-shadow: 0 0 18px #39c6ff, 0 0 40px #2b7bff; letter-spacing: 2px; }
+  .hero .ring-h { position: absolute; width: 180px; height: 180px; border-radius: 50%; border: 2px solid rgba(57,198,255,.5); box-shadow: 0 0 30px rgba(57,198,255,.4) inset; animation: spin 14s linear infinite; border-style: dashed; }
+  .hero .online { position: absolute; top: 12px; right: 12px; font-size: 10px; letter-spacing: 1.5px; color: #c8d1ec; background: rgba(5,11,30,.7); border: 1px solid #2a3f78; border-radius: 999px; padding: 4px 8px; }
+  .hero .online::before { content: "●"; color: #2ee58a; margin-right: 4px; }
+  .note-box { background: rgba(10,20,50,.6); border: 1px solid #2a3f78; border-radius: 12px; padding: 14px; text-align: center; color: #c8d1ec; font-size: 14px; margin-bottom: 6px; }
+  .result-hero { position: relative; height: 300px; margin: -22px -20px 0; border-radius: 20px 20px 0 0; overflow: hidden;
+    background: radial-gradient(circle at 55% 40%, #2a6bd8 0%, #0d2a6e 35%, #050b1e 75%); }
+  .result-hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(3px 3px at 30% 30%, #ffb24a, transparent), radial-gradient(3px 3px at 62% 46%, #ffb24a, transparent), radial-gradient(2px 2px at 70% 22%, #ffb24a, transparent), radial-gradient(2px 2px at 44% 58%, #ffb24a, transparent), radial-gradient(2px 2px at 20% 64%, #ffb24a, transparent), repeating-linear-gradient(90deg, rgba(91,140,255,.06) 0 1px, transparent 1px 30px); }
+  .result-hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 60%; background: linear-gradient(180deg, transparent, #0a132d); }
+  .result-body { position: relative; margin-top: -90px; text-align: center; }
+  .rtag { display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(34,197,122,.45); background: rgba(6,30,20,.85); color: #5fe3a1; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 800; letter-spacing: 1.5px; }
+  .rtag::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #2ee58a; }
+  .rtag.bad { border-color: rgba(239,68,88,.5); background: rgba(40,8,14,.85); color: #ff8a97; } .rtag.bad::before { background: #ef4458; }
+  .rh1 { font-size: 34px; font-weight: 800; line-height: 1.05; margin: 14px 0 0; }
+  .rh2 { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .ramt { font-size: 52px; font-weight: 800; color: var(--gold); line-height: 1.1; margin: 6px 0 6px; text-shadow: 0 4px 30px rgba(245,197,66,.35); }
+  .ramt.bad { color: #ff6b7d; text-shadow: none; }
+
+  .drawer { position: fixed; inset: 0; z-index: 65; display: none; }
+  .drawer.show { display: block; }
+  .drawer .shade { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+  .drawer nav { position: absolute; top: 0; bottom: 0; left: 0; width: 280px; background: #0a142e; border-right: 1px solid var(--line); padding: 20px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .drawer nav b { font-size: 20px; margin: 0 8px 14px; }
+  .drawer nav a, .drawer nav button { display: block; text-align: left; background: none; border: 0; color: var(--text); text-decoration: none; padding: 12px 10px; border-radius: 10px; font-size: 15.5px; }
+  .drawer nav a:hover, .drawer nav button:hover { background: var(--panel-2); }
+
+  /* ---------- Connect / Admin ---------- */
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .btn { border: 0; border-radius: 12px; padding: 13px 18px; font-weight: 700; }
+  .btn.gold { background: linear-gradient(90deg, #f7d64a, #eab308); color: #1f1600; }
+  .btn.line { background: transparent; border: 1px solid #3a4e86; color: #fff; }
+  .btn:disabled { opacity: .5; }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
+  .alert { border-radius: 12px; padding: 12px 14px; font-size: 14px; margin-top: 14px; }
+  .alert.err { background: rgba(239,68,88,.1); border: 1px solid rgba(239,68,88,.4); color: #ffb3bb; }
+  .alert.warn { background: rgba(245,197,66,.08); border: 1px solid rgba(245,197,66,.35); color: #ffe39a; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .kv { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+  .kv div { background: #071029; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .kv small { color: var(--muted); display: block; font-size: 12px; } .kv b { font-size: 17px; }
+
+  @media (max-width: 420px) { .title { font-size: 30px; } .scanner { width: 230px; height: 230px; } .orb { width: 58px; height: 58px; font-size: 21px; top: 262px; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="hdr">
+    <button class="burger" id="burger" aria-label="Menu"><i></i><i></i><i></i></button>
+    <div class="acct">
+      <button class="acct-btn" id="acctBtn">
+        <span class="acct-kind" id="acctKind">Not connected</span>
+        <div class="acct-bal" id="acctBal">—</div>
+      </button>
+      <div class="acct-menu hidden" id="acctMenu"></div>
+    </div>
+    <a class="transfer" href="https://app.deriv.com/cashier/account-transfer" target="_blank" rel="noopener">Transfer</a>
+  </header>
+
+  <!-- Pill navigation -->
+  <div class="navwrap" id="navwrap">
+    <nav class="nav">
+      <button class="pill" data-page="admin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        Admin
+      </button>
+      <button class="pill on" data-page="scan"><span class="chip" data-brand-initials></span><span data-brand-upper></span></button>
+      <button class="pill" data-page="dash">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
+        Dashboard
+      </button>
+      <button class="pill" data-page="builder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5"/></svg>
+        Bot Builder
+      </button>
+    </nav>
+  </div>
+
+  <button class="orb" id="orb" aria-label="Open scanner"><span data-brand-initials></span><span class="badge" id="orbBadge">OFFLINE</span></button>
+
+  <!-- Connect page (shown until authorized) -->
+  <section class="page" data-view="connect">
+    <div class="card">
+      <div class="eyebrow" data-brand-upper></div>
+      <div class="title">Connect Deriv</div>
+      <p class="lede">Link your Deriv account to start. Your token is sent only to Deriv's own servers.</p>
+      <div class="fld">
+        <label for="token">API token</label>
+        <input class="inp sm" id="token" type="password" autocomplete="off" placeholder="Paste your Deriv API token">
+        <div class="hint">Create one at app.deriv.com → Settings → API token with <b>Read</b> + <b>Trade</b> scopes only. Never enable Payments or Admin.</div>
+      </div>
+      <div class="grid2">
+        <div class="fld"><label for="appId">App ID</label><input class="inp sm" id="appId" inputmode="numeric" value="1089"></div>
+        <div class="fld"><label for="server">Server</label><input class="inp sm" id="server" value="ws.derivws.com"></div>
+      </div>
+      <button class="mbtn gold" id="connectBtn">Connect with token</button>
+      <button class="mbtn line" id="oauthBtn">Log in with Deriv</button>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="remember"> Remember on this device</label>
+      <div id="connectErr" class="alert err hidden"></div>
+    </div>
+  </section>
+
+  <!-- Admin -->
+  <section class="page hidden" data-view="admin">
+    <div class="card">
+      <div class="eyebrow">Admin</div>
+      <div class="title">Account</div>
+      <div class="kv">
+        <div><small>Login ID</small><b id="aLogin">—</b></div>
+        <div><small>Type</small><b id="aType">—</b></div>
+        <div><small>Balance</small><b id="aBal">—</b></div>
+        <div><small>Connection</small><b id="aConn">—</b></div>
+      </div>
+      <div class="fld" style="margin-top:18px">
+        <label for="brandName">Bot name</label>
+        <input class="inp sm" id="brandName" maxlength="18">
+      </div>
+      <button class="mbtn line" id="logoutBtn">Disconnect</button>
+      <div class="alert warn">Trading synthetic indices carries a high risk of losing money. Every contract's payout is priced below its true odds, so the average result of each trade is a loss.</div>
+    </div>
+  </section>
+
+  <!-- Scanner (brand page) -->
+  <section class="page hidden" data-view="scan">
+    <div class="card">
+      <div class="eyebrow" data-brand-upper></div>
+      <div class="title">Activate <span data-brand></span></div>
+      <p class="lede">Set your stake and take-profit, then activate the scanner to compare live markets.</p>
+      <div class="fld"><label for="qStake">Stake (<span data-cur>USD</span>)</label><input class="inp" id="qStake" type="number" inputmode="decimal" min="0.35" step="0.01"></div>
+      <div class="fld"><label for="qTp">Take-profit (<span data-cur>USD</span>)</label><input class="inp" id="qTp" type="number" inputmode="decimal" min="0.01" step="0.01"></div>
+      <div class="fld"><label for="qSl">Stop-loss (<span data-cur>USD</span>)</label><input class="inp" id="qSl" type="number" inputmode="decimal" min="0.01" step="0.01"></div>
+      <div class="err-line hidden" id="qErr"></div>
+      <button class="scanner" id="scanner" aria-label="Start scan">
+        <div class="ring"></div><div class="ring2"></div><div class="arc"></div>
+        <div class="core"><b>Activate<br><span data-brand></span></b><small id="coreSub">Ready to scan</small></div>
+      </button>
+      <div class="scan-msg" id="scanMsg"></div>
+      <div id="sigs"></div>
+    </div>
+  </section>
+
+  <!-- Bot Builder -->
+  <section class="page hidden" data-view="builder">
+    <div class="ws">
+      <div class="tools">
+        <button title="Reset to defaults" id="bReset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+        <button title="Dashboard" data-go="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h6l2 2h10v10H3z"/></svg></button>
+        <button title="Scanner" data-go="scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4v16M8 6h10v4H8zM8 14h7v4H8z"/></svg></button>
+      </div>
+      <div class="canvas">
+        <button class="qs" data-go="scan">Quick strategy</button>
+        <div class="blk"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>1. Trade parameters</div>
+        <div class="blk-body">
+          <div class="row-blk">Market: <span class="var">Derived</span> › <span class="var">Continuous Indices</span> ›
+            <select id="symbol">
+              <option value="R_10">Volatility 10 Index</option><option value="R_25">Volatility 25 Index</option>
+              <option value="R_50">Volatility 50 Index</option><option value="R_75">Volatility 75 Index</option>
+              <option value="R_100" selected>Volatility 100 Index</option>
+              <option value="1HZ10V">Volatility 10 (1s) Index</option><option value="1HZ25V">Volatility 25 (1s) Index</option>
+              <option value="1HZ50V">Volatility 50 (1s) Index</option><option value="1HZ75V">Volatility 75 (1s) Index</option>
+              <option value="1HZ100V">Volatility 100 (1s) Index</option>
+            </select></div>
+          <div class="row-blk">Trade Type: <span class="var">Digits</span> ›
+            <select id="ctype">
+              <option value="DIGITOVER" selected>Over</option><option value="DIGITUNDER">Under</option>
+              <option value="DIGITMATCH">Matches</option><option value="DIGITDIFF">Differs</option>
+              <option value="DIGITEVEN">Even</option><option value="DIGITODD">Odd</option>
+            </select></div>
+          <div class="row-blk">Duration: <input id="duration" type="number" min="1" max="10" value="1"> Ticks</div>
+        </div>
+        <div class="run-once">Run once at start:</div>
+        <div class="blk-body">
+          <div class="row-blk set">set <span class="var" data-varname="initial-stake"></span> to <input id="stake" type="number" min="0.35" step="0.01" value="1"></div>
+          <div class="row-blk set">set <span class="var" data-varname="active-barrier"></span> to <select id="barrier"></select></div>
+          <div class="row-blk set">set <span class="var" data-varname="recovery-barrier"></span> to <select id="recovery"></select></div>
+          <div class="row-blk set">set <span class="var" data-varname="martingale-factor"></span> to <input id="martingale" type="number" min="1" step="0.1" value="1"></div>
+          <div class="row-blk set">set <span class="var" data-varname="maximum-stake"></span> to <input id="maxStake" type="number" min="0.35" step="0.01" value="10"></div>
+          <div class="row-blk set">set <span class="var" data-varname="maximum-losses"></span> to <input id="maxLosses" type="number" min="1" step="1" value="3"></div>
+          <div class="row-blk set">set <span class="var" data-varname="take-profit"></span> to <input id="takeProfit" type="number" min="0.01" step="0.01" value="10"></div>
+          <div class="row-blk set">set <span class="var" data-varname="stop-loss"></span> to <input id="stopLoss" type="number" min="0.01" step="0.01" value="10"></div>
+          <div class="row-blk set">set <span class="var" data-varname="max-trades"></span> to <input id="maxRuns" type="number" min="0" step="1" value="0"></div>
+          <div class="row-blk set">set <span class="var" data-varname="trade-delay"></span> to <input id="delay" type="number" min="0" step="0.5" value="1"> s</div>
+        </div>
+        <div class="blk-end"></div>
+        <p class="hint" style="max-width:420px;margin-top:16px">recovery-barrier: the prediction used after a loss ("same" keeps the active one). martingale-factor 1 = fixed stake. max-trades 0 = no limit. The bot stops at take-profit, stop-loss, maximum-losses in a row, or max-trades.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dashboard -->
+  <section class="page hidden" data-view="dash">
+    <div class="dash-top">
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      <button class="reset" id="resetBtn">Reset</button>
+    </div>
+    <div class="segs">
+      <button class="seg" data-seg="summary">Summary</button>
+      <button class="seg on" data-seg="tx">Transactions</button>
+      <button class="seg" data-seg="journal">Journal</button>
+    </div>
+
+    <div data-segview="tx">
+      <div class="dl-row"><button class="ghost" id="csvBtn">Download</button><button class="ghost" id="detailBtn">View Detail</button></div>
+      <div class="tx-head"><span>Type</span><span>Entry/Exit spot</span><span>Buy price and P/L</span></div>
+      <div class="tx-list" id="txList"></div>
+    </div>
+    <div data-segview="summary" class="hidden"><div class="summary-box" id="summaryBox"></div></div>
+    <div data-segview="journal" class="hidden"><div class="journal" id="journal"></div></div>
+
+    <div class="whats"><button id="whatsBtn">What's this?</button></div>
+    <div class="stats">
+      <div><small>Total stake</small><b id="sStake">0.00 USD</b></div>
+      <div><small>Total payout</small><b id="sPayout">0.00 USD</b></div>
+      <div><small>No. of runs</small><b id="sRuns">0</b></div>
+      <div><small>Contracts lost</small><b id="sLost">0</b></div>
+      <div><small>Contracts won</small><b id="sWon">0</b></div>
+      <div><small>Total profit/loss</small><b id="sPl">0.00 USD</b></div>
+    </div>
+  </section>
+</div>
+
+<!-- Run bar -->
+<div class="runbar hidden" id="runbar">
+  <div class="runbar-in">
+    <button class="runbtn" id="runBtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><span>Run</span></button>
+    <div class="runstat" id="runstat">
+      <div class="fill"></div>
+      <span id="botStatus">Bot is not running</span>
+      <div class="prog"><b id="progBar"></b><i style="left:0"></i><i style="left:50%"></i><i style="left:100%"></i></div>
+    </div>
+  </div>
+</div>
+
+<button class="warn-fab hidden" id="warnFab" aria-label="Risk warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg></button>
+<div class="toasts" id="toasts"></div>
+
+<!-- Side drawer -->
+<div class="drawer" id="drawer">
+  <div class="shade"></div>
+  <nav>
+    <b data-brand></b>
+    <button data-go="scan">Scanner</button>
+    <button data-go="builder">Bot Builder</button>
+    <button data-go="dash">Dashboard</button>
+    <button data-go="admin">Admin</button>
+    <a href="https://app.deriv.com/reports/profit" target="_blank" rel="noopener">Deriv reports ↗</a>
+    <a href="https://app.deriv.com/account/api-token" target="_blank" rel="noopener">Manage API tokens ↗</a>
+  </nav>
+</div>
+
+<!-- Activation modal -->
+<div class="mask" id="actModal">
+  <div class="mbox">
+    <button class="mclose" data-close>✕</button>
+    <div class="mtitle"><span data-brand-upper></span> ACTIVATED</div>
+    <div class="hero"><div class="ring-h"></div><div class="big" data-brand-initials></div><div class="online"><span data-brand-upper></span> CORE ONLINE</div></div>
+    <div class="note-box" id="actText"></div>
+    <button class="mbtn gold" id="actOk">Activate <span data-brand></span></button>
+    <button class="mbtn line" data-close>Cancel</button>
+  </div>
+</div>
+
+<!-- Result modal (take-profit / stop-loss) -->
+<div class="mask" id="resModal">
+  <div class="mbox" style="padding-top:22px">
+    <div class="result-hero"></div>
+    <button class="mclose" data-close>✕</button>
+    <div class="result-body">
+      <span class="rtag" id="resTag">PROFIT TARGET REACHED</span>
+      <div class="rh1" data-brand-upper></div>
+      <div class="rh2" id="resLine">hit a profit of</div>
+      <div class="ramt" id="resAmt">0.00 USD</div>
+      <button class="mbtn lime" data-close>Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic dialog -->
+<div class="mask" id="dlg">
+  <div class="mbox">
+    <div class="mtitle" id="dTitle" style="font-size:20px;letter-spacing:0"></div>
+    <p class="mtext" id="dText" style="white-space:pre-line"></p>
+    <button class="mbtn gold" id="dOk">OK</button>
+    <button class="mbtn line" id="dCancel">Cancel</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return sessionStorage.getItem(k) ?? localStorage.getItem(k); } catch { return null; } },
+    set(k, v, persist) { try { (persist ? localStorage : sessionStorage).setItem(k, v); } catch {} },
+    del(k) { try { sessionStorage.removeItem(k); localStorage.removeItem(k); } catch {} },
+  };
+
+  // ---------- Branding (rename in Admin, or change the default here) ----------
+  const DEFAULT_BRAND = 'Kapa';
+  function applyBrand(name) {
+    name = (name || DEFAULT_BRAND).trim() || DEFAULT_BRAND;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const initials = name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+    document.querySelectorAll('[data-brand]').forEach((el) => el.textContent = name);
+    document.querySelectorAll('[data-brand-upper]').forEach((el) => el.textContent = name.toUpperCase());
+    document.querySelectorAll('[data-brand-initials]').forEach((el) => el.textContent = initials.length === 1 ? name.slice(0, 2).toUpperCase() : initials);
+    document.querySelectorAll('[data-varname]').forEach((el) => el.textContent = `${slug}-${el.dataset.varname}`);
+    document.title = `${name} Trader`;
+    $('brandName').value = name;
+    S.brand = name;
+  }
+
+  // ---------- Deriv WebSocket client ----------
+  class DerivClient {
+    constructor() { this.ws = null; this.reqId = 0; this.pending = new Map(); this.handlers = {}; this.pingTimer = null; }
+    on(type, fn) { (this.handlers[type] ||= []).push(fn); }
+    off(type, fn) { this.handlers[type] = (this.handlers[type] || []).filter((h) => h !== fn); }
+    emit(type, data) { (this.handlers[type] || []).slice().forEach((fn) => fn(data)); }
+    get open() { return this.ws && this.ws.readyState === WebSocket.OPEN; }
+    connect(server, appId) {
+      return new Promise((resolve, reject) => {
+        this.close();
+        const url = /^wss?:\/\//.test(server) ? server : `wss://${server}/websockets/v3?app_id=${encodeURIComponent(appId)}&l=EN`;
+        const ws = new WebSocket(url);
+        this.ws = ws;
+        ws.onopen = () => { this.pingTimer = setInterval(() => this.send({ ping: 1 }).catch(() => {}), 30000); this.emit('open'); resolve(); };
+        ws.onerror = () => reject(new Error('Could not reach Deriv servers.'));
+        ws.onclose = () => {
+          clearInterval(this.pingTimer);
+          this.pending.forEach(({ reject }) => reject(new Error('Connection closed')));
+          this.pending.clear();
+          if (this.ws === ws) this.emit('close');
+        };
+        ws.onmessage = (ev) => {
+          const msg = JSON.parse(ev.data);
+          const p = msg.req_id && this.pending.get(msg.req_id);
+          if (p) {
+            this.pending.delete(msg.req_id);
+            msg.error ? p.reject(Object.assign(new Error(msg.error.message), { code: msg.error.code })) : p.resolve(msg);
+          }
+          if (!msg.error) this.emit(msg.msg_type, msg);
+        };
+      });
+    }
+    send(req) {
+      return new Promise((resolve, reject) => {
+        if (!this.open) return reject(new Error('Not connected'));
+        const req_id = ++this.reqId;
+        this.pending.set(req_id, { resolve, reject });
+        this.ws.send(JSON.stringify({ ...req, req_id }));
+      });
+    }
+    // First response resolves; later stream updates arrive through on(msg_type)
+    subscribe(req) { return this.send({ ...req, subscribe: 1 }); }
+    close() { if (this.ws) { const w = this.ws; this.ws = null; w.close(); } clearInterval(this.pingTimer); }
+  }
+  const api = new DerivClient();
+
+  // ---------- State ----------
+  const S = {
+    brand: DEFAULT_BRAND, account: null, oauthAccounts: [], token: null, balance: 0, currency: 'USD', pipSize: 2,
+    bot: { running: false, stopRequested: false, lossStreak: 0, stake: 0, runs: 0, sessionPl: 0 },
+    stats: { stake: 0, payout: 0, runs: 0, won: 0, lost: 0, pl: 0 },
+    tx: [], selectedTx: null, lastContract: null, scanning: false,
+  };
+
+  // ---------- Small UI helpers ----------
+  const fmt = (n, d = 2) => Number(n).toFixed(d);
+  const money = (n) => `${fmt(n)} ${S.currency}`;
+  const signed = (n) => `${n >= 0 ? '+' : ''}${fmt(n)}`;
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const MARKET_NAMES = { R_10: 'Volatility 10 Index', R_25: 'Volatility 25 Index', R_50: 'Volatility 50 Index', R_75: 'Volatility 75 Index', R_100: 'Volatility 100 Index',
+    '1HZ10V': 'Volatility 10 (1s) Index', '1HZ25V': 'Volatility 25 (1s) Index', '1HZ50V': 'Volatility 50 (1s) Index', '1HZ75V': 'Volatility 75 (1s) Index', '1HZ100V': 'Volatility 100 (1s) Index' };
+  const TYPE_LABEL = { DIGITOVER: 'Over', DIGITUNDER: 'Under', DIGITMATCH: 'Matches', DIGITDIFF: 'Differs', DIGITEVEN: 'Even', DIGITODD: 'Odd' };
+
+  function log(text, cls = '') {
+    const el = document.createElement('div');
+    const t = document.createElement('time'); t.textContent = new Date().toLocaleTimeString();
+    const s = document.createElement('span'); s.className = cls; s.textContent = text;
+    el.append(t, s);
+    const j = $('journal'); j.prepend(el);
+    while (j.children.length > 500) j.lastChild.remove();
+  }
+  function toast(text, link) {
+    const el = document.createElement('div'); el.className = 'toast';
+    const span = document.createElement('span'); span.textContent = text;
+    if (link) { const a = document.createElement('a'); a.href = link.href; a.target = '_blank'; a.rel = 'noopener'; a.textContent = link.label; span.append(' ', a); }
+    const x = document.createElement('button'); x.textContent = '✕'; x.onclick = () => el.remove();
+    el.append(span, x); $('toasts').appendChild(el);
+    setTimeout(() => el.remove(), 7000);
+  }
+  function dialog(title, text, okLabel = 'OK', cancel = true) {
+    return new Promise((resolve) => {
+      $('dTitle').textContent = title; $('dText').textContent = text; $('dOk').textContent = okLabel;
+      $('dCancel').classList.toggle('hidden', !cancel);
+      $('dlg').classList.add('show');
+      const done = (v) => { $('dlg').classList.remove('show'); $('dOk').onclick = $('dCancel').onclick = null; resolve(v); };
+      $('dOk').onclick = () => done(true); $('dCancel').onclick = () => done(false);
+    });
+  }
+  document.querySelectorAll('.mask [data-close]').forEach((b) => b.onclick = () => b.closest('.mask').classList.remove('show'));
+
+  // ---------- Navigation ----------
+  let currentPage = 'scan';
+  function go(page) {
+    if (!S.account) page = 'connect';
+    else currentPage = page;
+    document.querySelectorAll('[data-view]').forEach((v) => v.classList.toggle('hidden', v.dataset.view !== page));
+    document.querySelectorAll('.pill[data-page]').forEach((p) => p.classList.toggle('on', p.dataset.page === page));
+    $('orb').classList.toggle('hidden', page === 'connect');
+    $('drawer').classList.remove('show');
+    window.scrollTo({ top: 0 });
+  }
+  document.querySelectorAll('.pill[data-page], [data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.page || b.dataset.go)));
+  $('orb').onclick = () => go('scan');
+  $('burger').onclick = () => $('drawer').classList.add('show');
+  $('drawer').querySelector('.shade').onclick = () => $('drawer').classList.remove('show');
+  document.querySelectorAll('.seg').forEach((s) => s.onclick = () => {
+    document.querySelectorAll('.seg').forEach((x) => x.classList.toggle('on', x === s));
+    document.querySelectorAll('[data-segview]').forEach((v) => v.classList.toggle('hidden', v.dataset.segview !== s.dataset.seg));
+  });
+
+  // ---------- Settings ----------
+  const SETTINGS_IDS = ['symbol','ctype','barrier','recovery','duration','stake','maxStake','takeProfit','stopLoss','martingale','maxLosses','maxRuns','delay'];
+  const DEFAULTS = { symbol: 'R_100', ctype: 'DIGITOVER', barrier: '1', recovery: 'same', duration: '1', stake: '1', maxStake: '10', takeProfit: '10', stopLoss: '10', martingale: '1', maxLosses: '3', maxRuns: '0', delay: '1' };
+  function settings() {
+    const v = (id) => $(id).value;
+    return {
+      symbol: v('symbol'), ctype: v('ctype'), barrier: v('barrier'), recovery: v('recovery'),
+      duration: Math.min(10, Math.max(1, parseInt(v('duration')) || 1)),
+      stake: +v('stake'), maxStake: +v('maxStake'), takeProfit: +v('takeProfit'), stopLoss: +v('stopLoss'),
+      martingale: Math.max(1, +v('martingale') || 1), maxLosses: Math.max(1, parseInt(v('maxLosses')) || 1),
+      maxRuns: Math.max(0, parseInt(v('maxRuns')) || 0), delay: Math.max(0, +v('delay') || 0),
+    };
+  }
+  const needsBarrier = (t) => ['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(t);
+  const barrierRange = (t) => t === 'DIGITOVER' ? [0, 8] : t === 'DIGITUNDER' ? [1, 9] : [0, 9];
+  function refreshBarrierOptions(keep = {}) {
+    const t = $('ctype').value, [lo, hi] = barrierRange(t);
+    const fill = (sel, prev, withSame) => {
+      sel.innerHTML = '';
+      if (withSame) sel.add(new Option('same', 'same'));
+      if (needsBarrier(t)) for (let d = lo; d <= hi; d++) sel.add(new Option(String(d), String(d)));
+      else if (!withSame) sel.add(new Option('—', '0'));
+      const ok = [...sel.options].some((o) => o.value === prev);
+      sel.value = ok ? prev : sel.options[0].value;
+    };
+    fill($('barrier'), keep.barrier ?? $('barrier').value, false);
+    fill($('recovery'), keep.recovery ?? $('recovery').value, true);
+    $('barrier').disabled = $('recovery').disabled = !needsBarrier(t) || S.bot.running;
+  }
+  function winProb(t, b) {
+    b = +b;
+    switch (t) {
+      case 'DIGITOVER': return (9 - b) / 10; case 'DIGITUNDER': return b / 10;
+      case 'DIGITMATCH': return 0.1; case 'DIGITDIFF': return 0.9; default: return 0.5;
+    }
+  }
+  function digitWins(t, b, d) {
+    b = +b;
+    return { DIGITOVER: d > b, DIGITUNDER: d < b, DIGITMATCH: d === b, DIGITDIFF: d !== b, DIGITEVEN: d % 2 === 0, DIGITODD: d % 2 === 1 }[t];
+  }
+  function persistSettings() { const o = {}; SETTINGS_IDS.forEach((id) => o[id] = $(id).value); store.set('dt_settings', JSON.stringify(o), true); syncQuick(); }
+  function restoreSettings(o) {
+    o = { ...DEFAULTS, ...o };
+    $('symbol').value = o.symbol; $('ctype').value = o.ctype;
+    refreshBarrierOptions({ barrier: o.barrier, recovery: o.recovery });
+    SETTINGS_IDS.forEach((id) => { if (!['symbol','ctype','barrier','recovery'].includes(id)) $(id).value = o[id]; });
+    syncQuick();
+  }
+  // Quick fields on the scanner page mirror the builder
+  function syncQuick() { $('qStake').value = $('stake').value; $('qTp').value = $('takeProfit').value; $('qSl').value = $('stopLoss').value; }
+  [['qStake','stake'], ['qTp','takeProfit'], ['qSl','stopLoss']].forEach(([q, b]) => $(q).addEventListener('input', () => {
+    $(b).value = $(q).value; const o = {}; SETTINGS_IDS.forEach((id) => o[id] = $(id).value); store.set('dt_settings', JSON.stringify(o), true); $('qErr').classList.add('hidden');
+  }));
+  $('ctype').onchange = () => { refreshBarrierOptions(); persistSettings(); };
+  SETTINGS_IDS.filter((id) => id !== 'ctype').forEach((id) => $(id).addEventListener('change', persistSettings));
+  SETTINGS_IDS.filter((id) => !['symbol','ctype','barrier','recovery'].includes(id)).forEach((id) => $(id).addEventListener('input', persistSettings));
+  $('bReset').onclick = () => { if (!S.bot.running) { restoreSettings({}); persistSettings(); toast('Bot Builder reset to defaults.'); } };
+
+  function buildProposal(symbol, ctype, barrier, duration, amount) {
+    const req = { proposal: 1, amount: round2(amount), basis: 'stake', contract_type: ctype, currency: S.currency, duration, duration_unit: 't', symbol };
+    if (needsBarrier(ctype)) req.barrier = String(barrier);
+    return req;
+  }
+
+  // ---------- Scanner ----------
+  // Compares live Deriv prices across markets and ranks them by expected result per trade.
+  const SCAN_MARKETS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100'];
+  const SCAN_BARRIERS = [1, 2];
+  function setScanner(state, sub) {
+    const el = $('scanner'); el.classList.toggle('busy', state === 'busy'); el.classList.toggle('off', state === 'off');
+    $('coreSub').textContent = sub;
+  }
+  function quickError() {
+    const st = +$('qStake').value, tp = +$('qTp').value, sl = +$('qSl').value;
+    if (!(st >= 0.35)) return 'Enter a valid stake (minimum 0.35) to calculate the automatic recovery limit.';
+    if (!(tp > 0)) return 'Enter a take-profit above 0.';
+    if (!(sl > 0)) return 'Enter a stop-loss above 0. The bot won\'t run without one.';
+    if (st > S.balance) return 'Stake is larger than your balance.';
+    return null;
+  }
+  $('scanner').onclick = async () => {
+    if (S.scanning || S.bot.running) return;
+    const err = quickError();
+    if (err) { $('qErr').textContent = err; $('qErr').classList.remove('hidden'); return; }
+    S.scanning = true; $('sigs').innerHTML = '';
+    setScanner('busy', 'Scanning live markets');
+    $('scanMsg').textContent = 'Scanning fresh synthetic-index ticks…';
+    const stake = +$('qStake').value, results = [];
+    try {
+      await Promise.all(SCAN_MARKETS.map(async (sym) => {
+        let digits = [];
+        try {
+          const h = await api.send({ ticks_history: sym, count: 100, end: 'latest', style: 'ticks' });
+          const pip = h.pip_size ?? 2;
+          digits = h.history.prices.map((p) => { const s = Number(p).toFixed(pip); return +s[s.length - 1]; });
+        } catch {}
+        await Promise.all(SCAN_BARRIERS.map(async (b) => {
+          try {
+            const r = await api.send(buildProposal(sym, 'DIGITOVER', b, 1, stake));
+            const payout = +r.proposal.payout, p = winProb('DIGITOVER', b);
+            const recent = digits.length ? digits.filter((d) => d > b).length / digits.length : null;
+            results.push({ sym, b, p, payout, ev: p * payout - stake, recent, n: digits.length });
+          } catch (e) { log(`Scan ${sym} Over ${b}: ${e.message}`, 'w'); }
+        }));
+      }));
+      await sleep(900);
+    } finally { S.scanning = false; }
+    results.sort((a, b) => b.ev - a.ev);
+    const top = results.slice(0, 3);
+    setScanner('idle', 'Ready to scan');
+    if (!top.length) { $('scanMsg').textContent = 'No prices returned. Check your connection and try again.'; return; }
+    $('scanMsg').textContent = `${top.length} live markets compared.`;
+    top.forEach((r, i) => $('sigs').appendChild(signalCard(r, i, stake)));
+  };
+  function signalCard(r, i, stake) {
+    const el = document.createElement('div'); el.className = 'sig' + (i === 0 ? ' best' : '');
+    const ret = (r.payout - stake) / stake * 100, evPct = r.ev / stake * 100;
+    el.innerHTML = `
+      <div class="rank">${i === 0 ? '<span class="tag">BEST PRICE</span>' : ''}#${i + 1} MARKET</div>
+      <h4></h4>
+      <div class="pct">${fmt(r.p * 100, 1)}%</div>
+      <p>Over ${r.b} · ${r.sym} · true win chance</p>
+      <p>Payout if won: <span class="pos">+${fmt(r.payout - stake)} ${S.currency}</span> (${fmt(ret, 1)}%)</p>
+      <p>Expected result per trade: <span class="${r.ev >= 0 ? 'pos' : 'neg'}">${signed(r.ev)} ${S.currency}</span> (${fmt(evPct, 1)}%)</p>
+      <p class="dim">${r.recent == null ? '' : `Last ${r.n} ticks: Over ${r.b} came up ${fmt(r.recent * 100, 1)}% of the time (past ticks don't predict the next one).`}</p>
+      <button class="use">Use this market</button>`;
+    el.querySelector('h4').textContent = MARKET_NAMES[r.sym];
+    el.querySelector('.use').onclick = () => useSignal(r);
+    return el;
+  }
+  async function useSignal(r) {
+    $('symbol').value = r.sym; $('ctype').value = 'DIGITOVER';
+    refreshBarrierOptions({ barrier: String(r.b), recovery: $('recovery').value });
+    persistSettings();
+    $('scanMsg').textContent = `${MARKET_NAMES[r.sym]} selected. Loading the settings into Bot Builder…`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    await sleep(700);
+    const s = settings();
+    $('actText').textContent = `${S.brand} is loaded with ${MARKET_NAMES[r.sym]} · Over ${r.b}. Stake ${money(s.stake)}, take-profit ${money(s.takeProfit)}, stop-loss ${money(s.stopLoss)}. Confirm activation to load automated trading.`;
+    $('actModal').classList.add('show');
+  }
+  $('actOk').onclick = () => {
+    $('actModal').classList.remove('show');
+    go('dash');
+    log(`${S.brand} strategy loaded`, 's');
+    toast(`${S.brand} strategy loaded. Review all settings and press Run when ready.`);
+  };
+
+  // ---------- Account ----------
+  async function authorize(token) {
+    const r = await api.send({ authorize: token });
+    S.account = r.authorize; S.token = token;
+    S.currency = S.account.currency || 'USD'; S.balance = +S.account.balance;
+    document.querySelectorAll('[data-cur]').forEach((el) => el.textContent = S.currency);
+    renderAccount();
+    try { await api.subscribe({ balance: 1 }); } catch (e) { log(`Balance stream: ${e.message}`, 'w'); }
+    log(`Authorized ${S.account.loginid} (${S.account.is_virtual ? 'Demo' : 'Real'}) · ${money(S.balance)}`, 's');
+  }
+  const caret = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+  function renderAccount() {
+    const a = S.account, k = $('acctKind');
+    $('acctBal').textContent = a ? money(S.balance) : '—';
+    if (!a) { k.textContent = 'Not connected'; k.className = 'acct-kind'; }
+    else {
+      k.className = 'acct-kind' + (a.is_virtual ? ' demo' : '');
+      k.innerHTML = `${a.is_virtual ? 'Demo account' : 'Real account'}${S.oauthAccounts.length > 1 ? ' ' + caret : ''}`;
+    }
+    $('aLogin').textContent = a?.loginid ?? '—'; $('aType').textContent = a ? (a.is_virtual ? 'Demo' : 'Real') : '—';
+    $('aBal').textContent = a ? money(S.balance) : '—'; $('aConn').textContent = api.open ? 'Online' : 'Offline';
+  }
+  $('acctBtn').onclick = () => {
+    const m = $('acctMenu');
+    if (S.oauthAccounts.length < 2) return go(S.account ? 'admin' : 'connect');
+    m.innerHTML = '';
+    S.oauthAccounts.forEach((x) => {
+      const b = document.createElement('button'); b.className = x.token === S.token ? 'on' : '';
+      b.innerHTML = `<span>${x.acct.startsWith('VR') ? 'Demo' : 'Real'} · ${x.acct}</span><span>${x.cur}</span>`;
+      b.onclick = () => { m.classList.add('hidden'); if (x.token !== S.token) switchAccount(x.token); };
+      m.appendChild(b);
+    });
+    m.classList.toggle('hidden');
+  };
+  async function switchAccount(token) {
+    if (S.bot.running) return dialog('Bot is running', 'Stop the bot before switching accounts.', 'OK', false);
+    await startSession(token);
+  }
+  function setOnline(on) {
+    $('orb').classList.toggle('live', on); $('orbBadge').textContent = on ? 'LIVE' : 'OFFLINE'; $('aConn').textContent = on ? 'Online' : 'Offline';
+  }
+  async function startSession(token) {
+    $('connectErr').classList.add('hidden'); $('connectBtn').disabled = true;
+    try {
+      await api.connect($('server').value.trim(), $('appId').value.trim());
+      await authorize(token);
+      store.set('dt_token', token, $('remember').checked);
+      $('runbar').classList.remove('hidden'); $('warnFab').classList.remove('hidden'); $('navwrap').classList.remove('hidden');
+      go(currentPage === 'connect' ? 'scan' : currentPage);
+    } catch (e) {
+      const ce = $('connectErr'); ce.textContent = e.code === 'InvalidToken' ? 'That token was rejected by Deriv. Check it and try again.' : e.message;
+      ce.classList.remove('hidden'); api.close(); S.account = null; go('connect');
+    } finally { $('connectBtn').disabled = false; }
+  }
+
+  // ---------- Run bar ----------
+  const PROG = { idle: 0, starting: 8, buying: 50, bought: 100 };
+  function setStatus(text, phase = 'idle') {
+    $('botStatus').textContent = text;
+    const rs = $('runstat'); rs.classList.toggle('won', phase === 'won'); rs.classList.toggle('lost', phase === 'lost');
+    $('progBar').style.width = (PROG[phase] ?? 0) + '%';
+    const dots = $('runstat').querySelectorAll('.prog i'), lvl = { starting: 1, buying: 2, bought: 3 }[phase] || 0;
+    dots.forEach((d, i) => { d.className = i < lvl ? 'on' : ''; if (i === 0 && lvl) d.className = 'st'; });
+  }
+  function setRunButton(running) {
+    const b = $('runBtn'); b.disabled = false;
+    b.classList.toggle('stop', running);
+    b.innerHTML = running
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" fill="#fff"/></svg><span>Stop</span>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><span>Run</span>';
+  }
+
+  // ---------- Bot engine ----------
+  function lockSettings(lock) {
+    SETTINGS_IDS.forEach((id) => { $(id).disabled = lock; });
+    ['qStake','qTp','qSl'].forEach((id) => $(id).disabled = lock);
+    $('resetBtn').disabled = lock;
+    if (!lock) refreshBarrierOptions();
+  }
+  function stopBot(reason, kind = '') {
+    S.bot.running = false; S.bot.stopRequested = false;
+    lockSettings(false); setRunButton(false);
+    log(`Bot stopped: ${reason}`, kind === 'tp' ? 's' : 'w');
+    if (['tp', 'sl', 'streak'].includes(kind)) showResult(kind, S.bot.sessionPl);
+    toast('Bot stopped. Check Reports for contract history.', { href: 'https://app.deriv.com/reports/profit', label: 'Reports' });
+    if (!['won','lost'].some((c) => $('runstat').classList.contains(c))) setStatus('Bot is not running');
+  }
+  function showResult(kind, pl) {
+    const tp = kind === 'tp';
+    $('resTag').textContent = tp ? 'PROFIT TARGET REACHED' : kind === 'streak' ? 'LOSS LIMIT REACHED' : 'STOP-LOSS REACHED';
+    $('resTag').classList.toggle('bad', !tp);
+    $('resLine').textContent = tp ? 'hit a profit of' : S.bot.sessionPl >= 0 ? 'stopped with a profit of' : 'stopped at a loss of';
+    $('resAmt').textContent = money(Math.abs(pl)); $('resAmt').classList.toggle('bad', !tp);
+    $('resModal').classList.add('show');
+  }
+  function validate(s) {
+    if (!(s.stake >= 0.35)) return 'Minimum stake is 0.35.';
+    if (!(s.takeProfit > 0)) return 'Set a take-profit above 0.';
+    if (!(s.stopLoss > 0)) return 'Set a stop-loss above 0. The bot won\'t run without one.';
+    if (!(s.maxStake >= s.stake)) return 'maximum-stake must be at least the initial stake.';
+    if (s.stake > S.balance) return 'Stake is larger than your balance.';
+    return null;
+  }
+  async function runBot() {
+    const s = settings(), err = validate(s);
+    if (err) return dialog('Check your settings', err, 'OK', false);
+    const pct = S.balance ? s.stake / S.balance * 100 : 0;
+    if (!S.account.is_virtual) {
+      const ok = await dialog('Trade with real money?',
+        `This bot will place real trades on ${S.account.loginid}.\n\nStake ${money(s.stake)} (${fmt(pct, 0)}% of your balance) · stop-loss ${money(s.stopLoss)}.\n\nEvery contract pays less than its true odds, so over many trades the expected result is a loss.`,
+        'Start real trading');
+      if (!ok) return;
+    }
+    Object.assign(S.bot, { running: true, stopRequested: false, lossStreak: 0, stake: s.stake, runs: 0, sessionPl: 0 });
+    lockSettings(true); setRunButton(true);
+    setStatus('Bot is starting', 'starting');
+    log(`Bot started · ${TYPE_LABEL[s.ctype]}${needsBarrier(s.ctype) ? ' ' + s.barrier : ''} on ${s.symbol} · stake ${money(s.stake)} · TP ${money(s.takeProfit)} · SL ${money(s.stopLoss)}`, 's');
+    await sleep(400);
+    loop(s);
+  }
+  async function loop(s) {
+    while (S.bot.running) {
+      if (S.bot.stopRequested) return stopBot('Stopped by you');
+      if (S.bot.sessionPl >= s.takeProfit) return stopBot(`Take-profit reached: ${signed(S.bot.sessionPl)}`, 'tp');
+      if (S.bot.sessionPl <= -s.stopLoss) return stopBot(`Stop-loss hit: ${signed(S.bot.sessionPl)}`, 'sl');
+      if (S.bot.lossStreak >= s.maxLosses) return stopBot(`${S.bot.lossStreak} losses in a row`, 'streak');
+      if (s.maxRuns && S.bot.runs >= s.maxRuns) return stopBot(`Finished ${S.bot.runs} trades`);
+
+      // Never stake more than the cap, the balance, or what's left before the stop-loss
+      const room = s.stopLoss + S.bot.sessionPl;
+      const stake = Math.floor(Math.min(S.bot.stake, s.maxStake, S.balance, room) * 100) / 100;
+      if (stake < 0.35) return stopBot('Not enough room left under the stop-loss for the minimum stake', 'sl');
+      const barrier = S.bot.lossStreak > 0 && s.recovery !== 'same' ? s.recovery : s.barrier;
+
+      try {
+        setStatus('Buying contract', 'buying');
+        const prop = await api.send(buildProposal(s.symbol, s.ctype, barrier, s.duration, stake));
+        const buy = await api.send({ buy: prop.proposal.id, price: prop.proposal.ask_price });
+        const c = buy.buy;
+        S.lastContract = { ...c, open: true };
+        log(`Bought #${c.contract_id} for ${money(c.buy_price)}: ${c.longcode}`);
+        setStatus('Contract bought', 'bought');
+        const poc = await waitForSettlement(c.contract_id);
+        record(s, c, poc);
+      } catch (e) {
+        log(`Trade error: ${e.message}`, 'e');
+        return stopBot(`Error: ${e.message}`);
+      }
+      if (S.bot.running && s.delay) await sleep(s.delay * 1000);
+    }
+  }
+  function waitForSettlement(contractId) {
+    return new Promise((resolve, reject) => {
+      let done = false, subId = null;
+      const finish = (poc) => {
+        done = true; api.off('proposal_open_contract', handler); api.off('close', onClose);
+        if (subId) api.send({ forget: subId }).catch(() => {});
+        resolve(poc);
+      };
+      const handler = (msg) => {
+        const poc = msg.proposal_open_contract;
+        if (done || !poc || poc.contract_id !== contractId) return;
+        if (msg.subscription) subId = msg.subscription.id;
+        if (poc.is_sold) finish(poc);
+      };
+      const onClose = () => { if (!done) { done = true; api.off('proposal_open_contract', handler); reject(new Error('Connection lost while a contract was open. Check Reports on Deriv.')); } };
+      api.on('proposal_open_contract', handler); api.on('close', onClose);
+      api.subscribe({ proposal_open_contract: 1, contract_id: contractId }).catch((e) => { if (!done) { done = true; api.off('proposal_open_contract', handler); reject(e); } });
+    });
+  }
+  function record(s, c, poc) {
+    const profit = +poc.profit, won = profit > 0, stake = +poc.buy_price, payout = +(poc.sell_price ?? 0);
+    S.bot.runs++; S.bot.sessionPl = round2(S.bot.sessionPl + profit);
+    S.stats.runs++; S.stats.stake += stake; S.stats.payout += payout; S.stats.pl += profit;
+    won ? S.stats.won++ : S.stats.lost++;
+    if (won) { S.bot.lossStreak = 0; S.bot.stake = s.stake; } else { S.bot.lossStreak++; S.bot.stake *= s.martingale; }
+    const t = {
+      time: new Date((poc.sell_time || Date.now() / 1000) * 1000), id: c.contract_id, longcode: c.longcode, transaction_id: c.transaction_id,
+      type: poc.contract_type || s.ctype, barrier: poc.barrier, symbol: poc.underlying || s.symbol,
+      entry: poc.entry_tick_display_value ?? poc.entry_tick, exit: poc.exit_tick_display_value ?? poc.exit_tick, stake, payout, profit, won,
+    };
+    S.tx.unshift(t); S.lastContract = { ...t, open: false };
+    log(`${won ? 'Won' : 'Lost'} #${c.contract_id}: ${signed(profit)} ${S.currency} · session ${signed(S.bot.sessionPl)}`, won ? 's' : 'e');
+    setStatus(won ? 'Won' : 'Lost', won ? 'won' : 'lost');
+    renderStats(); renderTx(); renderSummary();
+  }
+
+  // ---------- Dashboard rendering ----------
+  const ICON_MKT = '<svg viewBox="0 0 24 24" fill="none" stroke="#7fb0ff" stroke-width="1.6"><path d="M3 15l3-3 2 4 3-8 2 6 2-3 2 5 4-7"/><text x="1" y="7" font-size="6" fill="#7fb0ff" stroke="none">VOL</text></svg>';
+  const ICON_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="#ff4d63" stroke-width="2"><path d="M5 19L19 5M9 5h10v10"/><path d="M3 21h18" stroke-width="1.5"/></svg>';
+  const ICON_DN = '<svg viewBox="0 0 24 24" fill="none" stroke="#ff4d63" stroke-width="2"><path d="M5 5l14 14M19 9v10H9"/><path d="M3 3h18" stroke-width="1.5"/></svg>';
+  function renderStats() {
+    const st = S.stats;
+    $('sStake').textContent = money(st.stake); $('sPayout').textContent = money(st.payout);
+    $('sRuns').textContent = st.runs; $('sWon').textContent = st.won; $('sLost').textContent = st.lost;
+    const pl = $('sPl'); pl.textContent = `${st.pl > 0 ? '+' : ''}${money(st.pl)}`; pl.className = st.pl > 0 ? 'up' : st.pl < 0 ? 'down' : '';
+    $('detailBtn').disabled = $('csvBtn').disabled = !S.tx.length;
+  }
+  function renderTx() {
+    const list = $('txList'); list.innerHTML = '';
+    if (!S.tx.length) {
+      list.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>
+        <b>There are no transactions to display</b><small>Here are the possible reasons:</small><br><ul><li>The bot is not running</li><li>The stats are cleared</li></ul></div>`;
+      return;
+    }
+    S.tx.slice(0, 300).forEach((t) => {
+      const row = document.createElement('div'); row.className = 'tx-row' + (S.selectedTx === t.id ? ' sel' : '');
+      row.innerHTML = `<div class="ico">${ICON_MKT}${['DIGITUNDER','DIGITODD'].includes(t.type) ? ICON_DN : ICON_UP}</div>
+        <div class="spots"><div><i class="en"></i><span></span></div><div><i class="ex"></i><span></span></div></div>
+        <div class="px"><div></div><div class="${t.profit >= 0 ? 'up' : 'down'}"></div></div>`;
+      const sp = row.querySelectorAll('.spots span'); sp[0].textContent = t.entry ?? '—'; sp[1].textContent = t.exit ?? '—';
+      const px = row.querySelectorAll('.px div'); px[0].textContent = money(t.stake); px[1].textContent = `${signed(t.profit)} ${S.currency}`;
+      row.title = `${TYPE_LABEL[t.type] || t.type} ${t.barrier ?? ''} · ${t.symbol}`;
+      row.onclick = () => { S.selectedTx = t.id; renderTx(); };
+      list.appendChild(row);
+    });
+  }
+  function renderSummary() {
+    const c = S.lastContract, box = $('summaryBox');
+    if (!c) { box.innerHTML = '<div class="empty"><b>No contract yet</b><small>When the bot runs, the latest contract shows here.</small></div>'; return; }
+    const rows = [['Contract', `#${c.contract_id ?? c.id}`], ['Market', MARKET_NAMES[c.symbol] || c.symbol || '—'],
+      ['Type', `${TYPE_LABEL[c.type] || c.type || '—'} ${c.barrier ?? ''}`], ['Status', c.open ? 'Open' : c.won ? 'Won' : 'Lost'],
+      ['Buy price', money(c.stake ?? c.buy_price)], ['Profit/loss', c.open ? '—' : `${signed(c.profit)} ${S.currency}`],
+      ['Entry spot', c.entry ?? '—'], ['Exit spot', c.exit ?? '—']];
+    box.innerHTML = '<dl></dl>';
+    rows.forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; box.firstChild.append(dt, dd); });
+  }
+  $('detailBtn').onclick = () => {
+    const t = S.tx.find((x) => x.id === S.selectedTx) || S.tx[0]; if (!t) return;
+    dialog(`Contract #${t.id}`, `${t.longcode || ''}\n\n${MARKET_NAMES[t.symbol] || t.symbol} · ${TYPE_LABEL[t.type] || t.type} ${t.barrier ?? ''}\nEntry ${t.entry ?? '—'} → Exit ${t.exit ?? '—'}\nBuy price ${money(t.stake)} · Payout ${money(t.payout)}\nProfit/loss ${signed(t.profit)} ${S.currency}\n${t.time.toLocaleString()}`, 'Close', false);
+  };
+  $('csvBtn').onclick = () => {
+    const head = ['time','contract_id','type','barrier','symbol','entry','exit','stake','payout','profit'];
+    const rows = S.tx.map((t) => [t.time.toISOString(), t.id, t.type, t.barrier ?? '', t.symbol, t.entry ?? '', t.exit ?? '', t.stake, t.payout, t.profit]);
+    const csv = [head, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `deriv-trades-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  };
+  $('resetBtn').onclick = () => {
+    if (S.bot.running) return;
+    S.stats = { stake: 0, payout: 0, runs: 0, won: 0, lost: 0, pl: 0 }; S.tx = []; S.lastContract = null;
+    renderStats(); renderTx(); renderSummary(); setStatus('Bot is not running');
+  };
+  $('whatsBtn').onclick = () => dialog('What\'s this?', 'Totals for every contract the bot has run since the last Reset.\n\nTotal stake: what you paid for contracts.\nTotal payout: what Deriv paid back.\nTotal profit/loss: payout minus stake.', 'OK', false);
+  $('warnFab').onclick = () => dialog('Risk warning',
+    'Synthetic indices are generated by a random number generator. No scanner, signal or AI can predict the next tick.\n\nDeriv pays less than the true odds on every contract (for example, Over 1 wins 80% of the time but pays about +18% instead of the fair +25%), so the average result of each trade is a loss of a few percent.\n\nMartingale and recovery settings make wins more frequent and losses bigger. Only trade money you can afford to lose.', 'I understand', false);
+
+  // ---------- Run / connection events ----------
+  $('runBtn').onclick = () => {
+    if (!S.bot.running) return runBot();
+    S.bot.stopRequested = true; $('runBtn').disabled = true; setStatus('Stopping after the current contract', 'bought');
+  };
+  api.on('balance', (m) => { if (m.balance) { S.balance = +m.balance.balance; renderAccount(); } });
+  api.on('open', () => setOnline(true));
+  api.on('close', async () => {
+    setOnline(false);
+    if (!S.token) return;
+    log('Connection lost, reconnecting…', 'w');
+    for (let i = 0; i < 5 && S.token; i++) {
+      await sleep(1500 * (i + 1));
+      try { await api.connect($('server').value.trim(), $('appId').value.trim()); await authorize(S.token); log('Reconnected', 's'); return; }
+      catch (e) { log(`Reconnect failed: ${e.message}`, 'e'); }
+    }
+  });
+
+  $('connectBtn').onclick = () => {
+    const t = $('token').value.trim();
+    if (!t) { $('connectErr').textContent = 'Paste your API token first.'; return $('connectErr').classList.remove('hidden'); }
+    startSession(t);
+  };
+  $('oauthBtn').onclick = () => {
+    const id = $('appId').value.trim();
+    if (id === '1089') { $('connectErr').textContent = '"Log in with Deriv" needs your own App ID, registered at api.deriv.com with this page\'s address as the redirect URL. Or use an API token.'; return $('connectErr').classList.remove('hidden'); }
+    store.set('dt_appid', id, true); store.set('dt_server', $('server').value.trim(), true);
+    location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${encodeURIComponent(id)}&l=EN`;
+  };
+  $('logoutBtn').onclick = () => {
+    if (S.bot.running) return dialog('Bot is running', 'Stop the bot first.', 'OK', false);
+    store.del('dt_token'); store.del('dt_oauth'); S.token = null; S.account = null; S.oauthAccounts = [];
+    api.close(); setOnline(false); renderAccount();
+    $('runbar').classList.add('hidden'); $('warnFab').classList.add('hidden'); $('navwrap').classList.add('hidden');
+    go('connect');
+  };
+  $('brandName').addEventListener('input', () => { applyBrand($('brandName').value); store.set('dt_brand', $('brandName').value, true); });
+
+  // ---------- Boot ----------
+  applyBrand(store.get('dt_brand'));
+  let saved = {}; try { saved = JSON.parse(store.get('dt_settings') || '{}'); } catch {}
+  restoreSettings(saved);
+  renderStats(); renderTx(); renderSummary(); renderAccount(); setRunButton(false);
+  $('navwrap').classList.add('hidden');
+  go('connect');
+  const savedApp = store.get('dt_appid'); if (savedApp) $('appId').value = savedApp;
+  const savedServer = store.get('dt_server'); if (savedServer) $('server').value = savedServer;
+
+  // OAuth redirect lands here with ?acct1=..&token1=..&cur1=..&acct2=..
+  const q = new URLSearchParams(location.search);
+  if (q.get('token1')) {
+    for (let i = 1; q.get('token' + i); i++) S.oauthAccounts.push({ acct: q.get('acct' + i), token: q.get('token' + i), cur: q.get('cur' + i) });
+    store.set('dt_oauth', JSON.stringify(S.oauthAccounts));
+    history.replaceState(null, '', location.pathname);
+    const first = S.oauthAccounts.find((a) => a.acct.startsWith('VR')) || S.oauthAccounts[0];
+    startSession(first.token);
+  } else {
+    try { S.oauthAccounts = JSON.parse(store.get('dt_oauth') || '[]'); } catch {}
+    const tok = store.get('dt_token');
+    if (tok) { try { $('remember').checked = !!localStorage.getItem('dt_token'); } catch {} startSession(tok); }
+  }
+
+  window.__dt = { S, api }; // used by the local test harness
+})();
+</script>
+</body>
+</html>
