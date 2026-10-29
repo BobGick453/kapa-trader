@@ -299,7 +299,7 @@
       <div class="eyebrow" data-brand-upper></div>
       <div class="title">Connect Deriv</div>
       <p class="lede" id="connectLede">Link your Deriv account to start. If you're already signed in to Deriv in this browser, you only need to approve.</p>
-      <div class="linking hidden" id="linking"><i></i><span id="linkingText">Linking your Deriv account…</span></div>
+      <div class="linking hidden" id="linking"><i></i><span id="linkingText">Linking your Deriv account…</span><button class="btn line hidden" id="cancelLink" type="button">Cancel</button></div>
       <button class="mbtn gold" id="v2Btn">Log in with Deriv</button>
       <label class="check" style="margin-top:12px"><input type="checkbox" id="remember" checked> Stay connected on this device</label>
       <div id="connectErr" class="alert err hidden"></div>
@@ -307,6 +307,8 @@
       <details class="more" id="v2Setup">
         <summary>OAuth settings</summary>
         <div class="fld"><label for="clientId">Deriv OAuth client ID</label><input class="inp sm" id="clientId" autocomplete="off" placeholder="From your app on developers.deriv.com"></div>
+        <div class="fld"><label for="appId">Legacy App ID (accounts on Deriv's older platform)</label><input class="inp sm" id="appId" inputmode="numeric" placeholder="e.g. 12345">
+          <div class="hint">Deriv sends older accounts to this app instead. Without it, Deriv may leave you on its own dashboard after login. Register it at api.deriv.com with the same redirect URL.</div></div>
         <div class="fld"><label for="redirectUri">Redirect URL to register with Deriv</label>
           <div class="row"><input class="inp sm" id="redirectUri" readonly style="flex:1;min-width:0"><button class="btn line" id="copyRedirect" type="button">Copy</button></div></div>
         <div class="grid2">
@@ -323,10 +325,7 @@
           <input class="inp sm" id="token" type="password" autocomplete="off" placeholder="Paste your Deriv API token">
           <div class="hint">Only for accounts still on Deriv's older API. Use a token with <b>Read</b> + <b>Trade</b> scopes only.</div>
         </div>
-        <div class="grid2">
-          <div class="fld"><label for="appId">App ID</label><input class="inp sm" id="appId" inputmode="numeric" value="1089"></div>
-          <div class="fld"><label for="server">Server</label><input class="inp sm" id="server" value="ws.derivws.com"></div>
-        </div>
+        <div class="fld"><label for="server">Server</label><input class="inp sm" id="server" value="ws.derivws.com"></div>
         <button class="mbtn line" id="connectBtn">Connect with token</button>
         <button class="mbtn line" id="oauthBtn">Older login (App ID)</button>
       </details>
@@ -813,6 +812,9 @@
   const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const randomStr = (n = 48) => b64url(crypto.getRandomValues(new Uint8Array(n)));
   const clientId = () => ($('clientId').value || DEFAULT_CLIENT_ID).trim();
+  const DEFAULT_LEGACY_APP_ID = '';
+  const legacyAppId = () => ($('appId').value || DEFAULT_LEGACY_APP_ID).trim();
+  const wsAppId = () => legacyAppId() || '1089'; // 1089 = Deriv's public test app, enough for API-token connections
 
   function v2Tokens() { try { return JSON.parse(store.get('dt_v2') || 'null'); } catch { return null; } }
   function saveV2Tokens(t) { store.del('dt_v2'); store.set('dt_v2', JSON.stringify(t), store.get('dt_remember') !== '0'); }
@@ -823,11 +825,14 @@
     if (!crypto.subtle) return showConnectErr('This browser can\'t do a secure login here. Open the bot over https.');
     store.set('dt_client_id', id, true); store.set('dt_scope', $('oauthScope').value.trim(), true); store.set('dt_token_proxy', $('tokenProxy').value.trim(), true);
     store.set('dt_remember', $('remember').checked ? '1' : '0', true);
+    store.set('dt_appid', $('appId').value.trim(), true);
     const verifier = randomStr(48), state = randomStr(16);
     const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     try { sessionStorage.setItem('dt_pkce', JSON.stringify({ verifier, state })); } catch {}
     const p = new URLSearchParams({ response_type: 'code', client_id: id, redirect_uri: redirectUri(), code_challenge: challenge, code_challenge_method: 'S256', state });
     const scope = $('oauthScope').value.trim(); if (scope) p.set('scope', scope);
+    if (legacyAppId()) p.set('app_id', legacyAppId()); // lets Deriv route older-platform accounts back here
+    store.set('dt_login_started', String(Date.now()), true); // lets the next page load notice if Deriv never sent us back
     showLinking('Opening Deriv…');
     location.href = `${V2.auth}?${p}`;
   }
@@ -917,7 +922,7 @@
       S.v2Accounts = accts;
       const pick = accts.find((a) => a.id === (preferId || store.get('dt_v2_active'))) || accts.find((a) => a.demo) || accts[0];
       await connectV2(pick);
-      store.set('dt_v2_active', pick.id, true);
+      store.set('dt_v2_active', pick.id, true); store.set('dt_linked', '1', true);
       enterApp();
     } catch (e) {
       api.close(); S.account = null; S.mode = null;
@@ -926,9 +931,11 @@
       go('connect');
     } finally { showLinking(null); }
   }
-  function showLinking(text) {
+  function showLinking(text, onCancel) {
     $('linking').classList.toggle('hidden', !text); $('v2Btn').classList.toggle('hidden', !!text);
     if (text) $('linkingText').textContent = text;
+    $('cancelLink').classList.toggle('hidden', !onCancel);
+    $('cancelLink').onclick = onCancel ? () => { onCancel(); showLinking(null); } : null;
   }
   function showConnectErr(msg) { const ce = $('connectErr'); ce.textContent = msg; ce.classList.toggle('hidden', !msg); }
   function enterApp() {
@@ -988,9 +995,9 @@
   async function startSession(token) {
     showConnectErr(''); $('connectBtn').disabled = true;
     try {
-      await api.connect($('server').value.trim(), $('appId').value.trim());
+      await api.connect($('server').value.trim(), wsAppId());
       await authorize(token);
-      store.set('dt_token', token, $('remember').checked);
+      store.set('dt_token', token, $('remember').checked); store.set('dt_linked', '1', true);
       enterApp();
     } catch (e) {
       showConnectErr(e.code === 'InvalidToken' ? 'That token was rejected by Deriv. Check it and try again.' : e.message);
@@ -1209,7 +1216,7 @@
         await sleep(1500 * (i + 1));
         try {
           if (S.mode === 'v2') await connectV2(S.v2Accounts.find((a) => a.id === S.activeV2)); // each connection needs a fresh one-time password
-          else { await api.connect($('server').value.trim(), $('appId').value.trim()); await authorize(S.token); }
+          else { await api.connect($('server').value.trim(), wsAppId()); await authorize(S.token); }
           log('Reconnected', 's'); return;
         } catch (e) {
           log(`Reconnect failed: ${e.message}`, 'e');
@@ -1231,9 +1238,10 @@
     startSession(t);
   };
   $('oauthBtn').onclick = () => {
-    const id = $('appId').value.trim();
-    if (id === '1089') return showConnectErr('The older login needs your own App ID from api.deriv.com, with this page\'s address as its redirect URL.');
+    const id = legacyAppId();
+    if (!id || id === '1089') { $('v2Setup').open = true; return showConnectErr('The older login needs your own Legacy App ID from api.deriv.com (OAuth settings), with this page\'s address as its redirect URL.'); }
     store.set('dt_appid', id, true); store.set('dt_server', $('server').value.trim(), true);
+    store.set('dt_login_started', String(Date.now()), true);
     location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${encodeURIComponent(id)}&l=EN`;
   };
   $('logoutBtn').onclick = () => {
@@ -1267,36 +1275,45 @@
 
   const q = new URLSearchParams(location.search);
   const noAutoLink = (() => { try { return sessionStorage.getItem('dt_no_autolink') === '1'; } catch { return false; } })();
-  if (q.get('code') || q.get('error')) {
-    // Back from Deriv's OAuth 2.0 login
-    history.replaceState(null, '', location.pathname);
-    if (q.get('error')) {
-      try { sessionStorage.setItem('dt_no_autolink', '1'); } catch {}
-      showConnectErr(q.get('error') === 'access_denied' ? 'Deriv login was cancelled.' : `Deriv login failed: ${q.get('error_description') || q.get('error')}`);
-    } else {
-      showLinking('Linking your Deriv account…');
-      finishV2Login(q.get('code'), q.get('state'))
-        .then(() => startV2Session())
-        .catch((e) => { showLinking(null); try { sessionStorage.setItem('dt_no_autolink', '1'); } catch {} showConnectErr(e.message); });
-    }
+  const blockAutoLink = () => { try { sessionStorage.setItem('dt_no_autolink', '1'); } catch {} };
+  const loginStarted = +store.get('dt_login_started') || 0;
+  const isCallback = q.get('code') || q.get('error') || q.get('token1');
+  store.del('dt_login_started');
+  if (isCallback) history.replaceState(null, '', location.pathname);
+
+  if (q.get('error')) {
+    blockAutoLink();
+    showConnectErr(q.get('error') === 'access_denied' ? 'Deriv login was cancelled.' : `Deriv login failed: ${q.get('error_description') || q.get('error')}`);
+  } else if (q.get('code')) {
+    // Back from Deriv's OAuth 2.0 login (new platform)
+    showLinking('Linking your Deriv account…');
+    finishV2Login(q.get('code'), q.get('state'))
+      .then(() => startV2Session())
+      .catch((e) => { showLinking(null); blockAutoLink(); showConnectErr(e.message); });
+  } else if (q.get('token1')) {
+    // Back from Deriv's older login (legacy App ID): ?acct1=..&token1=..&cur1=..&acct2=..
+    for (let i = 1; q.get('token' + i); i++) S.oauthAccounts.push({ acct: q.get('acct' + i), token: q.get('token' + i), cur: q.get('cur' + i) });
+    store.del('dt_v2'); store.set('dt_oauth', JSON.stringify(S.oauthAccounts), store.get('dt_remember') !== '0');
+    const first = S.oauthAccounts.find((a) => a.acct.startsWith('VR')) || S.oauthAccounts[0];
+    startSession(first.token);
+  } else if (loginStarted && Date.now() - loginStarted < 30 * 60 * 1000) {
+    // A login was started but Deriv never sent the browser back here (for example it showed its own dashboard or a 404).
+    blockAutoLink(); $('v2Setup').open = true;
+    showConnectErr(legacyAppId()
+      ? 'Deriv didn\'t send you back to the bot after login. Check that the redirect URL below is registered exactly, in both your developers.deriv.com app and your legacy app on api.deriv.com.'
+      : 'Deriv didn\'t send you back to the bot after login. This happens when your Deriv account is on Deriv\'s older platform: add your Legacy App ID below, then tap Log in with Deriv again.');
   } else if (v2Tokens()) {
     showLinking('Connecting to your Deriv account…');
     startV2Session();
-  } else if (q.get('token1')) {
-    // Older Deriv login (App ID) lands here with ?acct1=..&token1=..&cur1=..&acct2=..
-    for (let i = 1; q.get('token' + i); i++) S.oauthAccounts.push({ acct: q.get('acct' + i), token: q.get('token' + i), cur: q.get('cur' + i) });
-    store.set('dt_oauth', JSON.stringify(S.oauthAccounts));
-    history.replaceState(null, '', location.pathname);
-    const first = S.oauthAccounts.find((a) => a.acct.startsWith('VR')) || S.oauthAccounts[0];
-    startSession(first.token);
   } else {
     try { S.oauthAccounts = JSON.parse(store.get('dt_oauth') || '[]'); } catch {}
     const tok = store.get('dt_token');
     if (tok) startSession(tok);
-    else if (clientId() && $('autoLink').checked && !noAutoLink) {
-      // Nothing saved yet: go straight to Deriv. If you're already signed in there, you only approve and come back linked.
-      try { sessionStorage.setItem('dt_no_autolink', '1'); } catch {} // at most once per tab, so a failed login can't loop
-      beginV2Login();
+    else if (clientId() && $('autoLink').checked && !noAutoLink && store.get('dt_linked') === '1') {
+      // This device has linked before and the login lapsed: re-link automatically, with a moment to cancel.
+      blockAutoLink(); // at most once per tab, so a failed login can never loop
+      const t = setTimeout(beginV2Login, 1500);
+      showLinking('Reconnecting to Deriv…', () => clearTimeout(t));
     }
   }
 

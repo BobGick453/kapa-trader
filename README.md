@@ -12,17 +12,23 @@ Deriv's newer accounts log in with OAuth 2.0. You never type a password or token
 3. Copy the app's **client ID**. It isn't a secret, so it's safe to put in the page.
 4. In the bot, open **OAuth settings**, paste the client ID, and tap **Log in with Deriv**. To make it permanent for every visitor, set `DEFAULT_CLIENT_ID` in `index.html`.
 
+**If your account is on Deriv's older platform** (you used API tokens before): Deriv routes these accounts to a *legacy* app. Without one, Deriv leaves you on its own dashboard after login, which may show "We couldn't find that page".
+1. Register a legacy app at **https://api.deriv.com** (Dashboard → Register application) with the same redirect URL.
+2. Put its number in **OAuth settings → Legacy App ID**, or set `DEFAULT_LEGACY_APP_ID` in `index.html`.
+3. Tap **Log in with Deriv** again. Deriv now sends older accounts back to the bot.
+
 **After that:**
-- When you open the bot, it goes straight to Deriv. If you're already signed in to Deriv in that browser, you just approve, and you come back linked to your **demo** account first.
-- The login is remembered on that device, and expired logins renew automatically when Deriv provides a refresh token. **Admin → Disconnect** unlinks it.
+- The first time, tap **Log in with Deriv**. If you're already signed in to Deriv in that browser, you just approve, and you come back linked to your **demo** account first.
+- The login is remembered on that device, and later visits connect on their own. If the login lapses, the bot re-links automatically, with a **Cancel** button. It never redirects on a first visit, and never after a login that didn't come back, so you can't get stuck outside the bot.
+- **Admin → Disconnect** unlinks it.
 - Switch between Demo and Real from the account name in the header.
 
 No website can read your deriv.com login by itself, because browsers block that to protect your account. Deriv's approve screen is the safe version of "detect my account automatically".
 
 **If login fails with "blocked by the browser":** Deriv's token server isn't accepting requests directly from web pages. Deploy `token-exchange-worker.js` as a free Cloudflare Worker (dash.cloudflare.com → Workers → Create → paste the file → Deploy). Then paste the worker's URL into **OAuth settings → Token exchange URL**.
 
-### Older Deriv accounts
-Accounts still on the old API can use **Older Deriv accounts: API token**: paste a token with **Read** + **Trade** scopes, or use an App ID from api.deriv.com.
+### Older Deriv accounts without OAuth
+**Older Deriv accounts: API token** still works if you have a token with **Read** + **Trade** scopes. **Older login (App ID)** uses only your Legacy App ID.
 
 ## Screens (same layout as the reference video)
 - **Header**: account type and balance (tap to switch accounts after OAuth login), **Transfer** opens Deriv's cashier
