@@ -2,16 +2,27 @@
 
 A one-file web bot that trades on your own Deriv account through Deriv's official WebSocket API (`wss://ws.derivws.com/websockets/v3`). There's no backend: the page talks to Deriv directly from your browser.
 
-## Use it
+## Connect your Deriv account (OAuth 2.0)
 
-1. Open `index.html` in a browser, or host it anywhere static (GitHub Pages, Netlify Drop, Cloudflare Pages).
-2. On Deriv, go to **Settings → API token** and create a token with **Read** and **Trade** scopes only. Do not enable Payments or Admin.
-3. Paste the token and press **Connect with token**. Start on your **Demo** account.
+Deriv's newer accounts log in with OAuth 2.0. You never type a password or token into the bot.
 
-### Optional: "Log in with Deriv"
-1. Register an app at https://api.deriv.com and set the redirect URL to wherever you host `index.html`.
-2. Put your App ID in the **App ID** field and press **Log in with Deriv**.
-3. You'll come back logged in, with all your accounts in the header dropdown. The bot starts on the demo account.
+**One-time setup (5 minutes):**
+1. Sign in at **https://developers.deriv.com** and register a new app with **OAuth 2.0** login.
+2. For the redirect URL, enter exactly `https://bobgick453.github.io/kapa-trader/`. The bot also shows it under **Connect → OAuth settings**, with a Copy button.
+3. Copy the app's **client ID**. It isn't a secret, so it's safe to put in the page.
+4. In the bot, open **OAuth settings**, paste the client ID, and tap **Log in with Deriv**. To make it permanent for every visitor, set `DEFAULT_CLIENT_ID` in `index.html`.
+
+**After that:**
+- When you open the bot, it goes straight to Deriv. If you're already signed in to Deriv in that browser, you just approve, and you come back linked to your **demo** account first.
+- The login is remembered on that device, and expired logins renew automatically when Deriv provides a refresh token. **Admin → Disconnect** unlinks it.
+- Switch between Demo and Real from the account name in the header.
+
+No website can read your deriv.com login by itself, because browsers block that to protect your account. Deriv's approve screen is the safe version of "detect my account automatically".
+
+**If login fails with "blocked by the browser":** Deriv's token server isn't accepting requests directly from web pages. Deploy `token-exchange-worker.js` as a free Cloudflare Worker (dash.cloudflare.com → Workers → Create → paste the file → Deploy). Then paste the worker's URL into **OAuth settings → Token exchange URL**.
+
+### Older Deriv accounts
+Accounts still on the old API can use **Older Deriv accounts: API token**: paste a token with **Read** + **Trade** scopes, or use an App ID from api.deriv.com.
 
 ## Screens (same layout as the reference video)
 - **Header**: account type and balance (tap to switch accounts after OAuth login), **Transfer** opens Deriv's cashier
