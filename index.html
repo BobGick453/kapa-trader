@@ -312,7 +312,7 @@
         <div class="fld"><label for="redirectUri">Redirect URL to register with Deriv</label>
           <div class="row"><input class="inp sm" id="redirectUri" readonly style="flex:1;min-width:0"><button class="btn line" id="copyRedirect" type="button">Copy</button></div></div>
         <div class="grid2">
-          <div class="fld"><label for="oauthScope">Scopes</label><input class="inp sm" id="oauthScope" placeholder="Deriv's default"></div>
+          <div class="fld"><label for="oauthScope">Scopes</label><input class="inp sm" id="oauthScope" placeholder="trade"></div>
           <div class="fld"><label for="tokenProxy">Token exchange URL</label><input class="inp sm" id="tokenProxy" placeholder="Deriv's token endpoint"></div>
         </div>
         <label class="check"><input type="checkbox" id="autoLink" checked> Link automatically when the page opens</label>
@@ -713,7 +713,8 @@
   $('bReset').onclick = () => { if (!S.bot.running) { restoreSettings({}); persistSettings(); toast('Bot Builder reset to defaults.'); } };
 
   function buildProposal(symbol, ctype, barrier, duration, amount) {
-    const req = { proposal: 1, amount: round2(amount), basis: 'stake', contract_type: ctype, currency: S.currency, duration, duration_unit: 't', symbol };
+    const req = { proposal: 1, amount: round2(amount), basis: 'stake', contract_type: ctype, currency: S.currency, duration, duration_unit: 't' };
+    req[S.mode === 'v2' ? 'underlying_symbol' : 'symbol'] = symbol; // the new API renamed this field
     if (needsBarrier(ctype)) req.barrier = String(barrier);
     return req;
   }
@@ -721,6 +722,8 @@
   // ---------- Scanner ----------
   // Compares live Deriv prices across markets and ranks them by expected result per trade.
   const SCAN_MARKETS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100'];
+  // Decimal places per market, used when a history response doesn't include pip_size
+  const PIP_SIZES = { R_10: 3, R_25: 3, R_50: 4, R_75: 4, R_100: 2, '1HZ10V': 2, '1HZ25V': 2, '1HZ50V': 2, '1HZ75V': 2, '1HZ100V': 2 };
   const SCAN_BARRIERS = [1, 2];
   function setScanner(state, sub) {
     const el = $('scanner'); el.classList.toggle('busy', state === 'busy'); el.classList.toggle('off', state === 'off');
@@ -747,7 +750,7 @@
         let digits = [];
         try {
           const h = await api.send({ ticks_history: sym, count: 100, end: 'latest', style: 'ticks' });
-          const pip = h.pip_size ?? 2;
+          const pip = h.pip_size ?? PIP_SIZES[sym] ?? 2;
           digits = h.history.prices.map((p) => { const s = Number(p).toFixed(pip); return +s[s.length - 1]; });
         } catch {}
         await Promise.all(SCAN_BARRIERS.map(async (b) => {
@@ -830,7 +833,8 @@
     const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     try { sessionStorage.setItem('dt_pkce', JSON.stringify({ verifier, state })); } catch {}
     const p = new URLSearchParams({ response_type: 'code', client_id: id, redirect_uri: redirectUri(), code_challenge: challenge, code_challenge_method: 'S256', state });
-    const scope = $('oauthScope').value.trim(); if (scope) p.set('scope', scope);
+    p.set('scope', $('oauthScope').value.trim() || 'trade'); // Deriv rejects scopes the app isn't registered for; trade is the minimum
+    p.set('lang', (navigator.language || 'en').slice(0, 2).toUpperCase()); // Deriv's login page in the visitor's language
     if (legacyAppId()) p.set('app_id', legacyAppId()); // lets Deriv route older-platform accounts back here
     store.set('dt_login_started', String(Date.now()), true); // lets the next page load notice if Deriv never sent us back
     showLinking('Opening Deriv…');
