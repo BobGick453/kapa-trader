@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { adminApi, premiumEnabled } from '../premium/premium-api';
 import './admin.scss';
 
-type TEnt = { key: string; value: { plan: string; expiresAt: number; source: string; accounts?: string[] } };
+type TCode = { set: boolean; source: 'admin' | 'secret' | null; updatedAt: number | null; ready: boolean };
 type TPay = {
     key: string;
     value: {
@@ -29,18 +29,20 @@ const AdminPage = () => {
         }
     });
     const [input, setInput] = useState('');
-    const [ents, setEnts] = useState<TEnt[] | null>(null);
+    const [codeInfo, setCodeInfo] = useState<TCode | null>(null);
     const [pays, setPays] = useState<TPay[] | null>(null);
-    const [account, setAccount] = useState('');
-    const [days, setDays] = useState(30);
+    const [newCode, setNewCode] = useState('');
+    const [confirmCode, setConfirmCode] = useState('');
+    const [showCode, setShowCode] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
     const [error, setError] = useState('');
 
     const load = useCallback(async (sec: string) => {
         setError('');
         try {
-            const [e, p] = await Promise.all([adminApi.entitlements(sec), adminApi.payments(sec)]);
-            setEnts(e.entitlements);
+            const [c, p] = await Promise.all([adminApi.code(sec), adminApi.payments(sec)]);
+            setCodeInfo(c);
             setPays(p.payments.sort((a: TPay, b: TPay) => b.value.createdAt - a.value.createdAt));
             return true;
         } catch (err: any) {
@@ -71,28 +73,39 @@ const AdminPage = () => {
             /* nothing stored */
         }
         setSecret('');
-        setEnts(null);
+        setCodeInfo(null);
         setPays(null);
     };
-    const doGrant = async () => {
+    const clean = (c: string) => c.replace(/[\s-]+/g, '').toUpperCase();
+    const codeError = (() => {
+        const c = clean(newCode);
+        if (!c) return '';
+        if (c.length < 8) return 'At least 8 characters (spaces and dashes not counted).';
+        if (!/^[A-Z0-9_.@#!*+=]+$/.test(c)) return 'Use letters, digits or _ . @ # ! * + =';
+        if (confirmCode && clean(confirmCode) !== c) return 'The two codes are different.';
+        return '';
+    })();
+    const saveCode = async () => {
+        if (codeError || !newCode || clean(confirmCode) !== clean(newCode)) return;
+        const warn = codeInfo?.set
+            ? 'Change the Premium code? Everyone using the current code, you included, must enter the new one.'
+            : 'Save this Premium code?';
+        if (!window.confirm(warn)) return;
+        setSaving(true);
         setMsg('');
+        setError('');
         try {
-            const r = await adminApi.grant(secret, account.trim(), days);
-            setMsg(`Premium granted to ${account.trim()} until ${fmtDate(r.entitlement.expiresAt)}.`);
-            setAccount('');
-            load(secret);
+            const r = await adminApi.setCode(secret, newCode);
+            setCodeInfo(c => ({ ...(c as TCode), set: true, source: 'admin', updatedAt: r.updatedAt }));
+            setMsg(
+                'New Premium code saved. Enter it in KAPA AI to unlock Premium on your devices, and send it to paying customers.'
+            );
+            setNewCode('');
+            setConfirmCode('');
         } catch (e: any) {
             setError(e?.message ?? 'Server error');
-        }
-    };
-    const doRevoke = async (id: string) => {
-        if (!window.confirm(`Remove Premium from ${id}?`)) return;
-        try {
-            await adminApi.revoke(secret, id);
-            setMsg(`Premium removed from ${id}.`);
-            load(secret);
-        } catch (e: any) {
-            setError(e?.message ?? 'Server error');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -115,7 +128,7 @@ const AdminPage = () => {
             <div className='kapa-admin'>
                 <section className='kapa-admin__card kapa-admin__card--login'>
                     <h2>Admin Dashboard</h2>
-                    <p>Enter the admin secret to manage Premium memberships and payments.</p>
+                    <p>Enter the admin secret to change the Premium code and see payments.</p>
                     <input
                         type='password'
                         placeholder='Admin secret'
@@ -133,7 +146,6 @@ const AdminPage = () => {
         );
     }
 
-    const now = Date.now();
     return (
         <div className='kapa-admin'>
             <section className='kapa-admin__card'>
@@ -145,16 +157,8 @@ const AdminPage = () => {
                 </div>
                 <div className='kapa-admin__kpis'>
                     <div>
-                        <small>Active members</small>
-                        <b>
-                            {
-                                new Set(
-                                    (ents || [])
-                                        .filter(e => e.value.expiresAt > now)
-                                        .map(e => (e.value.accounts || [e.key]).join())
-                                ).size
-                            }
-                        </b>
+                        <small>Premium code</small>
+                        <b>{codeInfo?.set ? 'Set' : 'Not set'}</b>
                     </div>
                     <div>
                         <small>Paid payments</small>
@@ -176,69 +180,72 @@ const AdminPage = () => {
             </section>
 
             <section className='kapa-admin__card'>
-                <h3>Grant Premium</h3>
-                <div className='kapa-admin__grant'>
+                <h3>Premium code</h3>
+                <p className='kapa-admin__help'>
+                    {codeInfo?.set
+                        ? `A code is active${codeInfo.updatedAt ? ` since ${fmtDate(codeInfo.updatedAt)}` : ' (from the PREMIUM_CODE secret)'}. For security the code is never shown again, so keep it somewhere safe.`
+                        : 'No code yet: nobody can unlock Premium. Choose one below.'}
+                </p>
+                <p className='kapa-admin__help'>
+                    Changing the code locks Premium for everyone who used the old one, you included, until they enter
+                    the new code. Use it when a subscription ends, then send the new code to customers who paid.
+                </p>
+                {codeInfo && !codeInfo.ready && (
+                    <p className='kapa-admin__error'>
+                        The server has no SESSION_KEY yet, so the code can&apos;t be saved.
+                    </p>
+                )}
+                <div className='kapa-admin__code'>
                     <input
-                        placeholder='Deriv account ID, e.g. ROT90001'
-                        value={account}
-                        onChange={e => setAccount(e.target.value)}
+                        type={showCode ? 'text' : 'password'}
+                        placeholder='New code (8+ characters)'
+                        value={newCode}
+                        onChange={e => setNewCode(e.target.value)}
+                        autoComplete='new-password'
+                        spellCheck={false}
+                        aria-label='New Premium code'
                     />
                     <input
-                        type='number'
-                        min={1}
-                        max={3650}
-                        value={days}
-                        onChange={e => setDays(+e.target.value)}
-                        aria-label='Days'
+                        type={showCode ? 'text' : 'password'}
+                        placeholder='Type it again'
+                        value={confirmCode}
+                        onChange={e => setConfirmCode(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && saveCode()}
+                        autoComplete='new-password'
+                        spellCheck={false}
+                        aria-label='Confirm the new Premium code'
                     />
-                    <button type='button' className='kapa-admin__gold' onClick={doGrant} disabled={!account.trim()}>
-                        Grant
+                    <label className='kapa-admin__show'>
+                        <input type='checkbox' checked={showCode} onChange={e => setShowCode(e.target.checked)} /> Show
+                    </label>
+                    <button
+                        type='button'
+                        className='kapa-admin__gold'
+                        onClick={saveCode}
+                        disabled={saving || !newCode || !!codeError || clean(confirmCode) !== clean(newCode)}
+                    >
+                        {saving ? 'Saving…' : codeInfo?.set ? 'Change code' : 'Save code'}
                     </button>
                 </div>
-            </section>
-
-            <section className='kapa-admin__card'>
-                <h3>Members</h3>
-                <div className='kapa-admin__table'>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Account</th>
-                                <th>Expires</th>
-                                <th>Source</th>
-                                <th />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {(ents || []).map(e => (
-                                <tr key={e.key} className={e.value.expiresAt > now ? '' : 'expired'}>
-                                    <td>{e.key}</td>
-                                    <td>{fmtDate(e.value.expiresAt)}</td>
-                                    <td>{e.value.source}</td>
-                                    <td>
-                                        <button
-                                            type='button'
-                                            className='kapa-admin__ghost'
-                                            onClick={() => doRevoke(e.key)}
-                                        >
-                                            Revoke
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {!ents?.length && <p className='kapa-admin__empty'>No members yet.</p>}
-                </div>
+                {codeError && <p className='kapa-admin__error'>{codeError}</p>}
+                <p className='kapa-admin__help'>
+                    Spaces, dashes and letter case don&apos;t matter when the code is typed: &quot;ABCD-1234-XYZ&quot;
+                    and &quot;abcd 1234 xyz&quot; are the same code.
+                </p>
             </section>
 
             <section className='kapa-admin__card'>
                 <h3>Payments</h3>
+                <p className='kapa-admin__help'>
+                    When a payment shows &quot;paid&quot;, send the Premium code to that customer. They give you the
+                    payment reference shown on their screen.
+                </p>
                 <div className='kapa-admin__table'>
                     <table>
                         <thead>
                             <tr>
                                 <th>Date</th>
+                                <th>Reference</th>
                                 <th>Accounts</th>
                                 <th>Amount</th>
                                 <th>Method</th>
@@ -249,6 +256,7 @@ const AdminPage = () => {
                             {(pays || []).map(p => (
                                 <tr key={p.key}>
                                     <td>{fmtDate(p.value.createdAt)}</td>
+                                    <td className='kapa-admin__ref'>{p.key}</td>
                                     <td>{p.value.accounts.join(', ')}</td>
                                     <td>
                                         {p.value.amount.toLocaleString()} {p.value.currency}

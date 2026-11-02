@@ -8,7 +8,7 @@ Kapa Trader is built on Deriv's open-source [trading-bot-template](https://githu
 - **Privacy**: the template's Google Tag Manager IDs, Survicate surveys and the upload of strategies and transactions to Deriv's analytics service are switched off.
 
 - **Reference-bot screens**: splash, pill tabs (Admin, KAPA AI, Dashboard, Bot Builder, Free Bot, Charts, Tutorials), dashboard carousel with social icons, floating AI orb with the live connection state and the KAPA Live Scanner, risk warning, Free Bot library.
-- **Premium** (`server/`): a Cloudflare Worker that verifies Deriv identity, sells access through CinetPay (mobile money and cards) and powers the Admin tab. Setup guide in `server/README.md`. Without `KAPA_API_URL` at build time the Premium tools are unavailable and only the free tools work. Security notes and the audit are in `SECURITY.md`.
+- **Premium** (`server/`): a Cloudflare Worker. Premium is unlocked with a secret code the owner sets and changes from the Admin tab; the server checks the code and runs the Premium tools. Payments go through CinetPay (mobile money and cards); the owner then sends the code. Setup guide in `server/README.md`. Without `KAPA_API_URL` at build time the Premium tools are unavailable and only the free tools work. Security notes and the audit are in `SECURITY.md`.
 
 ## Build for GitHub Pages
 

@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { generateOAuthURL } from '@/components/shared';
+import brandConfig from '@/../brand.config.json';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import {
     fetchPlan,
+    lockPremium,
     premiumEnabled,
     refreshEntitlement,
     remotePolicy,
@@ -15,6 +17,7 @@ import {
     startCheckout,
     TPlan,
     TPlanResult,
+    unlockPremium,
 } from '../premium/premium-api';
 import { openPremium, usePremium } from '../premium/use-premium';
 import {
@@ -172,17 +175,16 @@ const KapaAI = observer(() => {
         []
     );
 
-    // Premium: check the entitlement after login, finish a payment when CinetPay sends the buyer back
+    // Premium: check this device's code pass, and finish a payment when CinetPay sends the buyer back
     useEffect(() => {
         if (!premiumEnabled()) return;
+        refreshEntitlement();
         fetchPlan()
             .then(setPlan_)
             .catch(() => setPlan_(null));
     }, []);
     useEffect(() => {
-        if (!logged_in) return;
-        refreshEntitlement();
-        resumeCheckout(setPremiumMsg);
+        if (logged_in) resumeCheckout(setPremiumMsg);
     }, [logged_in]);
     // "Use in KAPA AI" from the Live Scanner
     useEffect(() => {
@@ -219,6 +221,30 @@ const KapaAI = observer(() => {
         if (!isPremium && premium.status !== 'unknown' && premium.status !== 'checking' && s.strategy !== 'fixed')
             update({ strategy: 'fixed' });
     }, [isPremium, premium.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const [code, setCode] = useState('');
+    const [unlocking, setUnlocking] = useState(false);
+    const unlock = async (e?: React.FormEvent) => {
+        e?.preventDefault();
+        if (!code.trim() || unlocking) return;
+        setUnlocking(true);
+        setPremiumMsg('');
+        try {
+            await unlockPremium(code);
+            setCode('');
+            setPremiumMsg('Premium unlocked on this device.');
+        } catch (err: any) {
+            setPremiumMsg(err?.message ?? "Couldn't reach the Premium server. Try again.");
+        } finally {
+            setUnlocking(false);
+        }
+    };
+    const relock = () => {
+        if (running) return;
+        lockPremium();
+        setPremiumMsg('Premium locked on this device. Enter the code to unlock it again.');
+    };
+    const contact = brandConfig.platform.social?.whatsapp || brandConfig.platform.social?.telegram || '';
 
     const pay = async () => {
         setPaying(true);
@@ -459,12 +485,12 @@ const KapaAI = observer(() => {
                     {
                         <div className={classNames('kapa-premium', { 'kapa-premium--on': isPremium })} ref={premiumRef}>
                             {isPremium ? (
-                                <p className='kapa-premium__active'>
-                                    ✓ Premium active
-                                    {premium.expiresAt
-                                        ? ` until ${new Date(premium.expiresAt).toLocaleDateString()}`
-                                        : ''}
-                                </p>
+                                <div className='kapa-premium__activebar'>
+                                    <p className='kapa-premium__active'>✓ KAPA AI Premium unlocked</p>
+                                    <button className='kapa-link' type='button' onClick={relock} disabled={running}>
+                                        Lock on this device
+                                    </button>
+                                </div>
                             ) : (
                                 <>
                                     <div className='kapa-premium__tag'>PREMIUM LOCKED</div>
@@ -486,34 +512,71 @@ const KapaAI = observer(() => {
                                             <b>Premium bots</b> in the Free Bot library
                                         </li>
                                     </ul>
+                                    {premium.status === 'off' ? (
+                                        <p className='kapa-premium__note'>KAPA AI Premium opens soon.</p>
+                                    ) : (
+                                        <>
+                                            <form className='kapa-premium__code' onSubmit={unlock}>
+                                                <label htmlFor='kapa-premium-code'>Premium code</label>
+                                                <div>
+                                                    <input
+                                                        id='kapa-premium-code'
+                                                        type='password'
+                                                        value={code}
+                                                        onChange={e => setCode(e.target.value)}
+                                                        placeholder='Enter your secret code'
+                                                        autoComplete='off'
+                                                        autoCapitalize='characters'
+                                                        spellCheck={false}
+                                                        maxLength={80}
+                                                    />
+                                                    <button
+                                                        className='kapa-btn kapa-btn--gold'
+                                                        type='submit'
+                                                        disabled={!code.trim() || unlocking}
+                                                    >
+                                                        {unlocking ? 'Checking…' : 'Unlock'}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                            <div className='kapa-premium__buy'>
+                                                <b>No code yet?</b>
+                                                <span>
+                                                    Pay for Premium, then Kapa sends you the code.
+                                                    {plan_?.configured
+                                                        ? ` ${plan_.price.toLocaleString()} ${plan_.currency} for ${plan_.days} days, by mobile money (Orange, MTN, Moov, Wave) or bank card.`
+                                                        : ''}
+                                                </span>
+                                                {plan_?.configured && (
+                                                    <button
+                                                        className='kapa-btn kapa-btn--line'
+                                                        type='button'
+                                                        onClick={pay}
+                                                        disabled={!logged_in || paying}
+                                                    >
+                                                        {paying ? 'Opening CinetPay…' : 'Pay with CinetPay'}
+                                                    </button>
+                                                )}
+                                                {plan_?.configured && !logged_in && (
+                                                    <small>Log in with Deriv first to pay.</small>
+                                                )}
+                                                {contact && (
+                                                    <a
+                                                        className='kapa-btn kapa-btn--line'
+                                                        href={contact}
+                                                        target='_blank'
+                                                        rel='noopener noreferrer'
+                                                    >
+                                                        Contact Kapa
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
                                     <p className='kapa-premium__note'>
                                         The session plan stays free for everyone. Premium adds tools; it does not change
                                         the odds: every Deriv contract still pays less than its true chance.
                                     </p>
-                                    {premium.status === 'off' ? (
-                                        <p className='kapa-premium__note'>KAPA AI Premium opens soon.</p>
-                                    ) : plan_?.configured ? (
-                                        <button
-                                            className='kapa-btn kapa-btn--gold'
-                                            type='button'
-                                            onClick={pay}
-                                            disabled={!logged_in || paying}
-                                        >
-                                            {paying
-                                                ? 'Opening CinetPay…'
-                                                : `Get Premium · ${plan_.price.toLocaleString()} ${plan_.currency} / ${plan_.days} days`}
-                                        </button>
-                                    ) : (
-                                        <p className='kapa-premium__note'>Premium payments open soon.</p>
-                                    )}
-                                    <small className='kapa-premium__methods'>
-                                        Mobile money (Orange, MTN, Moov, Wave) or bank card, through CinetPay.
-                                    </small>
-                                    {!logged_in && (
-                                        <small className='kapa-premium__methods'>
-                                            Log in with Deriv first: Premium is linked to your Deriv account.
-                                        </small>
-                                    )}
                                     {premium.status === 'unavailable' && (
                                         <button
                                             className='kapa-link'

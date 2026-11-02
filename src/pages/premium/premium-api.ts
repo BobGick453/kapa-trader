@@ -17,13 +17,34 @@ const accessToken = (): string | null => {
     }
 };
 
+// The Premium pass the server returns for a correct code. It proves nothing by itself: the server
+// checks its signature, and that it was made for the current code, on every Premium request.
+const PASS_KEY = 'kapa_premium_pass';
+const readPass = (): string | null => {
+    try {
+        return localStorage.getItem(PASS_KEY);
+    } catch {
+        return null;
+    }
+};
+const savePass = (pass: string | null) => {
+    try {
+        if (pass) localStorage.setItem(PASS_KEY, pass);
+        else localStorage.removeItem(PASS_KEY);
+    } catch {
+        /* the pass then lasts for this visit only */
+    }
+};
+
 const call = async (path: string, init: RequestInit = {}) => {
     const token = accessToken();
+    const pass = readPass();
     const res = await fetch(`${PREMIUM_API}${path}`, {
         ...init,
         headers: {
             ...(init.headers || {}),
             ...(token ? { authorization: `Bearer ${token}` } : {}),
+            ...(pass ? { 'x-kapa-pass': pass } : {}),
             ...(init.body ? { 'content-type': 'application/json' } : {}),
         },
     });
@@ -37,20 +58,36 @@ export type TPlan = { price: number; currency: string; days: number; configured:
 
 export const fetchPlan = (): Promise<TPlan> => call('/plan');
 
-/** Refreshes the shared Premium state from the server. */
+/** Refreshes the shared Premium state: asks the server whether this device's pass is still valid. */
 export const refreshEntitlement = async () => {
     if (!premiumEnabled()) return setPremium({ status: 'off' });
-    if (!accessToken()) return setPremium({ status: 'inactive' });
+    if (!readPass()) return setPremium({ status: 'inactive' });
     setPremium({ status: 'checking' });
     try {
-        const e = await call('/entitlement');
-        setPremium(
-            e.status === 'active' ? { status: 'active', plan: e.plan, expiresAt: e.expiresAt } : { status: 'inactive' }
-        );
+        const r = await call('/premium/status');
+        if (r.status === 'active' && r.pass) {
+            savePass(r.pass);
+            setPremium({ status: 'active', plan: 'premium' });
+        } else {
+            savePass(null); // the code was changed: the new code is needed
+            setPremium({ status: 'inactive' });
+        }
     } catch {
-        // Without an answer from the server Premium stays locked; the user can retry
-        setPremium({ status: 'unavailable' });
+        setPremium({ status: 'unavailable' }); // Premium stays locked; the user can retry
     }
+};
+
+/** Unlocks Premium on this device with the secret code. Only the server can tell whether the code is right. */
+export const unlockPremium = async (code: string) => {
+    const r = await call('/premium/unlock', { method: 'POST', body: JSON.stringify({ code }) });
+    savePass(r.pass);
+    setPremium({ status: 'active', plan: 'premium' });
+};
+
+/** Locks Premium again on this device. */
+export const lockPremium = () => {
+    savePass(null);
+    setPremium({ status: premiumEnabled() ? 'inactive' : 'off' });
 };
 
 /** Starts a CinetPay payment (mobile money or card) and leaves for CinetPay's checkout page. */
@@ -75,17 +112,20 @@ export const resumeCheckout = async (onUpdate: (text: string) => void) => {
         try {
             const s = await call(`/checkout/status?tx=${encodeURIComponent(tx)}`);
             if (s.status === 'paid') {
-                await refreshEntitlement();
-                return onUpdate('Payment confirmed. KAPA AI Premium is active.');
+                return onUpdate(
+                    `Payment confirmed. Send this reference to Kapa on WhatsApp or Telegram to receive your Premium code: ${tx}`
+                );
             }
             if (s.status === 'failed')
                 return onUpdate('The payment was refused or cancelled. No money was taken for Premium.');
         } catch (e: any) {
-            if (e?.status === 401) return onUpdate('Log in with Deriv to finish activating Premium.');
+            if (e?.status === 401) return onUpdate('Log in with Deriv to check your payment.');
         }
         await new Promise(r => setTimeout(r, 3000));
     }
-    onUpdate('Your payment is still being processed. Premium turns on automatically once CinetPay confirms it.');
+    onUpdate(
+        `Your payment is still being processed. Once CinetPay confirms it, send this reference to Kapa to receive your Premium code: ${tx}`
+    );
 };
 
 // ---- Premium tools: everything below is decided by the server, which checks the membership each time ----
@@ -172,9 +212,7 @@ const adminCall = (path: string, secret: string, body?: unknown) =>
     });
 
 export const adminApi = {
-    entitlements: (secret: string) => adminCall('/admin/entitlements', secret),
     payments: (secret: string) => adminCall('/admin/payments', secret),
-    grant: (secret: string, account_id: string, days: number) =>
-        adminCall('/admin/grant', secret, { account_id, days }),
-    revoke: (secret: string, account_id: string) => adminCall('/admin/revoke', secret, { account_id }),
+    code: (secret: string) => adminCall('/admin/code', secret),
+    setCode: (secret: string, code: string) => adminCall('/admin/code', secret, { code }),
 };

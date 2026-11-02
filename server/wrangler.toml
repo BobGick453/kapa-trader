@@ -18,4 +18,5 @@ id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 
 # Secrets (never in this file): CINETPAY_APIKEY, CINETPAY_SITE_ID, ADMIN_SECRET (20+ characters),
 # SESSION_KEY (32+ random characters; signs KAPA AI strategy sessions),
+# PREMIUM_CODE (optional first Premium code; the Admin page can set and change it),
 # PREMIUM_RULES (optional JSON that replaces the public default strategy values; see README.md)

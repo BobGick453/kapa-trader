@@ -133,9 +133,10 @@ const AppWrapper = observer(() => {
     };
     const active_hash_tab = GetHashedValue(active_tab);
     // Premium status for every tab (Free Bot locks Premium bots too), and "open Premium" from anywhere
+    // (Premium is unlocked with a code, so it doesn't depend on the Deriv login)
     useEffect(() => {
-        if (client.is_logged_in) refreshEntitlement();
-    }, [client.is_logged_in]);
+        refreshEntitlement();
+    }, []);
     useEffect(() => {
         const open = () => setActiveTab(DBOT_TABS.KAPA_AI);
         window.addEventListener('kapa:open-premium', open);

@@ -9,7 +9,14 @@ Ce document décrit ce qui a été vérifié et corrigé, ce qui reste exposé, 
 **Maintenant :**
 
 - Les stratégies Premium tournent sur le serveur Kapa (`server/strategy.js`). Le site envoie le résultat de chaque contrat et reçoit l'ordre suivant (marché, barrière, mise). Les règles ne sont plus dans le code du site : une recherche dans le site compilé ne trouve aucune de leurs valeurs.
-- Sans Premium actif, le serveur répond « 402 » : aucun ordre, aucun scan, aucun réglage de bot Premium. L'abonnement est revérifié à chaque décision : s'il expire pendant une session, la session s'arrête.
+- Sans accès Premium, le serveur répond « 402 » : aucun ordre, aucun scan, aucun réglage de bot Premium. L'accès est revérifié à chaque décision.
+- **Code secret Premium (mise à jour).** Le Premium s'ouvre avec un code choisi par le propriétaire dans l'Admin.
+  - Le code est vérifié uniquement par le serveur, qui n'en garde qu'une empreinte HMAC (avec `SESSION_KEY`), jamais le code en clair.
+  - Un code juste donne un « pass » signé, valable 30 jours (renouvelé à l'usage) et lié à la version du code : changer le code reverrouille immédiatement tous les appareils et arrête les sessions en cours.
+  - Après 10 codes faux, l'adresse IP est bloquée une heure ; le code fait au moins 8 caractères.
+  - Un pass ne peut pas servir de session de stratégie, ni l'inverse.
+  - Limite : un code reste partageable par un client. Le remède est de le changer et de ne renvoyer le nouveau qu'aux clients à jour.
+  - Un paiement CinetPay est vérifié et enregistré, mais ne débloque rien seul : le propriétaire envoie le code.
 - Les sessions sont signées (HMAC-SHA256 avec `SESSION_KEY`). Une session modifiée, expirée (6 h) ou appartenant à un autre compte Deriv est refusée. Un même contrat envoyé deux fois n'est compté qu'une fois.
 - Le scanner interroge lui-même les prix publics de Deriv. Le plan de session des stratégies Premium est calculé par le serveur (gratuit, limité en débit et en temps de calcul).
 - Le serveur impose les limites : stop-loss obligatoire, mise jamais supérieure au stop-loss, pertes d'affilée plafonnées à 20.
@@ -18,7 +25,7 @@ Ce document décrit ce qui a été vérifié et corrigé, ce qui reste exposé, 
 
 **Ce qui reste possible, et pourquoi c'est acceptable :** chaque client passe ses ordres avec son propre compte Deriv, donc personne ne peut l'empêcher d'écrire sa propre stratégie, par exemple dans Bot Builder. Mais il n'obtient ni les stratégies Kapa, ni le scanner, ni les bots Premium sans payer. Un membre qui ment au serveur sur le résultat d'un contrat ne fausse que sa propre session.
 
-**Tests :** 57 tests unitaires du serveur et des tests navigateur. Ils vérifient les appels directs au serveur sans payer, les sessions falsifiées, la stratégie forcée dans le stockage local, la fin du Premium en cours de session et les clés « piégées » comme `constructor` ou `__proto__`.
+**Tests :** 49 tests unitaires du serveur (modèle à code secret) et des tests navigateur. Ils vérifient les appels directs au serveur sans payer, les sessions falsifiées, la stratégie forcée dans le stockage local, la fin du Premium en cours de session et les clés « piégées » comme `constructor` ou `__proto__`.
 
 ## 2. Paiements et Admin
 

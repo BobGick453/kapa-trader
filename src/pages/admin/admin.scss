@@ -230,3 +230,56 @@
         }
     }
 }
+
+// Premium code card
+.kapa-admin {
+    &__help {
+        margin: 0 0 1rem;
+        color: #93a3cc;
+        font-size: 1.3rem;
+    }
+
+    &__code {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 0.8rem;
+        margin-bottom: 0.8rem;
+
+        @media (width <= 720px) {
+            grid-template-columns: minmax(0, 1fr) auto;
+
+            input[type='password'],
+            input[type='text'] {
+                grid-column: 1 / -1;
+            }
+        }
+
+        input[type='password'],
+        input[type='text'] {
+            letter-spacing: 0.1rem;
+        }
+    }
+
+    &__show {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: #c8d1ec;
+        white-space: nowrap;
+        cursor: pointer;
+
+        input {
+            min-height: 0 !important;
+            width: 1.8rem;
+            height: 1.8rem;
+            padding: 0 !important;
+        }
+    }
+
+    &__ref {
+        font-family: ui-monospace, monospace;
+        font-size: 1.2rem;
+        word-break: break-all;
+    }
+}
