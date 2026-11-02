@@ -3,14 +3,16 @@
     <head>
 
         <meta charset="UTF-8" />
-        <link rel="icon" type="image/svg+xml" href="/kapa-traderkapa-logo.svg" />
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://apis.google.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; media-src 'self' blob: https:; connect-src 'self' https://*.deriv.com https://*.derivws.com wss://*.derivws.com https://www.googleapis.com https://content.googleapis.com https://accounts.google.com; frame-src https://www.youtube.com https://iframe.cloudflarestream.com https://charts.deriv.com https://accounts.google.com https://docs.google.com https://content.googleapis.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+        <meta name="referrer" content="strict-origin-when-cross-origin" />
+        <link rel="icon" type="image/svg+xml" href="/kapa-trader/kapa-logo.svg" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-        <meta name="title" content="Automate Your Trades | Deriv Bot" />
+        <meta name="title" content="Kapa Trader" />
         <meta
             name="description"
             content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
         />
-        <meta property="og:title" content="Deriv Bot" />
+        <meta property="og:title" content="Kapa Trader" />
         <meta
             property="og:description"
             content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
@@ -21,55 +23,12 @@
                 font-size: 62.5%;
             }
         </style>
-    <script defer src="/kapa-trader/static/js/lib-react.a6c09a4b.js"></script><script defer src="/kapa-trader/static/js/lib-router.5d8807e1.js"></script><script defer src="/kapa-trader/static/js/3.f88a3661.js"></script><script defer src="/kapa-trader/static/js/index.9a3c0268.js"></script><link href="/kapa-trader/static/css/3.94640a0a.css" rel="stylesheet"><link href="/kapa-trader/static/css/index.3355bf9b.css" rel="stylesheet"></head>
+    <script defer src="/kapa-trader/static/js/lib-react.a6c09a4b.js"></script><script defer src="/kapa-trader/static/js/lib-router.5d8807e1.js"></script><script defer src="/kapa-trader/static/js/3.f88a3661.js"></script><script defer src="/kapa-trader/static/js/index.b386fbf6.js"></script><link href="/kapa-trader/static/css/3.94640a0a.css" rel="stylesheet"><link href="/kapa-trader/static/css/index.3355bf9b.css" rel="stylesheet"></head>
 
     <body class="body theme theme--light">
 
         <div id="modal_root" class="modal-root"></div>
         <div id="popup_root" class="popup-root"></div>
         <div id="root"></div>
-        <!-- LiveChat script -->
-        <script type="text/javascript" defer>
-            window.__lc = window.__lc || {};
-            window.__lc.license = 12049137;
-            window.__lc.asyncInit = true;
-            (function (n, t, c) {
-                function i(n) {
-                    return e._h ? e._h.apply(null, n) : e._q.push(n);
-                }
-                var e = {
-                    _q: [],
-                    _h: null,
-                    _v: '2.0',
-                    on: function () {
-                        i(['on', c.call(arguments)]);
-                    },
-                    once: function () {
-                        i(['once', c.call(arguments)]);
-                    },
-                    off: function () {
-                        i(['off', c.call(arguments)]);
-                    },
-                    get: function () {
-                        if (!e._h) throw new Error('[LiveChatWidget] You can’t use getters before load.');
-                        return i(['get', c.call(arguments)]);
-                    },
-                    call: function () {
-                        i(['call', c.call(arguments)]);
-                    },
-                    init: function () {
-                        setTimeout(() => {
-                            var n = t.createElement('script');
-                            ((n.async = !0),
-                                (n.type = 'text/javascript'),
-                                (n.src = 'https://cdn.livechatinc.com/tracking.js'),
-                                t.head.appendChild(n));
-                        }, 3000);
-                    },
-                };
-                (!n.__lc.asyncInit && e.init(), (n.LiveChatWidget = n.LiveChatWidget || e));
-            })(window, document, [].slice);
-        </script>
-        <!-- End LiveChat script -->
     </body>
 </html>
