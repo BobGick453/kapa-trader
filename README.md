@@ -41,6 +41,15 @@ No website can read your deriv.com login by itself, because browsers block that 
 
 To rename the bot, go to **Admin → Bot name**, or change `DEFAULT_BRAND` in `index.html`.
 
+## Strategies and session plan
+On the activation page, **Strategy** offers:
+- **Over 1 · recovery ×2.2 on Over 5**, like the bot in video 4
+- **Over 2 · recovery ×2.2 on Over 4**, like the "Profit Maker" bot in videos 1 and 3
+- **Over 1 · recovery on Over 5, sized to win back losses exactly**
+- **Fixed stake**, or **Custom** settings in Bot Builder
+
+The **Session plan** simulates your exact settings 4,000 times with your balance, the true win chances and Deriv's live payouts. It shows how often the take-profit is reached, how often the session stops at a loss and how much, and the average result. Recovery strategies reach small targets often, but each failure costs far more than a success earns, so the long-run average stays negative.
+
 ## What it does
 - Contracts: Digit Over/Under/Matches/Differs/Even/Odd on Volatility indices, 1–10 ticks
 - Take-profit, **required** stop-loss, stake cap, max losses in a row, max trades

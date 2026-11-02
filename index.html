@@ -253,6 +253,49 @@
   .linking { display: grid; place-items: center; gap: 10px; padding: 18px 0 6px; color: #d7def5; }
   .linking i { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(245,197,66,.25); border-top-color: var(--gold); animation: spin 1s linear infinite; }
 
+  /* ---------- Session plan ---------- */
+  select.inp { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #93a3cc 50%), linear-gradient(135deg, #93a3cc 50%, transparent 50%); background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 34px; }
+  .plan { background: #071029; border: 1px solid var(--line-2); border-radius: 14px; padding: 14px; margin: 4px 0 14px; }
+  .plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .plan-head span { font-weight: 700; color: var(--gold); letter-spacing: .5px; }
+  .plan-head small { color: var(--muted); font-size: 12px; text-align: right; }
+  .plan-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 520px) { .plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .plan-grid div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .plan-grid small { display: block; color: var(--muted); font-size: 11.5px; }
+  .plan-grid b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .plan-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: #1b2747; margin: 12px 0 8px; }
+  .plan-bar i { display: block; height: 100%; width: 0; transition: width .3s; }
+  .plan-bar i:first-child { background: var(--green-2); } .plan-bar i:last-child { background: var(--red); margin-left: auto; }
+  .plan-text { margin: 0; font-size: 13px; color: #c8d1ec; }
+  .sig .rec { color: #9fb3e8; }
+
+  /* ---------- Live contract card (Summary) ---------- */
+  .cc { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .cc-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: linear-gradient(90deg, rgba(239,68,88,.18), transparent); font-weight: 600; }
+  .cc-top.win { background: linear-gradient(90deg, rgba(34,197,122,.18), transparent); }
+  .cc-top .pill-s { font-size: 12px; border: 1px solid var(--line-2); border-radius: 999px; padding: 2px 10px; color: #dfe5f7; }
+  .cc-body { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; padding: 12px; font-size: 13px; }
+  .cc-body small { display: block; color: var(--muted); font-size: 12px; }
+  .cc-body b { font-size: 15px; font-variant-numeric: tabular-nums; }
+  .cc-ticks { display: flex; gap: 4px; padding: 0 12px 12px; }
+  .cc-ticks i { flex: 1; height: 4px; border-radius: 2px; background: #1b2747; }
+  .cc-ticks i.on { background: var(--blue-glow); }
+
+  /* ---------- Splash ---------- */
+  .splash { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: radial-gradient(600px 400px at 50% 45%, #13265e 0%, #050a19 70%); transition: opacity .5s; }
+  .splash.out { opacity: 0; pointer-events: none; }
+  .splash-in { text-align: center; padding: 24px; }
+  .splash-tag { color: #8fa0cc; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; }
+  .splash-mark { width: 92px; height: 92px; margin: 22px auto; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid rgba(245,197,66,.8); box-shadow: 0 0 0 6px rgba(245,197,66,.08), 0 0 40px rgba(245,197,66,.25); color: var(--gold); font-weight: 800; font-size: 30px; letter-spacing: 1px; }
+  .splash-name { color: var(--gold); font-size: 30px; font-weight: 700; letter-spacing: 4px; }
+  .splash-sub { color: #c8d1ec; font-size: 12px; letter-spacing: 3px; margin-top: 10px; text-transform: uppercase; }
+  .splash-line { width: 160px; height: 2px; background: #1b2747; margin: 26px auto 0; border-radius: 2px; overflow: hidden; }
+  .splash-line i { display: block; height: 100%; width: 40%; background: var(--gold); animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+  .runstat span svg { width: 16px; height: 16px; vertical-align: -3px; margin-left: 6px; }
+  @media (prefers-reduced-motion: reduce) { .splash-line i, .scanner.busy .ring, .scanner.busy .arc, .hero .ring-h { animation: none; } }
+
   @media (max-width: 420px) { .title { font-size: 30px; } .scanner { width: 230px; height: 230px; } .orb { width: 58px; height: 58px; font-size: 21px; top: 262px; } }
 </style>
 </head>
@@ -361,8 +404,28 @@
       <div class="title">Activate <span data-brand></span></div>
       <p class="lede">Set your stake and take-profit, then activate the scanner to compare live markets.</p>
       <div class="fld"><label for="qStake">Stake (<span data-cur>USD</span>)</label><input class="inp" id="qStake" type="number" inputmode="decimal" min="0.35" step="0.01"></div>
-      <div class="fld"><label for="qTp">Take-profit (<span data-cur>USD</span>)</label><input class="inp" id="qTp" type="number" inputmode="decimal" min="0.01" step="0.01"></div>
+      <div class="fld"><label for="qTp">Take-profit (<span data-cur>USD</span>)</label><input class="inp" id="qTp" type="number" inputmode="decimal" min="0.01" step="0.01">
+        <div class="hint" id="qTpHint"></div></div>
       <div class="fld"><label for="qSl">Stop-loss (<span data-cur>USD</span>)</label><input class="inp" id="qSl" type="number" inputmode="decimal" min="0.01" step="0.01"></div>
+      <div class="fld"><label for="qPreset">Strategy</label>
+        <select class="inp sm" id="qPreset">
+          <option value="pegasus">Over 1 · recovery ×2.2 on Over 5 (like video 4)</option>
+          <option value="martingale">Over 2 · recovery ×2.2 on Over 4 (like videos 1 and 3)</option>
+          <option value="recover">Over 1 · recovery on Over 5, sized to win back losses exactly</option>
+          <option value="fixed">Over 1 · fixed stake, no recovery</option>
+          <option value="custom">Custom (set in Bot Builder)</option>
+        </select></div>
+      <div class="plan" id="plan">
+        <div class="plan-head"><span>Session plan</span><small id="planNote">Simulated 4,000 times with Deriv's payouts</small></div>
+        <div class="plan-grid">
+          <div><small>Reaches take-profit</small><b id="planHit">—</b></div>
+          <div><small>Stops at a loss</small><b id="planBust" class="down">—</b></div>
+          <div><small>Average result</small><b id="planAvg">—</b></div>
+          <div><small>Typical trades</small><b id="planTrades">—</b></div>
+        </div>
+        <div class="plan-bar"><i id="planBarHit"></i><i id="planBarBust"></i></div>
+        <p class="plan-text" id="planText"></p>
+      </div>
       <div class="err-line hidden" id="qErr"></div>
       <button class="scanner" id="scanner" aria-label="Start scan">
         <div class="ring"></div><div class="ring2"></div><div class="arc"></div>
@@ -407,6 +470,7 @@
           <div class="row-blk set">set <span class="var" data-varname="initial-stake"></span> to <input id="stake" type="number" min="0.35" step="0.01" value="1"></div>
           <div class="row-blk set">set <span class="var" data-varname="active-barrier"></span> to <select id="barrier"></select></div>
           <div class="row-blk set">set <span class="var" data-varname="recovery-barrier"></span> to <select id="recovery"></select></div>
+          <div class="row-blk set">set <span class="var" data-varname="recovery-mode"></span> to <select id="recMode"><option value="none">none</option><option value="mult">martingale</option><option value="recover">win back losses</option></select></div>
           <div class="row-blk set">set <span class="var" data-varname="martingale-factor"></span> to <input id="martingale" type="number" min="1" step="0.1" value="1"></div>
           <div class="row-blk set">set <span class="var" data-varname="maximum-stake"></span> to <input id="maxStake" type="number" min="0.35" step="0.01" value="10"></div>
           <div class="row-blk set">set <span class="var" data-varname="maximum-losses"></span> to <input id="maxLosses" type="number" min="1" step="1" value="3"></div>
@@ -416,7 +480,7 @@
           <div class="row-blk set">set <span class="var" data-varname="trade-delay"></span> to <input id="delay" type="number" min="0" step="0.5" value="1"> s</div>
         </div>
         <div class="blk-end"></div>
-        <p class="hint" style="max-width:420px;margin-top:16px">recovery-barrier: the prediction used after a loss ("same" keeps the active one). martingale-factor 1 = fixed stake. max-trades 0 = no limit. The bot stops at take-profit, stop-loss, maximum-losses in a row, or max-trades.</p>
+        <p class="hint" style="max-width:420px;margin-top:16px">recovery-barrier: the prediction used after a loss ("same" keeps the active one). recovery-mode: "martingale" multiplies the stake by martingale-factor after each loss; "win back losses" sizes the next stake so one win on the recovery prediction recovers everything lost since the last win. maximum-stake caps both. max-trades 0 = no limit. The bot stops at take-profit, stop-loss, maximum-losses in a row, or max-trades.</p>
       </div>
     </div>
   </section>
@@ -454,6 +518,16 @@
 </div>
 
 <!-- Run bar -->
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash-in">
+    <div class="splash-tag">Digit trading on Deriv</div>
+    <div class="splash-mark"><span data-brand-initials></span></div>
+    <div class="splash-name"><span data-brand-upper></span> TRADER</div>
+    <div class="splash-sub">Plan · Execute · Stop on time</div>
+    <div class="splash-line"><i></i></div>
+  </div>
+</div>
+
 <div class="runbar hidden" id="runbar">
   <div class="runbar-in">
     <button class="runbtn" id="runBtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><span>Run</span></button>
@@ -657,12 +731,19 @@
   });
 
   // ---------- Settings ----------
-  const SETTINGS_IDS = ['symbol','ctype','barrier','recovery','duration','stake','maxStake','takeProfit','stopLoss','martingale','maxLosses','maxRuns','delay'];
-  const DEFAULTS = { symbol: 'R_100', ctype: 'DIGITOVER', barrier: '1', recovery: 'same', duration: '1', stake: '1', maxStake: '10', takeProfit: '10', stopLoss: '10', martingale: '1', maxLosses: '3', maxRuns: '0', delay: '1' };
+  const SETTINGS_IDS = ['symbol','ctype','barrier','recovery','recMode','duration','stake','maxStake','takeProfit','stopLoss','martingale','maxLosses','maxRuns','delay'];
+  const DEFAULTS = { symbol: 'R_100', ctype: 'DIGITOVER', barrier: '1', recovery: 'same', recMode: 'none', duration: '1', stake: '1', maxStake: '10', takeProfit: '10', stopLoss: '10', martingale: '1', maxLosses: '3', maxRuns: '0', delay: '1' };
+  // Strategy presets, modelled on the two bots in the reference videos
+  const PRESETS = {
+    pegasus: { ctype: 'DIGITOVER', barrier: '1', recovery: '5', recMode: 'mult', martingale: '2.2', maxLosses: '4' },
+    recover: { ctype: 'DIGITOVER', barrier: '1', recovery: '5', recMode: 'recover', martingale: '1', maxLosses: '4' },
+    martingale: { ctype: 'DIGITOVER', barrier: '2', recovery: '4', recMode: 'mult', martingale: '2.2', maxLosses: '5' },
+    fixed: { ctype: 'DIGITOVER', barrier: '1', recovery: 'same', recMode: 'none', martingale: '1', maxLosses: '3' },
+  };
   function settings() {
     const v = (id) => $(id).value;
     return {
-      symbol: v('symbol'), ctype: v('ctype'), barrier: v('barrier'), recovery: v('recovery'),
+      symbol: v('symbol'), ctype: v('ctype'), barrier: v('barrier'), recovery: v('recovery'), recMode: v('recMode'),
       duration: Math.min(10, Math.max(1, parseInt(v('duration')) || 1)),
       stake: +v('stake'), maxStake: +v('maxStake'), takeProfit: +v('takeProfit'), stopLoss: +v('stopLoss'),
       martingale: Math.max(1, +v('martingale') || 1), maxLosses: Math.max(1, parseInt(v('maxLosses')) || 1),
@@ -696,8 +777,23 @@
     b = +b;
     return { DIGITOVER: d > b, DIGITUNDER: d < b, DIGITMATCH: d === b, DIGITDIFF: d !== b, DIGITEVEN: d % 2 === 0, DIGITODD: d % 2 === 1 }[t];
   }
-  function persistSettings() { const o = {}; SETTINGS_IDS.forEach((id) => o[id] = $(id).value); store.set('dt_settings', JSON.stringify(o), true); syncQuick(); }
+  function persistSettings() { const o = {}; SETTINGS_IDS.forEach((id) => o[id] = $(id).value); store.set('dt_settings', JSON.stringify(o), true); syncQuick(); syncPreset(); schedulePlan(); }
+  function applyPreset(name) {
+    const pr = PRESETS[name]; if (!pr) return;
+    $('ctype').value = pr.ctype;
+    refreshBarrierOptions({ barrier: pr.barrier, recovery: pr.recovery });
+    ['recMode', 'martingale', 'maxLosses'].forEach((id) => { $(id).value = pr[id]; });
+    $('maxStake').value = Math.max(+$('stopLoss').value || 0, +$('stake').value || 0) || $('maxStake').value; // recovery stakes are capped by the stop-loss instead
+    persistSettings(); prefetchRatios();
+  }
+  function syncPreset() {
+    const cur = { ctype: $('ctype').value, barrier: $('barrier').value, recovery: $('recovery').value, recMode: $('recMode').value, martingale: String(+$('martingale').value) };
+    const hit = Object.keys(PRESETS).find((k) => ['ctype', 'barrier', 'recovery', 'recMode'].every((f) => PRESETS[k][f] === cur[f]) && String(+PRESETS[k].martingale) === cur.martingale);
+    $('qPreset').value = hit || 'custom';
+  }
+  $('qPreset').addEventListener('change', () => { if ($('qPreset').value !== 'custom') applyPreset($('qPreset').value); else go('builder'); });
   function restoreSettings(o) {
+    if (!('recMode' in o) && +o.martingale > 1) o.recMode = 'mult'; // settings saved before recovery modes existed
     o = { ...DEFAULTS, ...o };
     $('symbol').value = o.symbol; $('ctype').value = o.ctype;
     refreshBarrierOptions({ barrier: o.barrier, recovery: o.recovery });
@@ -708,8 +804,10 @@
   function syncQuick() { $('qStake').value = $('stake').value; $('qTp').value = $('takeProfit').value; $('qSl').value = $('stopLoss').value; }
   [['qStake','stake'], ['qTp','takeProfit'], ['qSl','stopLoss']].forEach(([q, b]) => $(q).addEventListener('input', () => {
     $(b).value = $(q).value; const o = {}; SETTINGS_IDS.forEach((id) => o[id] = $(id).value); store.set('dt_settings', JSON.stringify(o), true); $('qErr').classList.add('hidden');
+    if (b === 'stopLoss' && $('recMode').value !== 'none') $('maxStake').value = Math.max(+$('stopLoss').value || 0, +$('stake').value || 0);
+    schedulePlan();
   }));
-  $('ctype').onchange = () => { refreshBarrierOptions(); persistSettings(); };
+  $('ctype').onchange = () => { refreshBarrierOptions(); persistSettings(); prefetchRatios(); };
   SETTINGS_IDS.filter((id) => id !== 'ctype').forEach((id) => $(id).addEventListener('change', persistSettings));
   SETTINGS_IDS.filter((id) => !['symbol','ctype','barrier','recovery'].includes(id)).forEach((id) => $(id).addEventListener('input', persistSettings));
   $('bReset').onclick = () => { if (!S.bot.running) { restoreSettings({}); persistSettings(); toast('Bot Builder reset to defaults.'); } };
@@ -719,6 +817,80 @@
     req[S.mode === 'v2' ? 'underlying_symbol' : 'symbol'] = symbol; // the new API renamed this field
     if (needsBarrier(ctype)) req.barrier = String(barrier);
     return req;
+  }
+
+  // ---------- Payout ratios (profit per 1 staked, from Deriv's live prices) ----------
+  const ratioCache = new Map();
+  const ratioKey = (sym, t, b, d) => `${sym}|${t}|${needsBarrier(t) ? b : ''}|${d}`;
+  // Estimate used until Deriv has quoted the contract: Deriv pays roughly 7% under the fair odds
+  const estRatio = (t, b) => 0.93 / winProb(t, b) - 1;
+  function noteRatio(sym, t, b, d, ask, payout) { if (ask > 0 && payout > ask) ratioCache.set(ratioKey(sym, t, b, d), { r: (payout - ask) / ask, at: Date.now() }); }
+  function knownRatio(sym, t, b, d) { const c = ratioCache.get(ratioKey(sym, t, b, d)); return c ? c.r : null; }
+  async function payoutRatio(sym, t, b, d) {
+    const c = ratioCache.get(ratioKey(sym, t, b, d));
+    if (c && Date.now() - c.at < 5 * 60 * 1000) return c.r;
+    const r = await api.send(buildProposal(sym, t, b, d, 10));
+    noteRatio(sym, t, b, d, +r.proposal.ask_price, +r.proposal.payout);
+    return knownRatio(sym, t, b, d) ?? estRatio(t, b);
+  }
+  async function prefetchRatios() {
+    if (!S.account || !api.open) return;
+    const s = settings(), rb = s.recovery === 'same' ? s.barrier : s.recovery;
+    try { await payoutRatio(s.symbol, s.ctype, s.barrier, s.duration); if (s.recMode !== 'none') await payoutRatio(s.symbol, s.ctype, rb, s.duration); } catch {}
+    schedulePlan();
+  }
+
+  // ---------- Session plan (Monte Carlo with true win chances and Deriv's payouts) ----------
+  function planInputs() {
+    const s = settings(), rb = s.recovery === 'same' ? s.barrier : s.recovery;
+    const baseR = knownRatio(s.symbol, s.ctype, s.barrier, s.duration), recR = knownRatio(s.symbol, s.ctype, rb, s.duration);
+    return {
+      s, live: baseR != null && (s.recMode === 'none' || recR != null),
+      capital: S.balance || 1000,
+      baseP: winProb(s.ctype, s.barrier), baseR: baseR ?? estRatio(s.ctype, s.barrier),
+      recP: winProb(s.ctype, rb), recR: recR ?? estRatio(s.ctype, rb),
+    };
+  }
+  function simulate(cfg, sessions = 4000, maxTrades = 3000) {
+    const { s, capital, baseP, baseR, recP, recR } = cfg;
+    let hit = 0, bust = 0, sum = 0, bustSum = 0; const trades = [];
+    for (let k = 0; k < sessions; k++) {
+      let pl = 0, streak = 0, lost = 0, stake = s.stake, n = 0, end = 'open';
+      for (; n < maxTrades; n++) {
+        if (pl >= s.takeProfit) { end = 'tp'; break; }
+        if (pl <= -s.stopLoss || streak >= s.maxLosses) { end = 'loss'; break; }
+        if (s.maxRuns && n >= s.maxRuns) break;
+        const rec = streak > 0 && s.recMode !== 'none';
+        let st = s.recMode === 'recover' && rec ? (lost + s.stake * baseR) / recR : s.recMode === 'mult' ? stake : s.stake;
+        st = Math.floor(Math.min(st, s.maxStake, capital + pl, s.stopLoss + pl) * 100) / 100;
+        if (st < 0.35) { end = 'loss'; break; }
+        if (Math.random() < (rec ? recP : baseP)) { pl += st * (rec ? recR : baseR); streak = 0; lost = 0; stake = s.stake; }
+        else { pl -= st; streak++; lost += st; stake = st * s.martingale; }
+      }
+      sum += pl; trades.push(n);
+      if (end === 'tp') hit++; else if (end === 'loss' && pl < 0) { bust++; bustSum += pl; }
+    }
+    trades.sort((a, b) => a - b);
+    return { hit: hit / sessions, bust: bust / sessions, avg: sum / sessions, bustAvg: bust ? bustSum / bust : 0, median: trades[trades.length >> 1] };
+  }
+  let planTimer = null;
+  function schedulePlan() { clearTimeout(planTimer); planTimer = setTimeout(renderPlan, 250); }
+  function renderPlan() {
+    const cfg = planInputs(), s = cfg.s;
+    const pct = S.balance ? s.takeProfit / S.balance * 100 : null;
+    $('qTpHint').textContent = pct == null ? '' : `= ${fmt(pct, pct < 10 ? 1 : 0)}% of your balance (${money(S.balance)})`;
+    if (!(s.stake >= 0.35 && s.takeProfit > 0 && s.stopLoss > 0)) { ['planHit', 'planBust', 'planAvg', 'planTrades'].forEach((id) => $(id).textContent = '—'); $('planText').textContent = 'Enter a stake, take-profit and stop-loss to see the plan.'; return; }
+    const r = simulate(cfg);
+    $('planHit').textContent = `${fmt(r.hit * 100, 0)}%`;
+    $('planBust').textContent = `${fmt(r.bust * 100, 0)}%`;
+    const avg = $('planAvg'); avg.textContent = `${signed(r.avg)}`; avg.className = r.avg >= 0 ? 'up' : 'down';
+    $('planTrades').textContent = r.median;
+    $('planBarHit').style.width = `${r.hit * 100}%`; $('planBarBust').style.width = `${r.bust * 100}%`;
+    $('planNote').textContent = cfg.live ? 'Simulated 4,000 times with Deriv\'s live payouts' : 'Simulated 4,000 times with estimated payouts';
+    $('planText').textContent = `Out of 100 sessions like this, about ${Math.round(r.hit * 100)} reach +${money(s.takeProfit)}` +
+      (r.bust > 0.005 ? ` and about ${Math.round(r.bust * 100)} stop at a loss, losing ${money(Math.abs(r.bustAvg))} on average.` : '.') +
+      ` Averaged over many sessions, that's ${signed(r.avg)} ${S.currency} per session.` +
+      (r.avg < 0 ? ' Changing the target, stake or stop-loss changes how often you reach the target; the long-run average stays negative.' : '');
   }
 
   // ---------- Scanner ----------
@@ -781,6 +953,7 @@
       <h4></h4>
       <div class="pct">${fmt(r.p * 100, 1)}%</div>
       <p>Over ${r.b} · ${r.sym} · true win chance</p>
+      <p class="rec">${recoveryLine()}</p>
       <p>Payout if won: <span class="pos">+${fmt(r.payout - stake)} ${S.currency}</span> (${fmt(ret, 1)}%)</p>
       <p>Expected result per trade: <span class="${r.ev >= 0 ? 'pos' : 'neg'}">${signed(r.ev)} ${S.currency}</span> (${fmt(evPct, 1)}%)</p>
       <p class="dim">${r.recent == null ? '' : `Last ${r.n} ticks: Over ${r.b} came up ${fmt(r.recent * 100, 1)}% of the time (past ticks don't predict the next one).`}</p>
@@ -788,6 +961,12 @@
     el.querySelector('h4').textContent = MARKET_NAMES[r.sym];
     el.querySelector('.use').onclick = () => useSignal(r);
     return el;
+  }
+  function recoveryLine() {
+    const s = settings(), rb = s.recovery === 'same' ? s.barrier : s.recovery;
+    if (s.recMode === 'recover') return `Recovery: ${TYPE_LABEL[s.ctype]} ${rb} · wins back losses in one trade`;
+    if (s.recMode === 'mult') return `Recovery: ${TYPE_LABEL[s.ctype]} ${rb} · stake ×${s.martingale} after each loss`;
+    return 'Recovery: none · fixed stake';
   }
   async function useSignal(r) {
     $('symbol').value = r.sym; $('ctype').value = 'DIGITOVER';
@@ -953,6 +1132,7 @@
   }
   function showConnectErr(msg) { const ce = $('connectErr'); ce.textContent = msg; ce.classList.toggle('hidden', !msg); }
   function enterApp() {
+    setTimeout(prefetchRatios, 300);
     $('runbar').classList.remove('hidden'); $('warnFab').classList.remove('hidden'); $('navwrap').classList.remove('hidden');
     go(currentPage === 'connect' ? 'scan' : currentPage);
   }
@@ -1021,8 +1201,11 @@
 
   // ---------- Run bar ----------
   const PROG = { idle: 0, starting: 8, buying: 50, bought: 100 };
+  const ICON_WON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>';
+  const ICON_LOST = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>';
   function setStatus(text, phase = 'idle') {
     $('botStatus').textContent = text;
+    if (phase === 'won' || phase === 'lost') $('botStatus').insertAdjacentHTML('beforeend', phase === 'won' ? ICON_WON : ICON_LOST);
     const rs = $('runstat'); rs.classList.toggle('won', phase === 'won'); rs.classList.toggle('lost', phase === 'lost');
     $('progBar').style.width = (PROG[phase] ?? 0) + '%';
     const dots = $('runstat').querySelectorAll('.prog i'), lvl = { starting: 1, buying: 2, bought: 3 }[phase] || 0;
@@ -1039,7 +1222,7 @@
   // ---------- Bot engine ----------
   function lockSettings(lock) {
     SETTINGS_IDS.forEach((id) => { $(id).disabled = lock; });
-    ['qStake','qTp','qSl'].forEach((id) => $(id).disabled = lock);
+    ['qStake','qTp','qSl','qPreset'].forEach((id) => $(id).disabled = lock);
     $('resetBtn').disabled = lock;
     if (!lock) refreshBarrierOptions();
   }
@@ -1077,7 +1260,7 @@
         'Start real trading');
       if (!ok) return;
     }
-    Object.assign(S.bot, { running: true, stopRequested: false, lossStreak: 0, stake: s.stake, runs: 0, sessionPl: 0 });
+    Object.assign(S.bot, { running: true, stopRequested: false, lossStreak: 0, stake: s.stake, runs: 0, sessionPl: 0, recLosses: 0 });
     lockSettings(true); setRunButton(true);
     setStatus('Bot is starting', 'starting');
     log(`Bot started · ${TYPE_LABEL[s.ctype]}${needsBarrier(s.ctype) ? ' ' + s.barrier : ''} on ${s.symbol} · stake ${money(s.stake)} · TP ${money(s.takeProfit)} · SL ${money(s.stopLoss)}`, 's');
@@ -1092,15 +1275,25 @@
       if (S.bot.lossStreak >= s.maxLosses) return stopBot(`${S.bot.lossStreak} losses in a row`, 'streak');
       if (s.maxRuns && S.bot.runs >= s.maxRuns) return stopBot(`Finished ${S.bot.runs} trades`);
 
-      // Never stake more than the cap, the balance, or what's left before the stop-loss
-      const room = s.stopLoss + S.bot.sessionPl;
-      const stake = Math.floor(Math.min(S.bot.stake, s.maxStake, S.balance, room) * 100) / 100;
-      if (stake < 0.35) return stopBot('Not enough room left under the stop-loss for the minimum stake', 'sl');
-      const barrier = S.bot.lossStreak > 0 && s.recovery !== 'same' ? s.recovery : s.barrier;
-
+      const recovering = S.bot.lossStreak > 0 && s.recMode !== 'none';
+      const barrier = recovering && s.recovery !== 'same' ? s.recovery : s.barrier;
       try {
-        setStatus('Buying contract', 'buying');
+        let want = S.bot.stake;
+        if (recovering && s.recMode === 'recover') {
+          // Size the stake so one win on the recovery contract returns everything lost since the last win, plus one normal win
+          const recR = await payoutRatio(s.symbol, s.ctype, barrier, s.duration);
+          const baseR = knownRatio(s.symbol, s.ctype, s.barrier, s.duration) ?? estRatio(s.ctype, s.barrier);
+          want = Math.ceil((S.bot.recLosses + s.stake * baseR) / recR * 100) / 100;
+        }
+        // Never stake more than the cap, the balance, or what's left before the stop-loss
+        const room = s.stopLoss + S.bot.sessionPl;
+        const stake = Math.floor(Math.min(want, s.maxStake, S.balance, room) * 100) / 100;
+        if (stake < 0.35) return stopBot('Not enough room left under the stop-loss for the minimum stake', 'sl');
+        if (stake < want - 0.01) log(`Recovery stake capped at ${money(stake)} (wanted ${money(want)}) by maximum stake, balance or stop-loss`, 'w');
+
+        setStatus(recovering ? `Recovery · ${TYPE_LABEL[s.ctype]} ${barrier}` : 'Buying contract', 'buying');
         const prop = await api.send(buildProposal(s.symbol, s.ctype, barrier, s.duration, stake));
+        noteRatio(s.symbol, s.ctype, barrier, s.duration, +prop.proposal.ask_price, +prop.proposal.payout);
         const buy = await api.send({ buy: prop.proposal.id, price: prop.proposal.ask_price });
         const c = buy.buy;
         S.lastContract = { ...c, open: true };
@@ -1127,25 +1320,35 @@
         const poc = msg.proposal_open_contract;
         if (done || !poc || poc.contract_id !== contractId) return;
         if (msg.subscription) subId = msg.subscription.id;
-        if (poc.is_sold) finish(poc);
+        if (poc.is_sold) return finish(poc);
+        onContractUpdate(poc);
       };
       const onClose = () => { if (!done) { done = true; api.off('proposal_open_contract', handler); reject(new Error('Connection lost while a contract was open. Check Reports on Deriv.')); } };
       api.on('proposal_open_contract', handler); api.on('close', onClose);
       api.subscribe({ proposal_open_contract: 1, contract_id: contractId }).catch((e) => { if (!done) { done = true; api.off('proposal_open_contract', handler); reject(e); } });
     });
   }
+  function onContractUpdate(poc) {
+    const c = S.lastContract || {};
+    S.lastContract = { ...c, open: true, id: poc.contract_id, symbol: poc.underlying || poc.underlying_symbol || c.symbol || settings().symbol,
+      type: poc.contract_type || c.type || settings().ctype, barrier: poc.barrier ?? c.barrier, stake: +(poc.buy_price ?? c.stake ?? 0),
+      bid: +(poc.bid_price ?? 0), potential: +(poc.payout ?? 0), profit: +(poc.profit ?? 0),
+      ticks: settings().duration, tickNow: (poc.tick_stream || []).length, entry: poc.entry_tick_display_value ?? c.entry };
+    renderSummary();
+  }
   function record(s, c, poc) {
     const profit = +poc.profit, won = profit > 0, stake = +poc.buy_price, payout = +(poc.sell_price ?? 0);
     S.bot.runs++; S.bot.sessionPl = round2(S.bot.sessionPl + profit);
     S.stats.runs++; S.stats.stake += stake; S.stats.payout += payout; S.stats.pl += profit;
     won ? S.stats.won++ : S.stats.lost++;
-    if (won) { S.bot.lossStreak = 0; S.bot.stake = s.stake; } else { S.bot.lossStreak++; S.bot.stake *= s.martingale; }
+    if (won) { S.bot.lossStreak = 0; S.bot.recLosses = 0; S.bot.stake = s.stake; }
+    else { S.bot.lossStreak++; S.bot.recLosses = round2(S.bot.recLosses - profit); S.bot.stake = s.recMode === 'mult' ? stake * s.martingale : s.stake; }
     const t = {
       time: new Date((poc.sell_time || Date.now() / 1000) * 1000), id: c.contract_id, longcode: c.longcode, transaction_id: c.transaction_id,
       type: poc.contract_type || s.ctype, barrier: poc.barrier, symbol: poc.underlying || s.symbol,
       entry: poc.entry_tick_display_value ?? poc.entry_tick, exit: poc.exit_tick_display_value ?? poc.exit_tick, stake, payout, profit, won,
     };
-    S.tx.unshift(t); S.lastContract = { ...t, open: false };
+    S.tx.unshift(t); S.lastContract = { ...t, open: false, bid: payout, potential: +(poc.payout ?? payout), ticks: s.duration, tickNow: s.duration };
     log(`${won ? 'Won' : 'Lost'} #${c.contract_id}: ${signed(profit)} ${S.currency} · session ${signed(S.bot.sessionPl)}`, won ? 's' : 'e');
     setStatus(won ? 'Won' : 'Lost', won ? 'won' : 'lost');
     renderStats(); renderTx(); renderSummary();
@@ -1184,13 +1387,20 @@
   }
   function renderSummary() {
     const c = S.lastContract, box = $('summaryBox');
-    if (!c) { box.innerHTML = '<div class="empty"><b>No contract yet</b><small>When the bot runs, the latest contract shows here.</small></div>'; return; }
-    const rows = [['Contract', `#${c.contract_id ?? c.id}`], ['Market', MARKET_NAMES[c.symbol] || c.symbol || '—'],
-      ['Type', `${TYPE_LABEL[c.type] || c.type || '—'} ${c.barrier ?? ''}`], ['Status', c.open ? 'Open' : c.won ? 'Won' : 'Lost'],
-      ['Buy price', money(c.stake ?? c.buy_price)], ['Profit/loss', c.open ? '—' : `${signed(c.profit)} ${S.currency}`],
-      ['Entry spot', c.entry ?? '—'], ['Exit spot', c.exit ?? '—']];
-    box.innerHTML = '<dl></dl>';
-    rows.forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; box.firstChild.append(dt, dd); });
+    if (!c) { box.innerHTML = '<div class="empty"><b>No contract yet</b><small>When the bot runs, the open contract shows here, updated tick by tick.</small></div>'; return; }
+    const status = c.open ? 'Open' : c.won ? 'Won' : 'Lost';
+    box.innerHTML = `<div class="cc"><div class="cc-top"><span></span><span class="pill-s"></span></div>
+      <div class="cc-body"><div><small>Total profit/loss</small><b data-k="pl"></b></div><div><small>Contract value</small><b data-k="bid"></b></div>
+      <div><small>Stake</small><b data-k="stake"></b></div><div><small>Potential payout</small><b data-k="pot"></b></div></div>
+      <div class="cc-ticks"></div></div>`;
+    const top = box.querySelector('.cc-top'); top.classList.toggle('win', c.open ? c.profit >= 0 : !!c.won);
+    top.firstElementChild.textContent = `${MARKET_NAMES[c.symbol] || c.symbol || ''} · ${TYPE_LABEL[c.type] || c.type || ''} ${c.barrier ?? ''}`;
+    box.querySelector('.pill-s').textContent = status;
+    const set = (k, v) => { box.querySelector(`[data-k="${k}"]`).textContent = v; };
+    const pl = c.profit ?? 0; set('pl', `${signed(pl)} ${S.currency}`); box.querySelector('[data-k="pl"]').className = pl >= 0 ? 'up' : 'down';
+    set('bid', c.bid != null ? money(c.bid) : '—'); set('stake', money(c.stake ?? 0)); set('pot', c.potential ? money(c.potential) : '—');
+    const tk = box.querySelector('.cc-ticks'), n = Math.max(1, c.ticks || 1);
+    for (let i = 0; i < n; i++) { const b = document.createElement('i'); if (i < (c.tickNow || 0)) b.className = 'on'; tk.appendChild(b); }
   }
   $('detailBtn').onclick = () => {
     const t = S.tx.find((x) => x.id === S.selectedTx) || S.tx[0]; if (!t) return;
@@ -1217,7 +1427,7 @@
     if (!S.bot.running) return runBot();
     S.bot.stopRequested = true; $('runBtn').disabled = true; setStatus('Stopping after the current contract', 'bought');
   };
-  api.on('balance', (m) => { if (m.balance) { S.balance = +m.balance.balance; renderAccount(); } });
+  api.on('balance', (m) => { if (m.balance) { S.balance = +m.balance.balance; renderAccount(); schedulePlan(); } });
   api.on('open', () => setOnline(true));
   let reconnecting = false;
   api.on('close', async () => {
@@ -1273,6 +1483,9 @@
   applyBrand(store.get('dt_brand'));
   let saved = {}; try { saved = JSON.parse(store.get('dt_settings') || '{}'); } catch {}
   restoreSettings(saved);
+  syncPreset(); schedulePlan();
+  const splash = $('splash'), hideSplash = () => { splash.classList.add('out'); setTimeout(() => splash.remove(), 600); };
+  splash.onclick = hideSplash; setTimeout(hideSplash, 1600);
   renderStats(); renderTx(); renderSummary(); renderAccount(); setRunButton(false);
   $('navwrap').classList.add('hidden');
   go('connect');
