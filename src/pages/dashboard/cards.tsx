@@ -172,8 +172,17 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
                                     {content}
                                 </Text>
                                 {subtitle && <span className='kapa-tile__sub'>{subtitle}</span>}
-                                <button type='button' className='kapa-tile__open' onClick={() => callback()} disabled={disabled}>
-                                    {disabled ? <Localize i18n_default_text='SOON' /> : <Localize i18n_default_text='OPEN →' />}
+                                <button
+                                    type='button'
+                                    className='kapa-tile__open'
+                                    onClick={() => callback()}
+                                    disabled={disabled}
+                                >
+                                    {disabled ? (
+                                        <Localize i18n_default_text='SOON' />
+                                    ) : (
+                                        <Localize i18n_default_text='OPEN →' />
+                                    )}
                                 </button>
                             </div>
                         );

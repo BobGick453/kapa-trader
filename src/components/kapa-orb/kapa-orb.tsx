@@ -7,7 +7,10 @@ import { useStore } from '@/hooks/useStore';
 import { MARKETS, PREMIUM_PRESETS, SCAN_MARKETS, STRATEGIES, TPresetKey } from '@/pages/kapa-ai/engine';
 import { refreshEntitlement, scanMarkets, TScanRow } from '@/pages/premium/premium-api';
 import { openPremium, usePremium } from '@/pages/premium/use-premium';
+import { useFloating } from './use-floating';
 import './kapa-orb.scss';
+
+const isDesktop = () => window.innerWidth >= 1280;
 
 /** Floating "AI" orb with the live connection state; opens the KAPA Live Scanner. A risk-warning button sits on the left. */
 const KapaOrb = observer(() => {
@@ -26,6 +29,19 @@ const KapaOrb = observer(() => {
     const [rows, setRows] = useState<TScanRow[] | null>(null);
     const [scanned, setScanned] = useState<TPresetKey>('martingale');
     const [error, setError] = useState('');
+    // Both buttons float over every page and can be dragged; defaults keep them clear of the Run bars
+    const orbFloat = useFloating(
+        'kapa_orb_spot',
+        () => ({ side: 'right', y: isDesktop() ? 0.55 : 0.82 }),
+        window.innerWidth <= 599 ? 56 : 62
+    );
+    // On desktop the warning sits in the footer's empty left corner, clear of every page's buttons
+    const riskFloat = useFloating(
+        'kapa_risk_spot',
+        () => ({ side: 'left', y: isDesktop() ? 1 : 0.82 }),
+        isDesktop() ? 32 : 46,
+        () => (isDesktop() ? 2 : 16)
+    );
 
     if (connectionStatus === CONNECTION_STATUS.OPENED && !wasOpen) setWasOpen(true);
     const state =
@@ -83,14 +99,25 @@ const KapaOrb = observer(() => {
         <>
             <button
                 type='button'
-                className={classNames('kapa-fab-orb', `kapa-fab-orb--${state}`)}
+                className={classNames('kapa-fab-orb', `kapa-fab-orb--${state}`, {
+                    'kapa-fab--dragging': orbFloat.dragging,
+                })}
+                style={orbFloat.style}
+                {...orbFloat.handlers}
                 onClick={() => setOpen(true)}
-                aria-label={`KAPA Live Scanner, ${state}`}
+                aria-label={`KAPA Live Scanner, ${state}. Drag to move.`}
             >
                 AI
                 <span className='kapa-fab-orb__badge'>{state.toUpperCase()}</span>
             </button>
-            <button type='button' className='kapa-fab-risk' onClick={() => setRisk(true)} aria-label='Risk warning'>
+            <button
+                type='button'
+                className={classNames('kapa-fab-risk', { 'kapa-fab--dragging': riskFloat.dragging })}
+                style={riskFloat.style}
+                {...riskFloat.handlers}
+                onClick={() => setRisk(true)}
+                aria-label='Risk warning. Drag to move.'
+            >
                 <svg
                     viewBox='0 0 24 24'
                     width='22'

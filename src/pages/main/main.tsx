@@ -208,6 +208,20 @@ const AppWrapper = observer(() => {
         }
     }, [clear, connectionStatus, setWebSocketState, stopBot]);
 
+    // Keep the selected tab visible in the scrolling tab bar (phones and tablets)
+    React.useEffect(() => {
+        const t = setTimeout(() => {
+            // Scroll only the tab bar: scrollIntoView would also shift the page's own containers
+            const tab = document.querySelector('.dc-tabs__active--main__tabs') as HTMLElement | null;
+            const bar = tab?.parentElement;
+            if (!tab || !bar || bar.scrollWidth <= bar.clientWidth) return;
+            const tr = tab.getBoundingClientRect();
+            const br = bar.getBoundingClientRect();
+            bar.scrollTo({ left: bar.scrollLeft + tr.left - br.left - (br.width - tr.width) / 2, behavior: 'smooth' });
+        }, 50);
+        return () => clearTimeout(t);
+    }, [active_tab]);
+
     // Update tab shadows height to match bot builder height
     const updateTabShadowsHeight = () => {
         const botBuilderEl = document.getElementById('id-bot-builder');
@@ -387,7 +401,7 @@ const AppWrapper = observer(() => {
     // [/AI]
     return (
         <React.Fragment>
-            <div className='main'>
+            <div className={classNames('main', { 'main--no-run-panel': !show_bot_run_panel })}>
                 <div
                     className={classNames('main__container', {
                         'main__container--active': active_tour && active_tab === DASHBOARD && !isDesktop,
@@ -480,7 +494,9 @@ const AppWrapper = observer(() => {
                                 }
                                 id='id-kapa-ai'
                             >
-                                <Suspense fallback={<ChunkLoader message={localize('Please wait, loading KAPA AI...')} />}>
+                                <Suspense
+                                    fallback={<ChunkLoader message={localize('Please wait, loading KAPA AI...')} />}
+                                >
                                     <KapaAI />
                                 </Suspense>
                             </div>

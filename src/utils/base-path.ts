@@ -7,8 +7,11 @@ export const BASE_PATH = (() => {
     return p.endsWith('/') ? p : `${p}/`;
 })();
 
-/** Router basename: BASE_PATH without its trailing slash ('' at the root). */
-export const ROUTER_BASENAME = BASE_PATH.replace(/\/$/, '');
+/**
+ * Router basename. It keeps the trailing slash so the address stays /kapa-trader/#tab:
+ * without it, switching tabs produced /kapa-trader#tab, which some hosts don't serve on reload.
+ */
+export const ROUTER_BASENAME = BASE_PATH;
 
 /** Absolute URL of the app's home page; also the OAuth redirect URL. */
 export const getAppUrl = () => `${window.location.protocol}//${window.location.host}${BASE_PATH}`;

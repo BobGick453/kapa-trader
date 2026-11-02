@@ -3,7 +3,19 @@ import { adminApi, premiumEnabled } from '../premium/premium-api';
 import './admin.scss';
 
 type TEnt = { key: string; value: { plan: string; expiresAt: number; source: string; accounts?: string[] } };
-type TPay = { key: string; value: { status: string; amount: number; currency: string; method?: string; accounts: string[]; createdAt: number; paidAt?: number; reason?: string } };
+type TPay = {
+    key: string;
+    value: {
+        status: string;
+        amount: number;
+        currency: string;
+        method?: string;
+        accounts: string[];
+        createdAt: number;
+        paidAt?: number;
+        reason?: string;
+    };
+};
 
 const SECRET_KEY = 'kapa_admin_secret';
 const fmtDate = (t?: number) => (t ? new Date(t).toLocaleString() : '—');
@@ -89,7 +101,10 @@ const AdminPage = () => {
             <div className='kapa-admin'>
                 <section className='kapa-admin__card'>
                     <h2>Admin Dashboard</h2>
-                    <p>The Premium server isn&apos;t connected yet. Deploy it (see server/README.md on the platform-source branch), then rebuild the site with its address in KAPA_API_URL.</p>
+                    <p>
+                        The Premium server isn&apos;t connected yet. Deploy it (see server/README.md on the
+                        platform-source branch), then rebuild the site with its address in KAPA_API_URL.
+                    </p>
                 </section>
             </div>
         );
@@ -101,7 +116,14 @@ const AdminPage = () => {
                 <section className='kapa-admin__card kapa-admin__card--login'>
                     <h2>Admin Dashboard</h2>
                     <p>Enter the admin secret to manage Premium memberships and payments.</p>
-                    <input type='password' placeholder='Admin secret' value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && unlock()} autoComplete='off' />
+                    <input
+                        type='password'
+                        placeholder='Admin secret'
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && unlock()}
+                        autoComplete='off'
+                    />
                     <button type='button' className='kapa-admin__gold' onClick={unlock} disabled={!input}>
                         Unlock
                     </button>
@@ -124,7 +146,15 @@ const AdminPage = () => {
                 <div className='kapa-admin__kpis'>
                     <div>
                         <small>Active members</small>
-                        <b>{new Set((ents || []).filter(e => e.value.expiresAt > now).map(e => (e.value.accounts || [e.key]).join())).size}</b>
+                        <b>
+                            {
+                                new Set(
+                                    (ents || [])
+                                        .filter(e => e.value.expiresAt > now)
+                                        .map(e => (e.value.accounts || [e.key]).join())
+                                ).size
+                            }
+                        </b>
                     </div>
                     <div>
                         <small>Paid payments</small>
@@ -133,7 +163,11 @@ const AdminPage = () => {
                     <div>
                         <small>Revenue</small>
                         <b>
-                            {(pays || []).filter(p => p.value.status === 'paid').reduce((a, p) => a + p.value.amount, 0).toLocaleString()} {pays?.[0]?.value.currency || 'XOF'}
+                            {(pays || [])
+                                .filter(p => p.value.status === 'paid')
+                                .reduce((a, p) => a + p.value.amount, 0)
+                                .toLocaleString()}{' '}
+                            {pays?.[0]?.value.currency || 'XOF'}
                         </b>
                     </div>
                 </div>
@@ -144,8 +178,19 @@ const AdminPage = () => {
             <section className='kapa-admin__card'>
                 <h3>Grant Premium</h3>
                 <div className='kapa-admin__grant'>
-                    <input placeholder='Deriv account ID, e.g. ROT90001' value={account} onChange={e => setAccount(e.target.value)} />
-                    <input type='number' min={1} max={3650} value={days} onChange={e => setDays(+e.target.value)} aria-label='Days' />
+                    <input
+                        placeholder='Deriv account ID, e.g. ROT90001'
+                        value={account}
+                        onChange={e => setAccount(e.target.value)}
+                    />
+                    <input
+                        type='number'
+                        min={1}
+                        max={3650}
+                        value={days}
+                        onChange={e => setDays(+e.target.value)}
+                        aria-label='Days'
+                    />
                     <button type='button' className='kapa-admin__gold' onClick={doGrant} disabled={!account.trim()}>
                         Grant
                     </button>
@@ -171,7 +216,11 @@ const AdminPage = () => {
                                     <td>{fmtDate(e.value.expiresAt)}</td>
                                     <td>{e.value.source}</td>
                                     <td>
-                                        <button type='button' className='kapa-admin__ghost' onClick={() => doRevoke(e.key)}>
+                                        <button
+                                            type='button'
+                                            className='kapa-admin__ghost'
+                                            onClick={() => doRevoke(e.key)}
+                                        >
                                             Revoke
                                         </button>
                                     </td>

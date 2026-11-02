@@ -755,17 +755,75 @@
     justify-content: center;
 }
 
-// Kapa: tabs as rounded pills on a blue band, in the reference bot's order
-.dc-tabs__list--main__tabs {
-    gap: 0.8rem;
-    padding: 0.8rem 1rem !important;
-    margin: 0 1.6rem 0.8rem;
-    border-radius: 1.4rem;
-    background: linear-gradient(90deg, #0f1d44 0%, #13307c 55%, #2563eb 100%) !important;
-    box-shadow: inset 0 -4px 0 #2563eb;
+// ============================================================================
+// Kapa layout
+// The tab bar stays in place; every tab fills the space under it and scrolls on
+// its own, vertically, with horizontal scrolling only where a row needs it.
+// ============================================================================
+.main {
+    height: calc(100vh - 9rem);
+    height: calc(100dvh - 9rem);
 
     @include mobile-or-tablet-screen {
-        margin: 0.8rem 1.2rem;
+        height: calc(100vh - 6rem);
+        height: calc(100dvh - 6rem);
+    }
+}
+.main__container > div {
+    height: 100%;
+}
+.dc-tabs--main__tabs {
+    height: 100%;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr); // a wide child (e.g. the hidden announcements panel) can't widen the page
+}
+.dc-tabs__content--main__tabs {
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+// The template's white fades don't suit the blue band; the cut-off pill already shows the bar scrolls
+.tabs-shadow {
+    display: none;
+}
+
+// Tabs: rounded pills on a blue band, in the reference bot's order
+.dc-tabs__list--main__tabs {
+    gap: 0.8rem;
+    padding: 0.6rem !important;
+    margin: 0 1.6rem 1.2rem;
+    border-radius: 1.6rem;
+    background: linear-gradient(90deg, #0f1d44 0%, #13307c 55%, #2563eb 100%) !important;
+    box-shadow: inset 0 -3px 0 #2563eb;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 0.6rem;
+    -webkit-overflow-scrolling: touch;
+    width: auto !important;
+    max-width: 100%;
+    box-sizing: border-box;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+
+    @include desktop-screen {
+        // leaves room for the Run panel at the top right
+        margin-inline-end: 38rem;
+        min-height: 5.6rem;
+
+        .main--no-run-panel & {
+            margin-inline-end: 1.6rem;
+        }
+    }
+
+    @include mobile-or-tablet-screen {
+        margin: 0.8rem 1.2rem 1rem;
+        border-radius: 1.4rem;
     }
 
     .dc-tabs__item--main__tabs {
@@ -773,28 +831,60 @@
         gap: 0.8rem;
         width: auto !important;
         min-width: 0;
-        padding: 0.8rem 1.6rem;
+        height: 4.4rem;
+        padding: 0 1.6rem;
         border-radius: 99rem;
         border: 1px solid #2b3d74;
         background: rgba(10, 20, 50, 0.85);
         color: #eef2ff !important;
+        font-size: 1.4rem;
         font-weight: 600;
         white-space: nowrap;
+        scroll-snap-align: start;
+        transition:
+            background 0.2s,
+            border-color 0.2s,
+            box-shadow 0.2s;
+
+        &:hover {
+            border-color: #4a64b0;
+        }
+        &:focus-visible {
+            outline: 2px solid #f5c542;
+            outline-offset: 2px;
+        }
 
         svg {
             fill: currentColor !important;
+            width: 1.6rem;
+            height: 1.6rem;
+            margin-inline-end: 0 !important;
+        }
+        .dc-text,
+        span {
+            font-size: inherit !important;
+            line-height: 1;
         }
         .kapa-tab-icon {
             font-size: 1.4rem;
             line-height: 1;
         }
+
+        @include mobile-or-tablet-screen {
+            height: 4rem;
+            padding: 0 1.4rem;
+            font-size: 1.3rem;
+            gap: 0.6rem;
+
+            .dc-tabs__item__icon {
+                padding-top: 0;
+            }
+        }
     }
     .dc-tabs__active--main__tabs {
         background: linear-gradient(180deg, #2f6ff5, #1f55e0) !important;
         border-color: #5b8cff;
-        box-shadow:
-            0 0 0 2px rgba(91, 140, 255, 0.25),
-            0 6px 18px rgba(37, 99, 235, 0.45);
+        box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.25);
     }
     ~ .dc-tabs__active-line,
     .dc-tabs__active-line {
@@ -823,14 +913,26 @@
         order: 5;
     }
 }
+.dc-tabs__list--header--main__tabs {
+    // never wider than the page: the bar scrolls inside it instead
+    width: 100% !important;
+    min-width: 0;
+    max-width: 100%;
+
+    @include mobile-or-tablet-screen {
+        padding: 0 !important;
+    }
+}
+.main__run-strategy-wrapper {
+    @include desktop-screen {
+        top: 1.6rem;
+    }
+}
 
 // KAPA AI tab: shown first, with a gold "AI" badge like the reference bot's AI pill
 #id-kapa-ai {
-    order: -1;
-    gap: 0.8rem;
-
     .kapa-tab-badge {
-        font-size: 1rem;
+        font-size: 1rem !important;
         font-weight: 800;
         line-height: 1;
         border: 1.5px solid #f5c542;
@@ -840,6 +942,6 @@
     }
     .kapa-tab-label {
         font-weight: 700;
-        letter-spacing: 0.05rem;
+        letter-spacing: 0.03rem;
     }
 }

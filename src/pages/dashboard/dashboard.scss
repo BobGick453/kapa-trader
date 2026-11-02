@@ -580,3 +580,39 @@
     line-height: 1;
     filter: hue-rotate(290deg) saturate(1.4);
 }
+
+// Sizing and responsive finish: the five cards fit side by side from tablet width up,
+// and become a swipeable row on phones
+.tab__dashboard__table__tiles:has(.kapa-tile) {
+    gap: clamp(1rem, 1.6vw, 1.4rem);
+    justify-content: safe center;
+    scroll-padding-inline: 1.6rem;
+    -webkit-overflow-scrolling: touch;
+
+    @media (max-width: 599px) {
+        justify-content: flex-start;
+        padding-inline: 1.2rem;
+    }
+}
+.kapa-tile {
+    width: clamp(13.6rem, 17vw, 17rem) !important;
+
+    &__open {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 3.8rem;
+        transition:
+            border-color 0.15s,
+            background 0.15s;
+
+        &:hover:not(:disabled) {
+            border-color: #4a64b0;
+            background: #0d1a3a;
+        }
+        &:focus-visible {
+            outline: 2px solid #f5c542;
+            outline-offset: 2px;
+        }
+    }
+}

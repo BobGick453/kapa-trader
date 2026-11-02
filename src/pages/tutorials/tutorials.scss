@@ -507,3 +507,23 @@
         }
     }
 }
+
+// Kapa: rows of guides and videos scroll sideways inside the page instead of running off its edge
+.tutorials-wrap {
+    min-width: 0;
+
+    &__group {
+        min-width: 0;
+
+        &__guides {
+            max-width: 100%;
+            scroll-snap-type: x proximity;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 0.8rem;
+        }
+        &__cards {
+            flex: none;
+            scroll-snap-align: start;
+        }
+    }
+}

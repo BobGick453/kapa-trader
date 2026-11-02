@@ -45,7 +45,9 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                                     target='_blank'
                                     rel='noopener noreferrer'
                                     aria-label='WhatsApp'
-                                    title={brandConfig.platform.social?.whatsapp ? 'WhatsApp' : 'WhatsApp link coming soon'}
+                                    title={
+                                        brandConfig.platform.social?.whatsapp ? 'WhatsApp' : 'WhatsApp link coming soon'
+                                    }
                                     className='kapa-social__wa'
                                 >
                                     <svg viewBox='0 0 24 24' width='22' height='22' fill='currentColor' aria-hidden>
@@ -57,7 +59,9 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                                     target='_blank'
                                     rel='noopener noreferrer'
                                     aria-label='Telegram'
-                                    title={brandConfig.platform.social?.telegram ? 'Telegram' : 'Telegram link coming soon'}
+                                    title={
+                                        brandConfig.platform.social?.telegram ? 'Telegram' : 'Telegram link coming soon'
+                                    }
                                     className='kapa-social__tg'
                                 >
                                     <svg viewBox='0 0 24 24' width='20' height='20' fill='currentColor' aria-hidden>
