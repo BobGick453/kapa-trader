@@ -1,0 +1,119 @@
+.kapa-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(60rem 40rem at 50% 45%, #13265e 0%, #050a19 70%);
+    color: #f5c542;
+    font-family: Georgia, 'Times New Roman', serif;
+    transition: opacity 0.45s;
+    cursor: pointer;
+
+    &--out {
+        opacity: 0;
+        pointer-events: none;
+    }
+    &__corner {
+        position: absolute;
+        width: 3.2rem;
+        height: 3.2rem;
+        border-color: rgba(245, 197, 66, 0.6);
+        border-style: solid;
+        border-width: 0;
+
+        &--tl {
+            top: 1.6rem;
+            left: 1.6rem;
+            border-top-width: 1px;
+            border-left-width: 1px;
+        }
+        &--tr {
+            top: 1.6rem;
+            right: 1.6rem;
+            border-top-width: 1px;
+            border-right-width: 1px;
+        }
+        &--bl {
+            bottom: 1.6rem;
+            left: 1.6rem;
+            border-bottom-width: 1px;
+            border-left-width: 1px;
+        }
+        &--br {
+            bottom: 1.6rem;
+            right: 1.6rem;
+            border-bottom-width: 1px;
+            border-right-width: 1px;
+        }
+    }
+    &__in {
+        text-align: center;
+        padding: 2.4rem;
+    }
+    &__tag,
+    &__sub {
+        font-family: system-ui, sans-serif;
+        font-size: 1.1rem;
+        letter-spacing: 0.35rem;
+        text-transform: uppercase;
+        color: #d9c27a;
+    }
+    &__mark {
+        width: 9.2rem;
+        height: 9.2rem;
+        margin: 2.4rem auto 1.6rem;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        border: 1.5px solid rgba(245, 197, 66, 0.8);
+        box-shadow:
+            0 0 0 6px rgba(245, 197, 66, 0.08),
+            0 0 4rem rgba(245, 197, 66, 0.25);
+        font-size: 3rem;
+        font-weight: 700;
+        animation: kapa-splash-glow 2.4s ease-in-out infinite;
+    }
+    &__name {
+        font-size: 3.4rem;
+        letter-spacing: 0.3rem;
+        line-height: 1.1;
+    }
+    &__ai {
+        font-family: system-ui, sans-serif;
+        font-size: 1rem;
+        letter-spacing: 0.4rem;
+        margin: 0.4rem 0 1.6rem;
+    }
+    &__line {
+        width: 18rem;
+        height: 1px;
+        margin: 2rem auto 1.4rem;
+        background: linear-gradient(90deg, transparent, #f5c542, transparent);
+    }
+    &__step {
+        font-family: system-ui, sans-serif;
+        font-size: 1.1rem;
+        letter-spacing: 0.3rem;
+        text-transform: uppercase;
+        color: #c8d1ec;
+
+        &--ready {
+            color: #5fe3a1;
+        }
+    }
+}
+
+@keyframes kapa-splash-glow {
+    50% {
+        box-shadow:
+            0 0 0 6px rgba(245, 197, 66, 0.14),
+            0 0 6rem rgba(245, 197, 66, 0.4);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kapa-splash__mark {
+        animation: none;
+    }
+}

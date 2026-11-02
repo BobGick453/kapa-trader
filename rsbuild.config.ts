@@ -29,6 +29,7 @@ export default defineConfig({
                 APP_ENV: JSON.stringify(process.env.APP_ENV),
                 PUBLIC_PATH: JSON.stringify(process.env.PUBLIC_PATH || '/'),
                 GTM_ID: JSON.stringify(process.env.GTM_ID || ''),
+                KAPA_API_URL: JSON.stringify(process.env.KAPA_API_URL || ''),
                 CLIENT_ID: JSON.stringify(process.env.CLIENT_ID),
                 APP_ID: JSON.stringify(process.env.APP_ID),
                 GD_CLIENT_ID: JSON.stringify(process.env.GD_CLIENT_ID),

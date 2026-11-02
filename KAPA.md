@@ -7,11 +7,14 @@ Kapa Trader is built on Deriv's open-source [trading-bot-template](https://githu
 - **Sub-folder hosting**: `PUBLIC_PATH` sets where the app is served from, including the OAuth redirect URL (`src/utils/base-path.ts`).
 - **Privacy**: the template's Google Tag Manager IDs, Survicate surveys and the upload of strategies and transactions to Deriv's analytics service are switched off.
 
+- **Reference-bot screens**: splash, pill tabs (Admin, KAPA AI, Dashboard, Bot Builder, Free Bot, Charts, Tutorials), dashboard carousel with social icons, floating AI orb with the live connection state and the KAPA Live Scanner, risk warning, Free Bot library.
+- **Premium** (`server/`): a Cloudflare Worker that verifies Deriv identity, sells access through CinetPay (mobile money and cards) and powers the Admin tab. Setup guide in `server/README.md`. Without `KAPA_API_URL` at build time Premium is off and every feature is open.
+
 ## Build for GitHub Pages
 
 ```bash
 npm ci --ignore-scripts
-CLIENT_ID=34QvhOYOwdiGB0X15zX0W APP_ENV=production PUBLIC_PATH=/kapa-trader/ npm run build
+CLIENT_ID=34QvhOYOwdiGB0X15zX0W APP_ENV=production PUBLIC_PATH=/kapa-trader/ [KAPA_API_URL=https://…workers.dev] npm run build
 ```
 
 Copy the contents of `dist/` to the root of the `main` branch of `kapa-trader`, and copy `index.html` to `404.html`.

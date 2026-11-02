@@ -1,0 +1,18 @@
+# Kapa Premium server. Deploy steps are in server/README.md.
+name = "kapa-premium"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+PRICE_XOF = "0"            # set the Premium price in CFA francs (a multiple of 5)
+PLAN_DAYS = "30"           # days of access per payment
+CURRENCY = "XOF"
+SITE_URL = "https://bobgick453.github.io/kapa-trader/"
+ALLOWED_ORIGINS = "https://bobgick453.github.io"
+DERIV_API = "https://api.derivws.com"
+
+[[kv_namespaces]]
+binding = "KAPA_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# Secrets (never in this file): CINETPAY_APIKEY, CINETPAY_SITE_ID, ADMIN_SECRET

@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import React from 'react';
 import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from 'react-router-dom';
 import ChunkLoader from '@/components/loader/chunk-loader';
+import KapaSplash from '@/components/kapa-splash/kapa-splash';
 import LocalStorageSyncWrapper from '@/components/localStorage-sync-wrapper';
 import RoutePromptDialog from '@/components/route-prompt-dialog';
 import { useAccountSwitching } from '@/hooks/useAccountSwitching';
@@ -102,7 +103,12 @@ function App() {
         }
     }, [isProcessing, isValid, params.code, error, cleanupURL]);
 
-    return <RouterProvider router={router} />;
+    return (
+        <>
+            <KapaSplash />
+            <RouterProvider router={router} />
+        </>
+    );
 }
 
 export default App;

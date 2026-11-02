@@ -26,6 +26,8 @@ import {
     validate,
     winProb,
 } from './engine';
+import { fetchPlan, premiumEnabled, refreshEntitlement, resumeCheckout, startCheckout, TPlan } from '../premium/premium-api';
+import { openPremium, usePremium } from '../premium/use-premium';
 import './kapa-ai.scss';
 
 const STORAGE_KEY = 'kapa_ai_settings';
@@ -70,6 +72,12 @@ const Ring = ({ busy, label, sub, onClick, disabled }: { busy: boolean; label: R
 
 const KapaAI = observer(() => {
     const { client, run_panel } = useStore();
+    const premium = usePremium();
+    const isPremium = !premiumEnabled() || premium.status === 'active';
+    const [plan_, setPlan_] = useState<TPlan | null>(null);
+    const [premiumMsg, setPremiumMsg] = useState('');
+    const [paying, setPaying] = useState(false);
+    const premiumRef = useRef<HTMLDivElement>(null);
     const logged_in = client.is_logged_in;
     const currency = (logged_in && client.currency) || 'USD';
     const balance = logged_in ? Number(client.balance) || 0 : 0;
@@ -116,6 +124,60 @@ const KapaAI = observer(() => {
     };
 
     const log = useCallback((text: string, level: TLog['level'] = 'info') => setLogs(prev => [{ at: Date.now(), text, level }, ...prev].slice(0, 400)), []);
+
+    // Premium: check the entitlement after login, finish a payment when CinetPay sends the buyer back
+    useEffect(() => {
+        if (!premiumEnabled()) return;
+        fetchPlan().then(setPlan_).catch(() => setPlan_(null));
+    }, []);
+    useEffect(() => {
+        if (!logged_in) return;
+        refreshEntitlement();
+        resumeCheckout(setPremiumMsg);
+    }, [logged_in]);
+    // "Use in KAPA AI" from the Live Scanner
+    useEffect(() => {
+        const apply = (detail: any) => {
+            const { symbol, preset: k, stake } = detail || {};
+            if (!symbol || !PRESETS[k as TPresetKey]) return;
+            try {
+                sessionStorage.removeItem('kapa_pending_market');
+            } catch {
+                /* nothing to clear */
+            }
+            const p = PRESETS[k as TPresetKey];
+            update({ symbol, stake, ctype: p.ctype, barrier: p.barrier, recovery: p.recovery, recMode: p.recMode, martingale: p.martingale, maxLosses: p.maxLosses });
+            setScanMsg(`${MARKETS[symbol]} loaded from the Live Scanner. Review the settings and press Start KAPA AI when ready.`);
+        };
+        const use = (e: Event) => apply((e as CustomEvent).detail);
+        try {
+            apply(JSON.parse(sessionStorage.getItem('kapa_pending_market') || 'null'));
+        } catch {
+            /* no pending market */
+        }
+        window.addEventListener('kapa:use-market', use);
+        return () => window.removeEventListener('kapa:use-market', use);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        const show = () => premiumRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.addEventListener('kapa:open-premium', show);
+        return () => window.removeEventListener('kapa:open-premium', show);
+    }, []);
+    // Without Premium only the fixed-stake strategy is available
+    useEffect(() => {
+        if (!isPremium && premium.status !== 'unknown' && premium.status !== 'checking' && s.recMode !== 'none') applyPreset('fixed');
+    }, [isPremium, premium.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const pay = async () => {
+        setPaying(true);
+        setPremiumMsg('');
+        try {
+            await startCheckout();
+        } catch (e: any) {
+            setPremiumMsg(e?.message ?? 'The payment could not be started.');
+            setPaying(false);
+        }
+    };
 
     const engine = useMemo(
         () =>
@@ -176,6 +238,7 @@ const KapaAI = observer(() => {
 
     const scan = async () => {
         if (scanning || running) return;
+        if (!isPremium) return openPremium();
         const err = validate(s, balance);
         if (err) return setError(err);
         setError('');
@@ -233,6 +296,10 @@ const KapaAI = observer(() => {
         const err = validate(s, balance);
         if (err) return setError(err);
         if (run_panel.is_running) return setError('A Bot Builder strategy is running. Stop it before starting KAPA AI.');
+        if (!isPremium && s.recMode !== 'none') {
+            openPremium();
+            return setError('Recovery strategies are part of KAPA AI Premium.');
+        }
         setError('');
         if (!client.is_virtual) return setConfirmReal(true);
         go();
@@ -274,12 +341,56 @@ const KapaAI = observer(() => {
         <div className='kapa-ai'>
             <div className='kapa-ai__scroll'>
                 <section className='kapa-card'>
-                    <div className='kapa-orb' aria-hidden>
-                        KA<span className={classNames('kapa-orb__badge', { 'kapa-orb__badge--live': logged_in })}>{logged_in ? 'LIVE' : 'OFFLINE'}</span>
-                    </div>
                     <div className='kapa-eyebrow'>KAPA AI · Premium</div>
                     <h2 className='kapa-title'>Activate Kapa</h2>
                     <p className='kapa-lede'>Set your stake, take-profit and stop-loss, check the session plan, then activate the scanner to compare live markets.</p>
+
+                    {premiumEnabled() && (
+                        <div className={classNames('kapa-premium', { 'kapa-premium--on': isPremium })} ref={premiumRef}>
+                            {isPremium ? (
+                                <p className='kapa-premium__active'>
+                                    ✓ Premium active{premium.expiresAt ? ` until ${new Date(premium.expiresAt).toLocaleDateString()}` : ''}
+                                </p>
+                            ) : (
+                                <>
+                                    <div className='kapa-premium__tag'>PREMIUM LOCKED</div>
+                                    <h3>KAPA AI Premium</h3>
+                                    <ul>
+                                        <li>
+                                            <b>Recovery strategies</b> · Over 1 → Over 5 and Over 2 → Over 4 with ×2.2, and exact win-back recovery
+                                        </li>
+                                        <li>
+                                            <b>Live market scanner</b> · compares Deriv&apos;s live prices across Volatility indices
+                                        </li>
+                                        <li>
+                                            <b>Advanced settings</b> · predictions, multiplier, maximum stake, loss limits, pauses
+                                        </li>
+                                        <li>
+                                            <b>Premium bots</b> in the Free Bot library
+                                        </li>
+                                    </ul>
+                                    <p className='kapa-premium__note'>
+                                        The session plan stays free for everyone. Premium adds tools; it does not change the odds: every Deriv contract still pays less than its true chance.
+                                    </p>
+                                    {plan_?.configured ? (
+                                        <button className='kapa-btn kapa-btn--gold' type='button' onClick={pay} disabled={!logged_in || paying}>
+                                            {paying ? 'Opening CinetPay…' : `Get Premium · ${plan_.price.toLocaleString()} ${plan_.currency} / ${plan_.days} days`}
+                                        </button>
+                                    ) : (
+                                        <p className='kapa-premium__note'>Premium payments open soon.</p>
+                                    )}
+                                    <small className='kapa-premium__methods'>Mobile money (Orange, MTN, Moov, Wave) or bank card, through CinetPay.</small>
+                                    {!logged_in && <small className='kapa-premium__methods'>Log in with Deriv first: Premium is linked to your Deriv account.</small>}
+                                    {premium.status === 'unavailable' && (
+                                        <button className='kapa-link' type='button' onClick={() => refreshEntitlement()}>
+                                            Couldn&apos;t reach the Premium server. Try again
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                            {premiumMsg && <p className='kapa-premium__msg'>{premiumMsg}</p>}
+                        </div>
+                    )}
 
                     {!logged_in && (
                         <div className='kapa-login'>
@@ -317,9 +428,19 @@ const KapaAI = observer(() => {
                     </label>
                     <label className='kapa-field'>
                         <span>Strategy</span>
-                        <select value={preset} onChange={e => e.target.value !== 'custom' && applyPreset(e.target.value as TPresetKey)} disabled={running}>
+                        <select
+                            value={preset}
+                            onChange={e => {
+                                const k = e.target.value as TPresetKey | 'custom';
+                                if (k === 'custom') return;
+                                if (!isPremium && PRESETS[k].recMode !== 'none') return openPremium();
+                                applyPreset(k);
+                            }}
+                            disabled={running}
+                        >
                             {(Object.keys(PRESETS) as TPresetKey[]).map(k => (
                                 <option key={k} value={k}>
+                                    {!isPremium && PRESETS[k].recMode !== 'none' ? '🔒 ' : ''}
                                     {PRESETS[k].label}
                                 </option>
                             ))}
@@ -337,10 +458,10 @@ const KapaAI = observer(() => {
                         </select>
                     </label>
 
-                    <button className='kapa-link' type='button' onClick={() => setShowAdvanced(v => !v)}>
-                        {showAdvanced ? 'Hide' : 'Show'} advanced settings
+                    <button className='kapa-link' type='button' onClick={() => (isPremium ? setShowAdvanced(v => !v) : openPremium())}>
+                        {!isPremium ? '🔒 Advanced settings (Premium)' : `${showAdvanced ? 'Hide' : 'Show'} advanced settings`}
                     </button>
-                    {showAdvanced && (
+                    {showAdvanced && isPremium && (
                         <div className='kapa-grid2'>
                             <label className='kapa-field'>
                                 <span>Prediction (Over)</span>
@@ -446,7 +567,7 @@ const KapaAI = observer(() => {
                                 Kapa
                             </>
                         }
-                        sub={scanning ? 'Scanning live markets' : 'Ready to scan'}
+                        sub={!isPremium ? '🔒 Premium' : scanning ? 'Scanning live markets' : 'Ready to scan'}
                         onClick={scan}
                         disabled={!logged_in || running}
                     />

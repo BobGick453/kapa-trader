@@ -43,14 +43,19 @@ import Dashboard from '../dashboard';
 import RunStrategy from '../dashboard/run-strategy';
 import './main.scss';
 
+import KapaOrb from '@/components/kapa-orb/kapa-orb';
+import { refreshEntitlement } from '../premium/premium-api';
+
 const KapaAI = lazy(() => import('../kapa-ai/kapa-ai'));
+const FreeBot = lazy(() => import('../free-bot/free-bot'));
+const AdminPage = lazy(() => import('../admin/admin'));
 
 const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
 const Tutorial = lazy(() => import('../tutorials'));
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
-    const { dashboard, load_modal, run_panel, quick_strategy, summary_card, blockly_store } = useStore();
+    const { dashboard, load_modal, run_panel, quick_strategy, summary_card, blockly_store, client } = useStore();
     const { is_loading } = blockly_store;
     const {
         active_tab,
@@ -79,7 +84,7 @@ const AppWrapper = observer(() => {
     const { clear } = summary_card;
     const { DASHBOARD, BOT_BUILDER } = DBOT_TABS;
     const init_render = React.useRef(true);
-    const hash = ['dashboard', 'bot_builder', 'chart', 'tutorial', 'kapa_ai'];
+    const hash = ['dashboard', 'bot_builder', 'chart', 'tutorial', 'kapa_ai', 'free_bot', 'admin'];
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
@@ -127,6 +132,20 @@ const AppWrapper = observer(() => {
         return Number(hash.indexOf(String(tab_value)));
     };
     const active_hash_tab = GetHashedValue(active_tab);
+    // Premium status for every tab (Free Bot locks Premium bots too), and "open Premium" from anywhere
+    useEffect(() => {
+        if (client.is_logged_in) refreshEntitlement();
+    }, [client.is_logged_in]);
+    useEffect(() => {
+        const open = () => setActiveTab(DBOT_TABS.KAPA_AI);
+        window.addEventListener('kapa:open-premium', open);
+        window.addEventListener('kapa:use-market', open);
+        return () => {
+            window.removeEventListener('kapa:open-premium', open);
+            window.removeEventListener('kapa:use-market', open);
+        };
+    }, [setActiveTab]);
+
     // KAPA AI has its own Start/Stop bar; keep the Bot Builder run panel out of its way unless a Bot Builder strategy is running
     const show_bot_run_panel = active_tab !== DBOT_TABS.KAPA_AI || run_panel.is_running;
 
@@ -465,6 +484,36 @@ const AppWrapper = observer(() => {
                                     <KapaAI />
                                 </Suspense>
                             </div>
+                            <div
+                                label={
+                                    <>
+                                        <span className='kapa-tab-icon' aria-hidden>
+                                            ⚡
+                                        </span>
+                                        <Localize i18n_default_text='Free Bot' />
+                                    </>
+                                }
+                                id='id-free-bot'
+                            >
+                                <Suspense fallback={<ChunkLoader message={localize('Please wait, loading bots...')} />}>
+                                    <FreeBot handleTabChange={handleTabChange} />
+                                </Suspense>
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <span className='kapa-tab-icon' aria-hidden>
+                                            ⚙
+                                        </span>
+                                        <Localize i18n_default_text='Admin' />
+                                    </>
+                                }
+                                id='id-admin'
+                            >
+                                <Suspense fallback={<ChunkLoader message={localize('Please wait...')} />}>
+                                    <AdminPage />
+                                </Suspense>
+                            </div>
                         </Tabs>
                         {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}{' '}
                     </div>
@@ -481,6 +530,7 @@ const AppWrapper = observer(() => {
                 <TradingViewModal />
             </DesktopWrapper>
             <MobileWrapper>{!is_open && show_bot_run_panel && <RunPanel />}</MobileWrapper>
+            <KapaOrb />
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}
                 className='dc-dialog__wrapper--fixed'

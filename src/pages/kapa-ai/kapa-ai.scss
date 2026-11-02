@@ -923,3 +923,61 @@
         }
     }
 }
+
+.kapa-premium {
+    border: 1.5px solid rgba(245, 197, 66, 0.55);
+    border-radius: 1.6rem;
+    background: linear-gradient(180deg, rgba(245, 197, 66, 0.08), rgba(10, 21, 48, 0.4));
+    padding: 1.6rem;
+    margin-bottom: 1.8rem;
+
+    &--on {
+        border-color: rgba(34, 197, 122, 0.45);
+        background: rgba(34, 197, 122, 0.08);
+        padding: 1rem 1.4rem;
+    }
+    &__active {
+        margin: 0;
+        color: #5fe3a1;
+        font-weight: 700;
+    }
+    &__tag {
+        color: var(--k-gold);
+        font-size: 1.2rem;
+        font-weight: 800;
+        letter-spacing: 0.2rem;
+    }
+    h3 {
+        margin: 0.4rem 0 1rem;
+        font-size: 2.2rem;
+        font-weight: 700;
+    }
+    ul {
+        margin: 0 0 1rem;
+        padding-left: 1.8rem;
+        display: grid;
+        gap: 0.6rem;
+        color: #c8d1ec;
+    }
+    b {
+        color: #eef2ff;
+    }
+    &__note {
+        margin: 0 0 0.6rem;
+        color: var(--k-muted);
+        font-size: 1.3rem;
+    }
+    &__methods {
+        display: block;
+        margin-top: 0.8rem;
+        color: var(--k-muted);
+        text-align: center;
+    }
+    &__msg {
+        margin: 1rem 0 0;
+        padding: 1rem 1.2rem;
+        border-radius: 1rem;
+        background: rgba(37, 99, 235, 0.12);
+        border: 1px solid var(--k-line-2);
+    }
+}

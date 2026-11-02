@@ -1,3 +1,4 @@
+import { BASE_PATH } from '@/utils/base-path';
 import { action, makeObservable, reaction } from 'mobx';
 import { api_base, ApiHelpers, DBot, runIrreversibleEvents } from '@/external/bot-skeleton';
 import { setCurrency } from '@/external/bot-skeleton/scratch/utils';
@@ -56,7 +57,8 @@ export default class AppStore {
         if (!this.dbot_store) return;
 
         blockly_store.setLoading(true);
-        await DBot.initWorkspace('/', this.dbot_store, this.api_helpers_store, ui.is_mobile, false);
+        // Kapa: the runtime loads later chunks from here, so it must include the site's sub-folder
+        await DBot.initWorkspace(BASE_PATH, this.dbot_store, this.api_helpers_store, ui.is_mobile, false);
 
         blockly_store.setContainerSize();
         blockly_store.setLoading(false);

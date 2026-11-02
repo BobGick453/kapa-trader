@@ -113,6 +113,10 @@
                 "options": "options/",
                 "derivatives": "derivatives/"
             }
+        },
+        "social": {
+            "whatsapp": "",
+            "telegram": ""
         }
     }
 }

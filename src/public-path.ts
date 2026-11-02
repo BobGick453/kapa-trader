@@ -1,3 +1,4 @@
+import { BASE_PATH } from '@/utils/base-path';
 export const getUrlBase = (path = '') => {
     const l = window.location;
 
@@ -77,4 +78,5 @@ const initSurvicate = () => {
 
 export { initSurvicate, setSurvicateCalledValue };
 
-setBotPublicPath(getUrlBase('/'));
+// Kapa: lazy-loaded files (styles, sounds, block help) live under the site's sub-folder, e.g. /kapa-trader/
+setBotPublicPath(BASE_PATH);
