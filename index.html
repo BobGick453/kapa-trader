@@ -306,7 +306,7 @@
 
       <details class="more" id="v2Setup">
         <summary>OAuth settings</summary>
-        <div class="fld"><label for="clientId">Deriv OAuth client ID</label><input class="inp sm" id="clientId" autocomplete="off" placeholder="From your app on developers.deriv.com"></div>
+        <div class="fld"><label for="clientId">Deriv App ID (sent as the OAuth client_id)</label><input class="inp sm" id="clientId" autocomplete="off" spellcheck="false" placeholder="App ID from your app on developers.deriv.com"></div>
         <div class="fld"><label for="appId">Legacy App ID (accounts on Deriv's older platform)</label><input class="inp sm" id="appId" inputmode="numeric" placeholder="e.g. 12345">
           <div class="hint">Deriv sends older accounts to this app instead. Without it, Deriv may leave you on its own dashboard after login. Register it at api.deriv.com with the same redirect URL.</div></div>
         <div class="fld"><label for="redirectUri">Redirect URL (must match your app on developers.deriv.com exactly)</label>
@@ -810,7 +810,7 @@
   // ---------- Deriv OAuth 2.0 (new API platform) ----------
   // Authorization code + PKCE at auth.deriv.com, account list and a one-time
   // WebSocket password from api.derivws.com. No password or token is ever typed in.
-  const DEFAULT_CLIENT_ID = '019e2b5f-1453-7ae6-a6c4-0f71c4bbe71e'; // Kapa Trader's OAuth app on developers.deriv.com
+  const DEFAULT_CLIENT_ID = '34QvhOYOwdiGB0X15zX0W'; // App ID of Kapa Trader's app on developers.deriv.com, sent as the OAuth client_id
   const V2 = Object.assign({ auth: 'https://auth.deriv.com/oauth2/auth', token: 'https://auth.deriv.com/oauth2/token', api: 'https://api.derivws.com' },
     (() => { try { return JSON.parse(store.get('dt_v2_override') || '{}'); } catch { return {}; } })()); // override is for local testing only
   const defaultRedirect = () => location.origin + location.pathname.replace(/index\.html$/, '');
