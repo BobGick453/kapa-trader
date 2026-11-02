@@ -1,0 +1,925 @@
+// KAPA AI tab: navy and gold, modelled on the reference bot's activation screens
+.kapa-ai {
+    --k-bg: #071026;
+    --k-panel: #0d1a3a;
+    --k-panel-2: #102148;
+    --k-line: #1d2e5c;
+    --k-line-2: #2a3f78;
+    --k-text: #eef2ff;
+    --k-muted: #93a3cc;
+    --k-gold: #f5c542;
+    --k-gold-2: #e0a91a;
+    --k-blue: #2563eb;
+    --k-green: #22c57a;
+    --k-red: #ef4458;
+
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(900px 500px at 50% 0, #11255c 0%, var(--k-bg) 70%);
+    color: var(--k-text);
+    font-size: 1.4rem;
+    line-height: 1.45;
+
+    &__scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 1.6rem 1.6rem 2.4rem;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.6rem;
+        align-content: start;
+
+        @media (min-width: 1100px) {
+            grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+            align-items: start;
+        }
+    }
+
+    small {
+        font-size: 1.2rem;
+    }
+    button {
+        font-family: inherit;
+        cursor: pointer;
+    }
+    button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+    }
+    .kapa-up {
+        color: var(--k-green);
+    }
+    .kapa-down {
+        color: var(--k-red);
+    }
+    .kapa-dim {
+        color: var(--k-muted);
+    }
+}
+
+.kapa-card {
+    position: relative;
+    min-width: 0;
+    background: linear-gradient(180deg, rgba(17, 33, 74, 0.85), rgba(10, 21, 48, 0.92));
+    border: 1px solid var(--k-line);
+    border-radius: 2.2rem;
+    padding: 2.6rem 2rem 2.2rem;
+    box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.25);
+
+    &--panel {
+        padding-top: 1.6rem;
+    }
+}
+
+.kapa-orb {
+    position: absolute;
+    top: 1.8rem;
+    right: 1.8rem;
+    width: 5.8rem;
+    height: 5.8rem;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 800;
+    font-size: 2rem;
+    background: radial-gradient(circle at 35% 30%, #6aa2ff 0%, #2b62e8 45%, #163a9e 100%);
+    box-shadow:
+        0 0 0 3px rgba(245, 197, 66, 0.75),
+        0 0 0 6px rgba(37, 99, 235, 0.25),
+        0 0 2.6rem rgba(59, 130, 246, 0.8);
+
+    &__badge {
+        position: absolute;
+        right: -1.2rem;
+        bottom: 0;
+        font-size: 0.9rem;
+        font-weight: 800;
+        padding: 0.2rem 0.6rem;
+        border-radius: 0.6rem;
+        background: #9aa5c0;
+        color: #1b2238;
+        letter-spacing: 0.05rem;
+
+        &--live {
+            background: var(--k-gold);
+            color: #2a1d00;
+        }
+    }
+}
+
+.kapa-eyebrow {
+    text-align: center;
+    color: var(--k-gold);
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.2rem;
+    text-transform: uppercase;
+}
+
+.kapa-title {
+    text-align: center;
+    font-size: 3.2rem;
+    font-weight: 600;
+    margin: 0.4rem 0 0.6rem;
+    color: var(--k-text);
+    text-wrap: balance;
+}
+
+.kapa-lede {
+    text-align: center;
+    color: var(--k-muted);
+    margin: 0 auto 2rem;
+    max-width: 44rem;
+}
+
+.kapa-login {
+    text-align: center;
+    background: rgba(37, 99, 235, 0.1);
+    border: 1px solid var(--k-line-2);
+    border-radius: 1.4rem;
+    padding: 1.4rem;
+    margin-bottom: 1.6rem;
+
+    p {
+        margin: 0 0 1rem;
+    }
+}
+
+.kapa-field {
+    display: block;
+    margin-bottom: 1.4rem;
+
+    > span {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.6rem;
+    }
+    > small {
+        display: block;
+        color: var(--k-muted);
+        margin-top: 0.4rem;
+    }
+    input,
+    select {
+        width: 100%;
+        background: #071029;
+        color: var(--k-text);
+        border: 1px solid var(--k-line-2);
+        border-radius: 1.2rem;
+        padding: 1.2rem 1.4rem;
+        font-size: 1.6rem;
+        font-weight: 600;
+        font-family: inherit;
+
+        &:focus {
+            outline: none;
+            border-color: #4b7bff;
+            box-shadow: 0 0 0 3px rgba(75, 123, 255, 0.2);
+        }
+    }
+    select {
+        font-size: 1.4rem;
+        font-weight: 500;
+    }
+}
+
+.kapa-grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 1.2rem;
+
+    @media (max-width: 480px) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.kapa-link {
+    background: none;
+    border: 0;
+    padding: 0.4rem 0;
+    margin-bottom: 1.2rem;
+    color: var(--k-muted);
+    text-decoration: underline;
+    font-weight: 600;
+    font-size: 1.3rem;
+}
+
+.kapa-plan {
+    background: #071029;
+    border: 1px solid var(--k-line-2);
+    border-radius: 1.4rem;
+    padding: 1.4rem;
+    margin: 0.4rem 0 1.4rem;
+
+    &__head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.8rem;
+        margin-bottom: 1rem;
+
+        span {
+            font-weight: 700;
+            color: var(--k-gold);
+        }
+        small {
+            color: var(--k-muted);
+            text-align: right;
+        }
+    }
+    &__grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.8rem;
+
+        @media (max-width: 520px) {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        div {
+            background: var(--k-panel);
+            border: 1px solid var(--k-line);
+            border-radius: 1rem;
+            padding: 0.8rem 1rem;
+        }
+        small {
+            display: block;
+            color: var(--k-muted);
+        }
+        b {
+            font-size: 1.8rem;
+            font-variant-numeric: tabular-nums;
+        }
+    }
+    &__bar {
+        display: flex;
+        height: 0.8rem;
+        border-radius: 0.4rem;
+        overflow: hidden;
+        background: #1b2747;
+        margin: 1.2rem 0 0.8rem;
+
+        i {
+            display: block;
+            height: 100%;
+            transition: width 0.3s;
+        }
+        i:first-child {
+            background: var(--k-green);
+        }
+        i:last-child {
+            background: var(--k-red);
+            margin-left: auto;
+        }
+    }
+    &__text {
+        margin: 0;
+        font-size: 1.3rem;
+        color: #c8d1ec;
+    }
+}
+
+.kapa-error {
+    background: rgba(239, 68, 88, 0.1);
+    border: 1px solid rgba(239, 68, 88, 0.4);
+    color: #ffb3bb;
+    border-radius: 1.2rem;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.2rem;
+}
+
+.kapa-ring {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 23rem;
+    height: 23rem;
+    margin: 1.4rem auto 0.6rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+
+    &__dash {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2.5px dashed rgba(245, 197, 66, 0.85);
+    }
+    &__dots {
+        position: absolute;
+        inset: 2.4rem;
+        border-radius: 50%;
+        border: 1px dotted rgba(91, 140, 255, 0.65);
+    }
+    &__arc {
+        position: absolute;
+        inset: 4.4rem;
+        border-radius: 50%;
+        opacity: 0;
+        background: conic-gradient(from 0deg, rgba(245, 197, 66, 0) 0deg, rgba(245, 197, 66, 0.55) 50deg, rgba(245, 197, 66, 0) 95deg);
+    }
+    &__core {
+        position: relative;
+        width: 14rem;
+        height: 14rem;
+        border-radius: 50%;
+        display: grid;
+        place-content: center;
+        text-align: center;
+        background: radial-gradient(circle at 50% 40%, #12224c, #081330);
+        border: 2px solid rgba(245, 197, 66, 0.65);
+        box-shadow:
+            inset 0 0 3rem rgba(0, 0, 0, 0.6),
+            0 0 0 0.8rem rgba(13, 26, 58, 0.8);
+
+        b {
+            font-size: 2rem;
+            line-height: 1.1;
+            color: var(--k-gold);
+        }
+        small {
+            margin-top: 0.6rem;
+            color: #d7def5;
+            font-weight: 600;
+        }
+    }
+    &--busy &__dash {
+        animation: kapa-spin 10s linear infinite;
+        border-color: rgba(147, 163, 204, 0.35);
+    }
+    &--busy &__arc {
+        opacity: 1;
+        animation: kapa-spin 1.6s linear infinite;
+    }
+    &--busy &__core b,
+    &--busy &__core small {
+        color: #6f7ea6;
+    }
+}
+
+@keyframes kapa-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kapa-ring--busy .kapa-ring__dash,
+    .kapa-ring--busy .kapa-ring__arc,
+    .kapa-hero__ring {
+        animation: none;
+    }
+}
+
+.kapa-scanmsg {
+    text-align: center;
+    min-height: 2rem;
+    color: #d7def5;
+    margin-bottom: 0.6rem;
+}
+
+.kapa-sig {
+    background: linear-gradient(180deg, #0f1d42, #0a1532);
+    border: 1px solid var(--k-line);
+    border-radius: 1.8rem;
+    padding: 1.6rem 1.8rem;
+    margin-top: 1.4rem;
+
+    &--best {
+        border-color: rgba(245, 197, 66, 0.55);
+    }
+    &__rank {
+        font-size: 1.2rem;
+        letter-spacing: 0.05rem;
+        color: #cdd6f2;
+
+        span {
+            color: #201600;
+            background: var(--k-gold);
+            border-radius: 0.6rem;
+            padding: 0.2rem 0.6rem;
+            font-weight: 800;
+            margin-right: 0.6rem;
+            font-size: 1.1rem;
+        }
+    }
+    h4 {
+        margin: 0.6rem 0 0.2rem;
+        font-size: 1.8rem;
+        font-weight: 500;
+        color: var(--k-text);
+    }
+    &__pct {
+        color: var(--k-gold);
+        font-size: 2.6rem;
+        font-weight: 700;
+    }
+    p {
+        margin: 0.2rem 0;
+        font-size: 1.3rem;
+    }
+    &__rec {
+        color: #9fb3e8;
+    }
+}
+
+.kapa-use {
+    margin-top: 1.2rem;
+    width: 100%;
+    text-align: left;
+    background: #120f05;
+    border: 1px solid #4a3d14;
+    color: var(--k-gold);
+    border-radius: 1.2rem;
+    padding: 1.1rem 1.4rem;
+    font-weight: 700;
+}
+
+.kapa-segs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    background: #0b1631;
+    border: 1px solid var(--k-line);
+    border-radius: 1.6rem;
+    padding: 0.6rem;
+    margin-bottom: 1.4rem;
+
+    button {
+        background: none;
+        border: 0;
+        border-radius: 1.2rem;
+        padding: 1rem 0;
+        color: #c2cbe6;
+        font-size: 1.5rem;
+        position: relative;
+
+        &.on {
+            background: linear-gradient(180deg, #16295c, #12234e);
+            color: #fff;
+            font-weight: 700;
+
+            &::after {
+                content: '';
+                position: absolute;
+                left: 0;
+                right: 0;
+                bottom: -0.6rem;
+                height: 3px;
+                background: #3b82f6;
+                border-radius: 2px;
+            }
+        }
+    }
+}
+
+.kapa-cc {
+    border: 1px solid var(--k-line);
+    border-radius: 1.2rem;
+    overflow: hidden;
+
+    &__top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.2rem;
+        font-weight: 600;
+        background: linear-gradient(90deg, rgba(239, 68, 88, 0.18), transparent);
+
+        &.win {
+            background: linear-gradient(90deg, rgba(34, 197, 122, 0.18), transparent);
+        }
+    }
+    &__body {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem 1.6rem;
+        padding: 1.2rem;
+
+        small {
+            display: block;
+            color: var(--k-muted);
+        }
+        b {
+            font-size: 1.5rem;
+            font-variant-numeric: tabular-nums;
+        }
+    }
+    &__ticks {
+        display: flex;
+        gap: 0.4rem;
+        padding: 0 1.2rem 1.2rem;
+
+        i {
+            flex: 1;
+            height: 0.4rem;
+            border-radius: 2px;
+            background: #1b2747;
+
+            &.on {
+                background: #3b82f6;
+            }
+        }
+    }
+}
+
+.kapa-pill {
+    font-size: 1.2rem;
+    border: 1px solid var(--k-line-2);
+    border-radius: 99rem;
+    padding: 0.2rem 1rem;
+}
+
+.kapa-empty {
+    text-align: center;
+    padding: 3.2rem 1rem;
+    color: #dfe5f7;
+
+    b {
+        display: block;
+        margin-bottom: 0.6rem;
+    }
+    small {
+        color: var(--k-muted);
+    }
+}
+
+.kapa-tx {
+    max-height: 36rem;
+    overflow: auto;
+
+    &__head,
+    &__row {
+        display: grid;
+        grid-template-columns: 1fr 1.2fr 1.2fr;
+        gap: 0.8rem;
+        align-items: center;
+        padding: 1rem 0.4rem;
+        border-bottom: 1px solid #14234a;
+    }
+    &__head {
+        color: #dfe5f7;
+        font-weight: 600;
+    }
+    &__head span:nth-child(2),
+    &__spots {
+        text-align: center;
+    }
+    &__head span:nth-child(3),
+    &__px {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    &__row em {
+        font-style: normal;
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--k-gold);
+        border: 1px solid #4a3d14;
+        border-radius: 0.4rem;
+        padding: 0 0.4rem;
+        margin-left: 0.6rem;
+    }
+    &__spots {
+        font-variant-numeric: tabular-nums;
+
+        i {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            margin-right: 0.6rem;
+            vertical-align: -0.1rem;
+
+            &.en {
+                background: #ff3b50;
+                box-shadow: 0 0 0 2px #fff inset;
+            }
+            &.ex {
+                border: 1.5px solid #c7d1ee;
+            }
+        }
+    }
+}
+
+.kapa-journal {
+    max-height: 36rem;
+    overflow: auto;
+    font-size: 1.3rem;
+
+    > div {
+        padding: 0.8rem 0.4rem;
+        border-bottom: 1px solid #14234a;
+    }
+    time {
+        color: var(--k-muted);
+        margin-right: 0.6rem;
+        font-variant-numeric: tabular-nums;
+    }
+    &__success {
+        color: var(--k-green);
+    }
+    &__error {
+        color: #ff8a97;
+    }
+    &__warn {
+        color: var(--k-gold);
+    }
+}
+
+.kapa-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin-top: 1.4rem;
+
+    div {
+        background: #0c1734;
+        border: 1px solid var(--k-line);
+        border-radius: 0.6rem;
+        padding: 1rem 0.4rem;
+        text-align: center;
+    }
+    small {
+        display: block;
+        font-weight: 600;
+        color: #dfe5f7;
+        margin-bottom: 0.4rem;
+    }
+    b {
+        font-weight: 400;
+        color: #c2cbe6;
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+.kapa-runbar {
+    // Stays on screen while the page scrolls, like the reference bot's Run bar
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    align-items: stretch;
+    padding: 1rem 1.6rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    background: #091228;
+    border-top: 1px solid var(--k-line);
+}
+
+.kapa-runbtn {
+    border: 0;
+    border-radius: 0.4rem 0 0 0.4rem;
+    padding: 0 2rem;
+    min-height: 5rem;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #fff;
+    background: #18b26b;
+    white-space: nowrap;
+
+    &--stop {
+        background: #1d4fd8;
+    }
+}
+
+.kapa-runstat {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 0 1.2rem;
+    border: 1px solid #26365f;
+    border-left: 0;
+    border-radius: 0 0.4rem 0.4rem 0;
+    overflow: hidden;
+
+    span {
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    &--won {
+        background: #0f3a2a;
+        color: #31e08e;
+    }
+    &--lost {
+        background: #3b1220;
+        color: #ff6b7d;
+    }
+    &__prog {
+        position: absolute;
+        left: 1.4rem;
+        right: 1.4rem;
+        bottom: 0.8rem;
+        height: 0.4rem;
+        border-radius: 2px;
+        background: #1b2747;
+
+        b {
+            display: block;
+            height: 100%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #ef4458, #1bb98a);
+            transition: width 0.5s;
+        }
+    }
+}
+
+.kapa-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.6rem;
+    background: rgba(2, 6, 18, 0.78);
+    backdrop-filter: blur(3px);
+}
+
+.kapa-modal {
+    position: relative;
+    width: 100%;
+    max-width: 44rem;
+    max-height: 100%;
+    overflow-y: auto;
+    border-radius: 2rem;
+    border: 1.5px solid rgba(245, 197, 66, 0.55);
+    background: linear-gradient(180deg, #0f1c40, #0a132d);
+    padding: 2.2rem 2rem 2rem;
+    color: var(--k-text, #eef2ff);
+    box-shadow: 0 3rem 8rem rgba(0, 0, 0, 0.6);
+
+    &__x {
+        position: absolute;
+        top: 1.2rem;
+        right: 1.2rem;
+        z-index: 2;
+        width: 3.4rem;
+        height: 3.4rem;
+        border-radius: 50%;
+        border: 1px solid #3a4e86;
+        background: rgba(10, 20, 50, 0.8);
+        color: #fff;
+        font-size: 1.6rem;
+    }
+    &__title {
+        text-align: center;
+        font-size: 2.2rem;
+        font-weight: 800;
+        letter-spacing: 0.1rem;
+        margin: 0.4rem 0 1rem;
+
+        &--sm {
+            font-size: 2rem;
+            letter-spacing: 0;
+        }
+    }
+    &__text {
+        text-align: center;
+        color: #c8d1ec;
+        background: rgba(10, 20, 50, 0.6);
+        border: 1px solid #2a3f78;
+        border-radius: 1.2rem;
+        padding: 1.2rem;
+        margin: 0 0 0.6rem;
+    }
+    &--result {
+        padding-top: 0;
+        overflow: hidden;
+    }
+}
+
+.kapa-btn {
+    width: 100%;
+    border: 0;
+    border-radius: 1.2rem;
+    padding: 1.4rem;
+    margin-top: 1rem;
+    font-weight: 700;
+    font-size: 1.6rem;
+
+    &--gold {
+        background: linear-gradient(90deg, #f7d64a, #eab308);
+        color: #1f1600;
+    }
+    &--lime {
+        background: linear-gradient(90deg, #f8e46a, #c9e265);
+        color: #1f1600;
+    }
+    &--line {
+        background: transparent;
+        border: 1px solid #3a4e86;
+        color: #fff;
+    }
+}
+
+.kapa-hero {
+    position: relative;
+    height: 20rem;
+    border-radius: 1.4rem;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    margin-bottom: 1.4rem;
+    background: radial-gradient(circle at 50% 55%, #1e4fc9 0%, #0b1b4a 45%, #050b1e 100%);
+
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+            repeating-linear-gradient(90deg, rgba(91, 140, 255, 0.08) 0 1px, transparent 1px 26px),
+            repeating-linear-gradient(0deg, rgba(91, 140, 255, 0.08) 0 1px, transparent 1px 26px);
+    }
+    &__ring {
+        position: absolute;
+        width: 17rem;
+        height: 17rem;
+        border-radius: 50%;
+        border: 2px dashed rgba(57, 198, 255, 0.5);
+        animation: kapa-spin 14s linear infinite;
+    }
+    &__big {
+        position: relative;
+        font-size: 8.4rem;
+        font-weight: 800;
+        color: #b9f3ff;
+        text-shadow:
+            0 0 1.8rem #39c6ff,
+            0 0 4rem #2b7bff;
+    }
+    &__online {
+        position: absolute;
+        top: 1.2rem;
+        right: 1.2rem;
+        font-size: 1rem;
+        letter-spacing: 0.15rem;
+        color: #c8d1ec;
+        background: rgba(5, 11, 30, 0.7);
+        border: 1px solid #2a3f78;
+        border-radius: 99rem;
+        padding: 0.4rem 0.8rem;
+    }
+}
+
+.kapa-result {
+    position: relative;
+    margin-top: -9rem;
+    text-align: center;
+
+    &__hero {
+        height: 28rem;
+        margin: 0 -2rem;
+        background:
+            radial-gradient(3px 3px at 30% 30%, #ffb24a, transparent),
+            radial-gradient(3px 3px at 62% 46%, #ffb24a, transparent),
+            radial-gradient(2px 2px at 70% 22%, #ffb24a, transparent),
+            linear-gradient(180deg, transparent 50%, #0a132d),
+            radial-gradient(circle at 55% 40%, #2a6bd8 0%, #0d2a6e 35%, #050b1e 75%);
+    }
+    &__tag {
+        display: inline-block;
+        border: 1px solid rgba(34, 197, 122, 0.45);
+        background: rgba(6, 30, 20, 0.85);
+        color: #5fe3a1;
+        border-radius: 99rem;
+        padding: 0.6rem 1.4rem;
+        font-size: 1.2rem;
+        font-weight: 800;
+        letter-spacing: 0.15rem;
+
+        &.bad {
+            border-color: rgba(239, 68, 88, 0.5);
+            background: rgba(40, 8, 14, 0.85);
+            color: #ff8a97;
+        }
+    }
+    &__h1 {
+        font-size: 3.2rem;
+        font-weight: 800;
+        line-height: 1.05;
+        margin-top: 1.4rem;
+    }
+    &__h2 {
+        font-size: 2.6rem;
+        font-weight: 700;
+    }
+    &__amt {
+        font-size: 4.8rem;
+        font-weight: 800;
+        color: #f5c542;
+        line-height: 1.1;
+        margin: 0.6rem 0;
+
+        &.bad {
+            color: #ff6b7d;
+        }
+    }
+}
