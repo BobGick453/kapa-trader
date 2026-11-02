@@ -4,7 +4,6 @@ import { ToastContainer } from 'react-toastify';
 import AuthLoadingWrapper from '@/components/auth-loading-wrapper';
 import useLiveChat from '@/components/chat/useLiveChat';
 import ChunkLoader from '@/components/loader/chunk-loader';
-import { getUrlBase } from '@/components/shared';
 import TransactionDetailsModal from '@/components/transaction-details';
 import { api_base, ApiHelpers, ServerTime } from '@/external/bot-skeleton';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
@@ -14,6 +13,7 @@ import { useStore } from '@/hooks/useStore';
 import useThemeSwitcher from '@/hooks/useThemeSwitcher';
 import { ThemeProvider } from '@deriv-com/quill-ui';
 import { setSmartChartsPublicPath } from '@deriv-com/smartcharts-champion';
+import { BASE_PATH } from '@/utils/base-path';
 import { localize } from '@deriv-com/translations';
 import Audio from '../components/audio';
 import BlocklyLoading from '../components/blockly-loading';
@@ -89,7 +89,7 @@ const AppContent = observer(() => {
     );
 
     React.useEffect(() => {
-        setSmartChartsPublicPath(getUrlBase('/js/smartcharts/'));
+        setSmartChartsPublicPath(`${BASE_PATH}js/smartcharts/`); // the chart's own chunks live under the app's folder
     }, []);
 
     React.useEffect(() => {

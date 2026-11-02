@@ -1,48 +1,56 @@
 /**
- * KAPA AI trading engine: digit-contract strategies with optional recovery,
- * a Monte Carlo session plan, and a trade loop with hard risk limits.
- * UI-free; it talks to Deriv through the app's authorized api_base connection.
+ * KAPA AI trade runner. It places the contracts a strategy asks for, through the app's
+ * authorized Deriv connection, and reports each result back to the strategy.
+ *
+ * Two kinds of strategy ("policy") drive it:
+ * - the free fixed-stake strategy, which runs here in the browser;
+ * - the Premium strategies, which run on the Kapa server (see premium-api.ts). Their rules
+ *   are not in this file or anywhere in the website: the server only sends the next trade.
  */
 
 export type TContractType = 'DIGITOVER' | 'DIGITUNDER' | 'DIGITEVEN' | 'DIGITODD' | 'DIGITMATCH' | 'DIGITDIFF';
 export type TRecoveryMode = 'none' | 'mult' | 'recover';
+export type TPresetKey = 'pegasus' | 'martingale' | 'recover' | 'fixed';
+export type TStrategy = TPresetKey | 'custom';
+
+/** Rules the user writes for the "Custom" strategy (Premium). The server checks and runs them. */
+export type TCustomRules = { barrier: number; recovery: number; recMode: TRecoveryMode; martingale: number };
 
 export type TSettings = {
+    strategy: TStrategy;
     symbol: string;
-    ctype: TContractType;
-    barrier: number;
-    recovery: number | 'same';
-    recMode: TRecoveryMode;
-    martingale: number;
-    duration: number;
     stake: number;
     maxStake: number;
     takeProfit: number;
     stopLoss: number;
-    maxLosses: number;
+    maxLosses: number | null; // null: the strategy's own limit
     maxRuns: number;
     delay: number;
+    custom: TCustomRules;
 };
 
-export type TPresetKey = 'pegasus' | 'martingale' | 'recover' | 'fixed';
-
-export const PRESETS: Record<TPresetKey, { label: string } & Pick<TSettings, 'ctype' | 'barrier' | 'recovery' | 'recMode' | 'martingale' | 'maxLosses'>> = {
-    pegasus: { label: 'Over 1 · recovery ×2.2 on Over 5', ctype: 'DIGITOVER', barrier: 1, recovery: 5, recMode: 'mult', martingale: 2.2, maxLosses: 4 },
-    martingale: { label: 'Over 2 · recovery ×2.2 on Over 4', ctype: 'DIGITOVER', barrier: 2, recovery: 4, recMode: 'mult', martingale: 2.2, maxLosses: 5 },
-    recover: { label: 'Over 1 · recovery on Over 5, sized to win back losses', ctype: 'DIGITOVER', barrier: 1, recovery: 5, recMode: 'recover', martingale: 1, maxLosses: 4 },
-    fixed: { label: 'Over 1 · fixed stake, no recovery', ctype: 'DIGITOVER', barrier: 1, recovery: 'same', recMode: 'none', martingale: 1, maxLosses: 3 },
+export const STRATEGIES: Record<TPresetKey, { label: string; premium: boolean }> = {
+    pegasus: { label: 'Pegasus · high win rate, fast recovery', premium: true },
+    martingale: { label: 'Steady · balanced recovery', premium: true },
+    recover: { label: 'Exact recovery · wins back losses in one trade', premium: true },
+    fixed: { label: 'Over 1 · fixed stake, no recovery', premium: false },
 };
+export const PREMIUM_PRESETS = (Object.keys(STRATEGIES) as TPresetKey[]).filter(k => STRATEGIES[k].premium);
+
+/** The free strategy: Over 1, the same stake every time. */
+const FIXED = { barrier: 1, maxLosses: 3 };
 
 export const DEFAULT_SETTINGS: TSettings = {
+    strategy: 'fixed',
     symbol: 'R_100',
-    ...PRESETS.pegasus,
-    duration: 1,
     stake: 1,
     maxStake: 50,
     takeProfit: 10,
     stopLoss: 50,
+    maxLosses: null,
     maxRuns: 0,
     delay: 1,
+    custom: { barrier: 1, recovery: 1, recMode: 'none', martingale: 2 },
 };
 
 export const MARKETS: Record<string, string> = {
@@ -57,6 +65,7 @@ export const MARKETS: Record<string, string> = {
     '1HZ75V': 'Volatility 75 (1s) Index',
     '1HZ100V': 'Volatility 100 (1s) Index',
 };
+export const SCAN_MARKETS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100'];
 
 export const TYPE_LABEL: Record<TContractType, string> = {
     DIGITOVER: 'Over',
@@ -67,40 +76,39 @@ export const TYPE_LABEL: Record<TContractType, string> = {
     DIGITDIFF: 'Differs',
 };
 
-// Decimal places per market, for reading last digits when a response omits pip_size
-export const PIP_SIZES: Record<string, number> = { R_10: 3, R_25: 3, R_50: 4, R_75: 4, R_100: 2 };
-
 export const needsBarrier = (t: TContractType) => ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(t);
-export const recoveryBarrier = (s: Pick<TSettings, 'barrier' | 'recovery'>) => (s.recovery === 'same' ? s.barrier : s.recovery);
 
-/** True chance of winning: the last digit of a synthetic index is uniformly random. */
-export const winProb = (t: TContractType, b: number) => {
-    switch (t) {
-        case 'DIGITOVER':
-            return (9 - b) / 10;
-        case 'DIGITUNDER':
-            return b / 10;
-        case 'DIGITMATCH':
-            return 0.1;
-        case 'DIGITDIFF':
-            return 0.9;
-        default:
-            return 0.5;
-    }
-};
-
-/** Profit per 1 staked before Deriv has quoted the contract: Deriv pays roughly 7% under fair odds. */
-export const estRatio = (t: TContractType, b: number) => 0.93 / winProb(t, b) - 1;
+/** True chance of winning Over b: the last digit of a synthetic index is uniformly random. */
+export const overChance = (b: number) => (9 - b) / 10;
+/** Profit per 1 staked before Deriv has quoted: Deriv pays roughly 7% under fair odds. */
+export const estRatio = (b: number) => 0.93 / overChance(b) - 1;
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 const floor2 = (n: number) => Math.floor(n * 100) / 100;
+
+/** Reads saved settings, dropping anything from older versions that no longer fits. */
+export const sanitizeSettings = (raw: any): TSettings => {
+    const s = { ...DEFAULT_SETTINGS, ...(raw && typeof raw === 'object' ? raw : {}) };
+    if (!(s.strategy in STRATEGIES) && s.strategy !== 'custom') s.strategy = 'fixed';
+    if (!MARKETS[s.symbol]) s.symbol = DEFAULT_SETTINGS.symbol;
+    s.custom = { ...DEFAULT_SETTINGS.custom, ...(raw?.custom || {}) };
+    if (s.maxLosses !== null && !(Number.isInteger(s.maxLosses) && s.maxLosses >= 1)) s.maxLosses = null;
+    return s;
+};
 
 export type TApi = {
     send: (req: Record<string, unknown>) => Promise<any>;
     onMessage: () => { subscribe: (cb: (msg: any) => void) => { unsubscribe: () => void } };
 };
 
-export const buildProposal = (currency: string, symbol: string, t: TContractType, b: number, duration: number, amount: number) => {
+export const buildProposal = (
+    currency: string,
+    symbol: string,
+    t: TContractType,
+    b: number,
+    duration: number,
+    amount: number
+) => {
     const req: Record<string, unknown> = {
         proposal: 1,
         amount: round2(amount),
@@ -115,42 +123,40 @@ export const buildProposal = (currency: string, symbol: string, t: TContractType
     return req;
 };
 
-/** Live profit-per-stake ratios quoted by Deriv, cached for five minutes. */
+/** Deriv's live payout for Over b on a market (profit per 1 staked), cached for five minutes. */
 export class RatioCache {
     private cache = new Map<string, { r: number; at: number }>();
-    private key = (sym: string, t: TContractType, b: number, d: number) => `${sym}|${t}|${needsBarrier(t) ? b : ''}|${d}`;
 
-    note(sym: string, t: TContractType, b: number, d: number, ask: number, payout: number) {
-        if (ask > 0 && payout > ask) this.cache.set(this.key(sym, t, b, d), { r: (payout - ask) / ask, at: Date.now() });
+    known(sym: string, b: number) {
+        return this.cache.get(`${sym}|${b}`)?.r ?? null;
     }
 
-    known(sym: string, t: TContractType, b: number, d: number) {
-        return this.cache.get(this.key(sym, t, b, d))?.r ?? null;
+    note(sym: string, b: number, ask: number, payout: number) {
+        if (ask > 0 && payout > ask) this.cache.set(`${sym}|${b}`, { r: (payout - ask) / ask, at: Date.now() });
     }
 
-    async get(api: TApi, currency: string, sym: string, t: TContractType, b: number, d: number) {
-        const c = this.cache.get(this.key(sym, t, b, d));
+    async get(api: TApi, currency: string, sym: string, b: number) {
+        const c = this.cache.get(`${sym}|${b}`);
         if (c && Date.now() - c.at < 5 * 60 * 1000) return c.r;
-        const res = await api.send(buildProposal(currency, sym, t, b, d, 10));
+        const res = await api.send(buildProposal(currency, sym, 'DIGITOVER', b, 1, 10));
         if (res?.error) throw new Error(res.error.message);
-        this.note(sym, t, b, d, +res.proposal.ask_price, +res.proposal.payout);
-        return this.known(sym, t, b, d) ?? estRatio(t, b);
+        this.note(sym, b, +res.proposal.ask_price, +res.proposal.payout);
+        return this.known(sym, b) ?? estRatio(b);
     }
 }
 
 export type TPlanResult = { hit: number; bust: number; avg: number; bustAvg: number; median: number };
 
-/** Simulates many sessions of the given settings with true win chances and the given payout ratios. */
-export const simulate = (
+/** Session plan for the free fixed-stake strategy. Premium plans are simulated by the server. */
+export const simulateFixed = (
     s: TSettings,
     capital: number,
-    baseR: number,
-    recR: number,
+    ratio: number,
     sessions = 4000,
     maxTrades = 3000
 ): TPlanResult => {
-    const baseP = winProb(s.ctype, s.barrier);
-    const recP = winProb(s.ctype, recoveryBarrier(s));
+    const p = overChance(FIXED.barrier);
+    const maxLosses = s.maxLosses ?? FIXED.maxLosses;
     let hit = 0;
     let bust = 0;
     let sum = 0;
@@ -159,8 +165,6 @@ export const simulate = (
     for (let k = 0; k < sessions; k++) {
         let pl = 0;
         let streak = 0;
-        let lost = 0;
-        let stake = s.stake;
         let n = 0;
         let end = 'open';
         for (; n < maxTrades; n++) {
@@ -168,28 +172,22 @@ export const simulate = (
                 end = 'tp';
                 break;
             }
-            if (pl <= -s.stopLoss || streak >= s.maxLosses) {
+            if (pl <= -s.stopLoss || streak >= maxLosses) {
                 end = 'loss';
                 break;
             }
             if (s.maxRuns && n >= s.maxRuns) break;
-            const rec = streak > 0 && s.recMode !== 'none';
-            let st = s.recMode === 'recover' && rec ? (lost + s.stake * baseR) / recR : s.recMode === 'mult' ? stake : s.stake;
-            st = floor2(Math.min(st, s.maxStake, capital + pl, s.stopLoss + pl));
+            const st = floor2(Math.min(s.stake, capital + pl, s.stopLoss + pl));
             if (st < 0.35) {
                 end = 'loss';
                 break;
             }
-            if (Math.random() < (rec ? recP : baseP)) {
-                pl += st * (rec ? recR : baseR);
+            if (Math.random() < p) {
+                pl += st * ratio;
                 streak = 0;
-                lost = 0;
-                stake = s.stake;
             } else {
                 pl -= st;
                 streak++;
-                lost += st;
-                stake = st * s.martingale;
             }
         }
         sum += pl;
@@ -201,16 +199,79 @@ export const simulate = (
         }
     }
     trades.sort((a, b) => a - b);
-    return { hit: hit / sessions, bust: bust / sessions, avg: sum / sessions, bustAvg: bust ? bustSum / bust : 0, median: trades[trades.length >> 1] };
+    return {
+        hit: hit / sessions,
+        bust: bust / sessions,
+        avg: sum / sessions,
+        bustAvg: bust ? bustSum / bust : 0,
+        median: trades[trades.length >> 1],
+    };
 };
 
 export const validate = (s: TSettings, balance: number) => {
     if (!(s.stake >= 0.35)) return 'Minimum stake is 0.35.';
     if (!(s.takeProfit > 0)) return 'Set a take-profit above 0.';
     if (!(s.stopLoss > 0)) return "Set a stop-loss above 0. KAPA AI won't run without one.";
+    if (s.stake > s.stopLoss) return 'The stake must not be larger than the stop-loss.';
     if (!(s.maxStake >= s.stake)) return 'Maximum stake must be at least the initial stake.';
     if (s.stake > balance) return 'Stake is larger than your balance.';
     return null;
+};
+
+export type TStopKind = 'tp' | 'sl' | 'streak' | 'user' | 'runs' | 'error';
+
+/** One order from a strategy. */
+export type TOrder = {
+    contract_type: TContractType;
+    barrier: number;
+    amount: number;
+    symbol: string;
+    duration: number;
+    recovery: boolean;
+    capped?: boolean;
+};
+export type TDecision = { trade?: TOrder; stop?: TStopKind; reason?: string };
+export type TContractResult = { contract_id: number; buy_price: number; profit: number };
+export type TPayoutRatios = { base?: number; rec?: number };
+
+/** A strategy: says what to trade first, then what to trade after each settled contract. */
+export type TPolicy = {
+    start: () => Promise<TDecision>;
+    next: (result: TContractResult, ratios: TPayoutRatios) => Promise<TDecision>;
+};
+
+/** The free fixed-stake strategy, decided here in the browser. */
+export const fixedPolicy = (s: TSettings): TPolicy => {
+    const st = { pl: 0, streak: 0, runs: 0 };
+    const maxLosses = s.maxLosses ?? FIXED.maxLosses;
+    const decide = (): TDecision => {
+        if (st.pl >= s.takeProfit) return { stop: 'tp', reason: `Take-profit reached: +${st.pl.toFixed(2)}` };
+        if (st.pl <= -s.stopLoss) return { stop: 'sl', reason: `Stop-loss hit: ${st.pl.toFixed(2)}` };
+        if (st.streak >= maxLosses) return { stop: 'streak', reason: `${st.streak} losses in a row` };
+        if (s.maxRuns && st.runs >= s.maxRuns) return { stop: 'runs', reason: `Finished ${st.runs} trades` };
+        const amount = floor2(Math.min(s.stake, s.stopLoss + st.pl));
+        if (amount < 0.35)
+            return { stop: 'sl', reason: 'Not enough room left under the stop-loss for the minimum stake' };
+        return {
+            trade: {
+                contract_type: 'DIGITOVER',
+                barrier: FIXED.barrier,
+                amount,
+                symbol: s.symbol,
+                duration: 1,
+                recovery: false,
+            },
+        };
+    };
+    return {
+        start: async () => decide(),
+        next: async r => {
+            st.runs++;
+            st.pl = round2(st.pl + r.profit);
+            st.streak = r.profit > 0 ? 0 : st.streak + 1;
+            return decide();
+        },
+    };
 };
 
 export type TTrade = {
@@ -245,7 +306,6 @@ export type TLiveContract = {
 };
 
 export type TPhase = 'idle' | 'starting' | 'buying' | 'bought' | 'won' | 'lost';
-export type TStopKind = 'tp' | 'sl' | 'streak' | 'user' | 'runs' | 'error';
 
 export type TEngineEvents = {
     onStatus: (text: string, phase: TPhase) => void;
@@ -256,22 +316,18 @@ export type TEngineEvents = {
 };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const ALLOWED_TYPES: TContractType[] = ['DIGITOVER', 'DIGITUNDER', 'DIGITEVEN', 'DIGITODD', 'DIGITMATCH', 'DIGITDIFF'];
 
-/** Runs one session: buys contracts until take-profit, stop-loss, loss streak, max trades, an error or Stop. */
+/** Runs one session: asks the strategy for each trade until it says stop, an error occurs or the user presses Stop. */
 export class KapaEngine {
     running = false;
     private stopRequested = false;
     private sessionPl = 0;
-    private lossStreak = 0;
-    private recLosses = 0;
-    private nextStake = 0;
-    private runs = 0;
 
     constructor(
         private api: TApi,
         private currency: () => string,
         private balance: () => number,
-        private ratios: RatioCache,
         private ev: TEngineEvents
     ) {}
 
@@ -279,60 +335,82 @@ export class KapaEngine {
         this.stopRequested = true;
     }
 
-    async run(s: TSettings) {
+    async run(
+        policy: TPolicy,
+        opts: { name: string; delay: number; stake: number; takeProfit: number; stopLoss: number; symbol: string }
+    ) {
         if (this.running) return;
-        Object.assign(this, { running: true, stopRequested: false, sessionPl: 0, lossStreak: 0, recLosses: 0, nextStake: s.stake, runs: 0 });
+        Object.assign(this, { running: true, stopRequested: false, sessionPl: 0 });
         this.ev.onStatus('Bot is starting', 'starting');
         this.ev.onLog(
-            `KAPA AI started · ${TYPE_LABEL[s.ctype]} ${s.barrier} on ${s.symbol} · stake ${s.stake} · take-profit ${s.takeProfit} · stop-loss ${s.stopLoss}`,
+            `KAPA AI started · ${opts.name} on ${opts.symbol} · stake ${opts.stake} · take-profit ${opts.takeProfit} · stop-loss ${opts.stopLoss}`,
             'success'
         );
-        await sleep(300);
         const stop = (reason: string, kind: TStopKind) => {
             this.running = false;
             this.ev.onLog(`Stopped: ${reason}`, kind === 'tp' ? 'success' : 'warn');
             this.ev.onStop(reason, kind, this.sessionPl);
         };
+        let d: TDecision;
+        try {
+            d = await policy.start();
+        } catch (e: any) {
+            return stop(e?.message ?? String(e), 'error');
+        }
         while (this.running) {
             if (this.stopRequested) return stop('Stopped by you', 'user');
-            if (this.sessionPl >= s.takeProfit) return stop(`Take-profit reached: +${this.sessionPl.toFixed(2)}`, 'tp');
-            if (this.sessionPl <= -s.stopLoss) return stop(`Stop-loss hit: ${this.sessionPl.toFixed(2)}`, 'sl');
-            if (this.lossStreak >= s.maxLosses) return stop(`${this.lossStreak} losses in a row`, 'streak');
-            if (s.maxRuns && this.runs >= s.maxRuns) return stop(`Finished ${this.runs} trades`, 'runs');
-
-            const recovering = this.lossStreak > 0 && s.recMode !== 'none';
-            const barrier = recovering ? recoveryBarrier(s) : s.barrier;
+            if (d.stop || !d.trade) return stop(d.reason || 'Session finished', d.stop || 'runs');
+            const o = d.trade;
+            if (
+                !ALLOWED_TYPES.includes(o.contract_type) ||
+                !MARKETS[o.symbol] ||
+                !(o.duration >= 1 && o.duration <= 10)
+            )
+                return stop('Unexpected order from the strategy', 'error');
             try {
-                let want = this.nextStake;
-                if (recovering && s.recMode === 'recover') {
-                    // One win on the recovery contract returns everything lost since the last win, plus one normal win
-                    const recR = await this.ratios.get(this.api, this.currency(), s.symbol, s.ctype, barrier, s.duration);
-                    const baseR = this.ratios.known(s.symbol, s.ctype, s.barrier, s.duration) ?? estRatio(s.ctype, s.barrier);
-                    want = Math.ceil(((this.recLosses + s.stake * baseR) / recR) * 100) / 100;
-                }
-                // Never stake more than the cap, the balance, or what's left before the stop-loss
-                const stake = floor2(Math.min(want, s.maxStake, this.balance(), s.stopLoss + this.sessionPl));
-                if (stake < 0.35) return stop('Not enough room left under the stop-loss for the minimum stake', 'sl');
-                if (stake < want - 0.01) this.ev.onLog(`Recovery stake capped at ${stake} (wanted ${want}) by maximum stake, balance or stop-loss`, 'warn');
-
-                this.ev.onStatus(recovering ? `Recovery · ${TYPE_LABEL[s.ctype]} ${barrier}` : 'Buying contract', 'buying');
-                const prop = await this.api.send(buildProposal(this.currency(), s.symbol, s.ctype, barrier, s.duration, stake));
+                // Never stake more than the balance, whatever the strategy asks
+                const amount = floor2(Math.min(o.amount, this.balance()));
+                if (amount < 0.35) return stop('Balance too low for the next stake', 'sl');
+                if (o.capped)
+                    this.ev.onLog(`Recovery stake capped at ${amount} by the maximum stake or the stop-loss`, 'warn');
+                this.ev.onStatus(
+                    o.recovery ? `Recovery · ${TYPE_LABEL[o.contract_type]} ${o.barrier}` : 'Buying contract',
+                    'buying'
+                );
+                const prop = await this.api.send(
+                    buildProposal(this.currency(), o.symbol, o.contract_type, o.barrier, o.duration, amount)
+                );
                 if (prop?.error) throw new Error(prop.error.message);
-                this.ratios.note(s.symbol, s.ctype, barrier, s.duration, +prop.proposal.ask_price, +prop.proposal.payout);
+                const ask = +prop.proposal.ask_price;
+                const ratio = ask > 0 ? (+prop.proposal.payout - ask) / ask : undefined;
                 const buyRes = await this.api.send({ buy: prop.proposal.id, price: prop.proposal.ask_price });
                 if (buyRes?.error) throw new Error(buyRes.error.message);
                 const c = buyRes.buy;
                 this.ev.onLog(`Bought #${c.contract_id} for ${c.buy_price}: ${c.longcode ?? ''}`, 'info');
                 this.ev.onStatus('Contract bought', 'bought');
-                const live: TLiveContract = { id: c.contract_id, symbol: s.symbol, type: s.ctype, barrier, stake: +c.buy_price, potential: +c.payout, ticks: s.duration, tickNow: 0, open: true };
+                const live: TLiveContract = {
+                    id: c.contract_id,
+                    symbol: o.symbol,
+                    type: o.contract_type,
+                    barrier: o.barrier,
+                    stake: +c.buy_price,
+                    potential: +c.payout,
+                    ticks: o.duration,
+                    tickNow: 0,
+                    open: true,
+                };
                 this.ev.onContract(live);
                 const poc = await this.settle(c.contract_id, live);
-                this.record(s, c, poc, barrier, recovering);
+                const profit = this.record(o, c, poc);
+                if (this.running && opts.delay) await sleep(opts.delay * 1000);
+                d = await policy.next(
+                    { contract_id: c.contract_id, buy_price: +poc.buy_price, profit },
+                    ratio ? { [o.recovery ? 'rec' : 'base']: ratio } : {}
+                );
             } catch (e: any) {
                 this.ev.onLog(`Trade error: ${e?.message ?? e}`, 'error');
                 return stop(`Error: ${e?.message ?? e}`, 'error');
             }
-            if (this.running && s.delay) await sleep(s.delay * 1000);
         }
     }
 
@@ -395,39 +473,46 @@ export class KapaEngine {
         });
     }
 
-    private record(s: TSettings, c: any, poc: any, barrier: number, recovery: boolean) {
+    private record(o: TOrder, c: any, poc: any) {
         const profit = +poc.profit;
         const won = profit > 0;
         const stake = +poc.buy_price;
-        this.runs++;
         this.sessionPl = round2(this.sessionPl + profit);
-        if (won) {
-            this.lossStreak = 0;
-            this.recLosses = 0;
-            this.nextStake = s.stake;
-        } else {
-            this.lossStreak++;
-            this.recLosses = round2(this.recLosses - profit);
-            this.nextStake = s.recMode === 'mult' ? stake * s.martingale : s.stake;
-        }
         const t: TTrade = {
             id: c.contract_id,
             time: (poc.sell_time || Date.now() / 1000) * 1000,
-            symbol: s.symbol,
-            type: s.ctype,
-            barrier,
+            symbol: o.symbol,
+            type: o.contract_type,
+            barrier: o.barrier,
             stake,
             payout: +(poc.sell_price ?? 0),
             profit,
             won,
             entry: poc.entry_tick_display_value ?? poc.entry_spot_display_value,
             exit: poc.exit_tick_display_value ?? poc.exit_spot_display_value,
-            recovery,
+            recovery: o.recovery,
             longcode: c.longcode,
         };
-        this.ev.onContract({ id: t.id, symbol: s.symbol, type: s.ctype, barrier, stake, bid: t.payout, potential: +(poc.payout ?? t.payout), profit, ticks: s.duration, tickNow: s.duration, open: false, won });
+        this.ev.onContract({
+            id: t.id,
+            symbol: o.symbol,
+            type: o.contract_type,
+            barrier: o.barrier,
+            stake,
+            bid: t.payout,
+            potential: +(poc.payout ?? t.payout),
+            profit,
+            ticks: o.duration,
+            tickNow: o.duration,
+            open: false,
+            won,
+        });
         this.ev.onTrade(t, this.sessionPl);
-        this.ev.onLog(`${won ? 'Won' : 'Lost'} #${t.id}: ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} · session ${this.sessionPl.toFixed(2)}`, won ? 'success' : 'error');
+        this.ev.onLog(
+            `${won ? 'Won' : 'Lost'} #${t.id}: ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} · session ${this.sessionPl.toFixed(2)}`,
+            won ? 'success' : 'error'
+        );
         this.ev.onStatus(won ? 'Won' : 'Lost', won ? 'won' : 'lost');
+        return profit;
     }
 }

@@ -6,8 +6,9 @@ import { load } from '@/external/bot-skeleton';
 import { save_types } from '@/external/bot-skeleton/constants/save-type';
 import { useStore } from '@/hooks/useStore';
 import { addDynamicBlockToDOM } from '@/utils/xml-dom-quick-strategy';
+import { fetchPremiumBot, refreshEntitlement } from '../premium/premium-api';
 import { openPremium, usePremium } from '../premium/use-premium';
-import { LIBRARY_BOTS, TBotCategory, TLibraryBot } from './bots';
+import { LIBRARY_BOTS, TBotCategory, TBotData, TLibraryBot } from './bots';
 import './free-bot.scss';
 
 const FILTERS: { key: 'all' | TBotCategory; label: string }[] = [
@@ -23,11 +24,28 @@ const XML_LOADERS = {
     oscars_grind: () => import('../../xml/oscars_grind.xml'),
 };
 
+const SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
+const isNum = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
+const optNum = (v: unknown, lo: number, hi: number) => v === undefined || isNum(v, lo, hi);
+
+/** Checks bot settings before they go into the XML, whether they came from this file or from the server. */
+const checkData = (d: any): d is TBotData =>
+    Boolean(d) &&
+    SYMBOLS.includes(d.symbol) &&
+    ['overunder', 'evenodd'].includes(d.tradetype) &&
+    ['DIGITOVER', 'DIGITUNDER', 'DIGITEVEN', 'DIGITODD'].includes(d.type) &&
+    optNum(d.prediction, 0, 9) &&
+    isNum(d.stake, 0.35, 50000) &&
+    optNum(d.size, 1, 10) &&
+    optNum(d.unit, 0.01, 1000) &&
+    isNum(d.profit, 0.01, 1e6) &&
+    isNum(d.loss, 0.01, 1e6) &&
+    isNum(d.duration, 1, 10);
+
 /** Fills a template strategy XML with the bot's settings, as Quick strategy does, and loads it into Bot Builder. */
-const loadBot = async (bot: TLibraryBot) => {
+const loadBot = async (bot: TLibraryBot, d: TBotData) => {
     const xml = (await XML_LOADERS[bot.xml]()).default as string;
     const dom = window.Blockly.utils.xml.textToDom(xml);
-    const d = bot.data;
     if (d.prediction !== undefined) addDynamicBlockToDOM('PREDICTION', 'last_digit_prediction', 'digits', dom);
 
     const setNumber = (key: string, value: number) =>
@@ -52,7 +70,8 @@ const loadBot = async (bot: TLibraryBot) => {
     setNumber('profit', d.profit);
     setNumber('loss', d.loss);
     if (d.size !== undefined) setNumber('size', d.size);
-    if (d.unit !== undefined) ['alembert_unit', 'dalembert_unit', 'oscar_unit'].forEach(k => setNumber(k, d.unit as number));
+    if (d.unit !== undefined)
+        ['alembert_unit', 'dalembert_unit', 'oscar_unit'].forEach(k => setNumber(k, d.unit as number));
     if (d.prediction !== undefined) setNumber('last_digit_prediction', d.prediction);
 
     await load({
@@ -82,13 +101,19 @@ const FreeBot = observer(({ handleTabChange }: TFreeBotProps) => {
         if (run_panel.is_running) return setError('Stop the running bot before loading another one.');
         setError('');
         setBusy(bot.id);
+        let switched = false;
         try {
+            // Premium bot settings come from the server, which checks the membership first
+            const data = bot.premium ? await fetchPremiumBot(bot.id) : bot.data;
+            if (!checkData(data)) throw new Error('its settings are invalid');
             handleTabChange(DBOT_TABS.BOT_BUILDER);
+            switched = true;
             await new Promise(r => setTimeout(r, 300)); // let Bot Builder's workspace become visible first
-            await loadBot(bot);
+            await loadBot(bot, data);
         } catch (e: any) {
+            if (e?.status === 402) refreshEntitlement();
             setError(`Couldn't load ${bot.name}: ${e?.message ?? e}`);
-            handleTabChange(DBOT_TABS.FREE_BOT);
+            if (switched) handleTabChange(DBOT_TABS.FREE_BOT);
         } finally {
             setBusy(null);
         }
@@ -102,7 +127,14 @@ const FreeBot = observer(({ handleTabChange }: TFreeBotProps) => {
             </section>
             <div className='free-bot__filters' role='tablist'>
                 {FILTERS.map(f => (
-                    <button key={f.key} type='button' role='tab' aria-selected={filter === f.key} className={classNames({ on: filter === f.key })} onClick={() => setFilter(f.key)}>
+                    <button
+                        key={f.key}
+                        type='button'
+                        role='tab'
+                        aria-selected={filter === f.key}
+                        className={classNames({ on: filter === f.key })}
+                        onClick={() => setFilter(f.key)}
+                    >
                         {f.label}
                     </button>
                 ))}
@@ -119,9 +151,16 @@ const FreeBot = observer(({ handleTabChange }: TFreeBotProps) => {
                             </div>
                             <p>{bot.description}</p>
                             <small>
-                                Stake {bot.data.stake} · take-profit {bot.data.profit} · stop-loss {bot.data.loss} · {bot.data.symbol}
+                                {bot.data
+                                    ? `Stake ${bot.data.stake} · take-profit ${bot.data.profit} · stop-loss ${bot.data.loss} · ${bot.data.symbol}`
+                                    : 'Settings are sent to Premium members when the bot loads.'}
                             </small>
-                            <button type='button' className={classNames('free-bot__load', { locked })} onClick={() => onLoad(bot)} disabled={busy !== null}>
+                            <button
+                                type='button'
+                                className={classNames('free-bot__load', { locked })}
+                                onClick={() => onLoad(bot)}
+                                disabled={busy !== null}
+                            >
                                 {busy === bot.id ? 'Loading…' : locked ? '🔒 Unlock with Premium' : 'Load Bot'}
                             </button>
                         </article>

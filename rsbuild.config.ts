@@ -5,6 +5,35 @@ import { pluginBasicSsl } from './scripts/rsbuild-plugin-basic-ssl';
 
 const path = require('path');
 
+/**
+ * Content Security Policy for the page: scripts only from this site (plus Google's Drive picker),
+ * network calls only to Deriv, Google Drive and the Kapa Premium server, no plugins, no foreign forms.
+ */
+const contentSecurityPolicy = () => {
+    let kapaApi = '';
+    try {
+        kapaApi = process.env.KAPA_API_URL ? new URL(process.env.KAPA_API_URL).origin : '';
+    } catch {
+        throw new Error('KAPA_API_URL must be a full https:// address');
+    }
+    const google = 'https://apis.google.com https://accounts.google.com';
+    return [
+        "default-src 'self'",
+        // 'unsafe-eval': Bot Builder's strategy interpreter (js-interpreter's bundled acorn) builds functions from strings
+        `script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' ${google}`,
+        "style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com https://cdn.jsdelivr.net",
+        "img-src 'self' data: blob: https:",
+        "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
+        "media-src 'self' blob: https:",
+        `connect-src 'self' https://*.deriv.com https://*.derivws.com wss://*.derivws.com https://www.googleapis.com https://content.googleapis.com https://accounts.google.com ${kapaApi}`.trim(),
+        'frame-src https://www.youtube.com https://iframe.cloudflarestream.com https://charts.deriv.com https://accounts.google.com https://docs.google.com https://content.googleapis.com',
+        "worker-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+    ].join('; ');
+};
+
 export default defineConfig({
     plugins: [
         pluginSass({
@@ -73,6 +102,7 @@ export default defineConfig({
     },
     html: {
         template: './index.html',
+        templateParameters: { CSP: contentSecurityPolicy() },
     },
     server: {
         port: 8443,

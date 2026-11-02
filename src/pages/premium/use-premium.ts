@@ -5,14 +5,14 @@ import { useEffect, useState } from 'react';
  * source of truth; this module caches its answer for the current session.
  */
 export type TPremiumState = {
-    status: 'unknown' | 'checking' | 'active' | 'inactive' | 'unavailable';
+    status: 'off' | 'unknown' | 'checking' | 'active' | 'inactive' | 'unavailable'; // off: no Premium server in this build
     expiresAt?: number;
     plan?: string;
 };
 
 type TListener = (s: TPremiumState) => void;
 
-let state: TPremiumState = { status: 'unknown' };
+let state: TPremiumState = { status: process.env.KAPA_API_URL ? 'unknown' : 'off' };
 const listeners = new Set<TListener>();
 
 export const getPremium = () => state;

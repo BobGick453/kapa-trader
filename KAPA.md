@@ -2,13 +2,13 @@
 
 Kapa Trader is built on Deriv's open-source [trading-bot-template](https://github.com/deriv-com/trading-bot-template) (MIT licence, copyright Deriv.com, see `LICENSE`), with:
 
-- **KAPA AI tab** (`src/pages/kapa-ai/`): activation scanner, strategy presets with recovery, the session plan (Monte Carlo with Deriv's live payouts), live contract card, transactions, journal and result popups. It trades through the app's own authorized Deriv connection.
+- **KAPA AI tab** (`src/pages/kapa-ai/`): the trade runner, session plan, live contract card, transactions, journal and result popups. It trades through the app's own authorized Deriv connection. The free fixed-stake strategy runs in the browser; the Premium strategies, the scanner and Premium plans run on the Kapa server, which sends the next trade after each settled contract.
 - **Kapa branding**: navy and gold dark theme by default, Kapa logo and name (`brand.config.json`, `_themes.scss`, `BrandLogo.tsx`).
 - **Sub-folder hosting**: `PUBLIC_PATH` sets where the app is served from, including the OAuth redirect URL (`src/utils/base-path.ts`).
 - **Privacy**: the template's Google Tag Manager IDs, Survicate surveys and the upload of strategies and transactions to Deriv's analytics service are switched off.
 
 - **Reference-bot screens**: splash, pill tabs (Admin, KAPA AI, Dashboard, Bot Builder, Free Bot, Charts, Tutorials), dashboard carousel with social icons, floating AI orb with the live connection state and the KAPA Live Scanner, risk warning, Free Bot library.
-- **Premium** (`server/`): a Cloudflare Worker that verifies Deriv identity, sells access through CinetPay (mobile money and cards) and powers the Admin tab. Setup guide in `server/README.md`. Without `KAPA_API_URL` at build time Premium is off and every feature is open.
+- **Premium** (`server/`): a Cloudflare Worker that verifies Deriv identity, sells access through CinetPay (mobile money and cards) and powers the Admin tab. Setup guide in `server/README.md`. Without `KAPA_API_URL` at build time the Premium tools are unavailable and only the free tools work. Security notes and the audit are in `SECURITY.md`.
 
 ## Build for GitHub Pages
 

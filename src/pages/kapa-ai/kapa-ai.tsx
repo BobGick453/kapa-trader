@@ -5,51 +5,68 @@ import { generateOAuthURL } from '@/components/shared';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import {
+    fetchPlan,
+    premiumEnabled,
+    refreshEntitlement,
+    remotePolicy,
+    resumeCheckout,
+    scanMarkets,
+    simulatePlan,
+    startCheckout,
+    TPlan,
+    TPlanResult,
+} from '../premium/premium-api';
+import { openPremium, usePremium } from '../premium/use-premium';
+import {
     DEFAULT_SETTINGS,
     estRatio,
+    fixedPolicy,
     KapaEngine,
     MARKETS,
-    PIP_SIZES,
-    PRESETS,
+    overChance,
     RatioCache,
-    recoveryBarrier,
-    simulate,
+    sanitizeSettings,
+    simulateFixed,
+    STRATEGIES,
     TApi,
     TLiveContract,
+    TPayoutRatios,
     TPhase,
-    TPlanResult,
     TPresetKey,
     TSettings,
     TStopKind,
+    TStrategy,
     TTrade,
     TYPE_LABEL,
     validate,
-    winProb,
 } from './engine';
-import { fetchPlan, premiumEnabled, refreshEntitlement, resumeCheckout, startCheckout, TPlan } from '../premium/premium-api';
-import { openPremium, usePremium } from '../premium/use-premium';
 import './kapa-ai.scss';
 
-const STORAGE_KEY = 'kapa_ai_settings';
-const SCAN_MARKETS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100'];
+const STORAGE_KEY = 'kapa_ai_settings_v2';
 
 const loadSettings = (): TSettings => {
     try {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') };
+        return sanitizeSettings(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'));
     } catch {
         return DEFAULT_SETTINGS;
     }
 };
-const presetOf = (s: TSettings): TPresetKey | 'custom' =>
-    (Object.keys(PRESETS) as TPresetKey[]).find(k => {
-        const p = PRESETS[k];
-        return p.ctype === s.ctype && p.barrier === s.barrier && p.recovery === s.recovery && p.recMode === s.recMode && p.martingale === s.martingale;
-    }) ?? 'custom';
 
 const fmt = (n: number, d = 2) => Number(n).toFixed(d);
 const signed = (n: number) => `${n >= 0 ? '+' : ''}${fmt(n)}`;
+const strategyName = (k: TStrategy) => (k === 'custom' ? 'Custom strategy' : STRATEGIES[k].label);
 
-type TScanCard = { sym: string; b: number; p: number; payout: number; ev: number; recent: number | null; n: number };
+type TScanCard = {
+    sym: string;
+    b: number;
+    rec: number | null;
+    p: number;
+    payout: number;
+    ev: number;
+    recent: number | null;
+    n: number;
+    preset: TPresetKey;
+};
 type TLog = { at: number; text: string; level: 'info' | 'success' | 'warn' | 'error' };
 
 // The app's authorized connection, shaped for the engine
@@ -58,8 +75,25 @@ const derivApi: TApi = {
     onMessage: () => (api_base.api as any).onMessage(),
 };
 
-const Ring = ({ busy, label, sub, onClick, disabled }: { busy: boolean; label: React.ReactNode; sub: string; onClick: () => void; disabled?: boolean }) => (
-    <button className={classNames('kapa-ring', { 'kapa-ring--busy': busy })} onClick={onClick} disabled={disabled} type='button'>
+const Ring = ({
+    busy,
+    label,
+    sub,
+    onClick,
+    disabled,
+}: {
+    busy: boolean;
+    label: React.ReactNode;
+    sub: string;
+    onClick: () => void;
+    disabled?: boolean;
+}) => (
+    <button
+        className={classNames('kapa-ring', { 'kapa-ring--busy': busy })}
+        onClick={onClick}
+        disabled={disabled}
+        type='button'
+    >
         <span className='kapa-ring__dash' />
         <span className='kapa-ring__dots' />
         <span className='kapa-ring__arc' />
@@ -73,7 +107,7 @@ const Ring = ({ busy, label, sub, onClick, disabled }: { busy: boolean; label: R
 const KapaAI = observer(() => {
     const { client, run_panel } = useStore();
     const premium = usePremium();
-    const isPremium = !premiumEnabled() || premium.status === 'active';
+    const isPremium = premium.status === 'active';
     const [plan_, setPlan_] = useState<TPlan | null>(null);
     const [premiumMsg, setPremiumMsg] = useState('');
     const [paying, setPaying] = useState(false);
@@ -84,8 +118,9 @@ const KapaAI = observer(() => {
 
     const [s, setS] = useState<TSettings>(loadSettings);
     const [showAdvanced, setShowAdvanced] = useState(false);
-    const [plan, setPlan] = useState<TPlanResult | null>(null);
-    const [planLive, setPlanLive] = useState(false);
+    const [plan, setPlan] = useState<Omit<TPlanResult, 'sessions'> | null>(null);
+    const [planNote, setPlanNote] = useState('');
+    const [ratioTick, setRatioTick] = useState(0);
     const [scanning, setScanning] = useState(false);
     const [scanMsg, setScanMsg] = useState('');
     const [cards, setCards] = useState<TScanCard[]>([]);
@@ -93,7 +128,10 @@ const KapaAI = observer(() => {
     const [confirmReal, setConfirmReal] = useState(false);
     const [result, setResult] = useState<{ kind: TStopKind; pl: number } | null>(null);
     const [running, setRunning] = useState(false);
-    const [status, setStatus] = useState<{ text: string; phase: TPhase }>({ text: 'KAPA AI is not running', phase: 'idle' });
+    const [status, setStatus] = useState<{ text: string; phase: TPhase }>({
+        text: 'KAPA AI is not running',
+        phase: 'idle',
+    });
     const [live, setLive] = useState<TLiveContract | null>(null);
     const [trades, setTrades] = useState<TTrade[]>([]);
     const [logs, setLogs] = useState<TLog[]>([]);
@@ -101,6 +139,8 @@ const KapaAI = observer(() => {
     const [error, setError] = useState('');
 
     const ratios = useRef(new RatioCache()).current;
+    // Live payouts from the last server scan, per strategy and market (used for Premium plans and sessions)
+    const scanRatios = useRef(new Map<string, TPayoutRatios>()).current;
     const balanceRef = useRef(balance);
     balanceRef.current = balance;
     const currencyRef = useRef(currency);
@@ -116,19 +156,28 @@ const KapaAI = observer(() => {
             }
             return next;
         });
-    const num = (k: keyof TSettings) => (e: React.ChangeEvent<HTMLInputElement>) => update({ [k]: e.target.value === '' ? ('' as any) : +e.target.value } as Partial<TSettings>);
+    const num = (k: keyof TSettings) => (e: React.ChangeEvent<HTMLInputElement>) =>
+        update({ [k]: e.target.value === '' ? ('' as any) : +e.target.value } as Partial<TSettings>);
+    const setCustom = (patch: Partial<TSettings['custom']>) =>
+        update({ strategy: 'custom', custom: { ...s.custom, ...patch } });
 
-    const applyPreset = (k: TPresetKey) => {
-        const p = PRESETS[k];
-        update({ ctype: p.ctype, barrier: p.barrier, recovery: p.recovery, recMode: p.recMode, martingale: p.martingale, maxLosses: p.maxLosses, maxStake: Math.max(s.stopLoss, s.stake) });
+    const chooseStrategy = (k: TStrategy) => {
+        if (k !== 'fixed' && !isPremium) return openPremium();
+        update({ strategy: k, ...(k !== 'fixed' ? { maxStake: Math.max(s.stopLoss, s.stake) } : {}) });
     };
 
-    const log = useCallback((text: string, level: TLog['level'] = 'info') => setLogs(prev => [{ at: Date.now(), text, level }, ...prev].slice(0, 400)), []);
+    const log = useCallback(
+        (text: string, level: TLog['level'] = 'info') =>
+            setLogs(prev => [{ at: Date.now(), text, level }, ...prev].slice(0, 400)),
+        []
+    );
 
     // Premium: check the entitlement after login, finish a payment when CinetPay sends the buyer back
     useEffect(() => {
         if (!premiumEnabled()) return;
-        fetchPlan().then(setPlan_).catch(() => setPlan_(null));
+        fetchPlan()
+            .then(setPlan_)
+            .catch(() => setPlan_(null));
     }, []);
     useEffect(() => {
         if (!logged_in) return;
@@ -139,15 +188,17 @@ const KapaAI = observer(() => {
     useEffect(() => {
         const apply = (detail: any) => {
             const { symbol, preset: k, stake } = detail || {};
-            if (!symbol || !PRESETS[k as TPresetKey]) return;
+            if (!MARKETS[symbol] || !STRATEGIES[k as TPresetKey]) return;
             try {
                 sessionStorage.removeItem('kapa_pending_market');
             } catch {
                 /* nothing to clear */
             }
-            const p = PRESETS[k as TPresetKey];
-            update({ symbol, stake, ctype: p.ctype, barrier: p.barrier, recovery: p.recovery, recMode: p.recMode, martingale: p.martingale, maxLosses: p.maxLosses });
-            setScanMsg(`${MARKETS[symbol]} loaded from the Live Scanner. Review the settings and press Start KAPA AI when ready.`);
+            if (detail.ratios) scanRatios.set(`${k}|${symbol}`, detail.ratios);
+            update({ symbol, strategy: k, ...(stake >= 0.35 ? { stake } : {}) });
+            setScanMsg(
+                `${MARKETS[symbol]} loaded from the Live Scanner. Review the settings and press Start KAPA AI when ready.`
+            );
         };
         const use = (e: Event) => apply((e as CustomEvent).detail);
         try {
@@ -165,7 +216,8 @@ const KapaAI = observer(() => {
     }, []);
     // Without Premium only the fixed-stake strategy is available
     useEffect(() => {
-        if (!isPremium && premium.status !== 'unknown' && premium.status !== 'checking' && s.recMode !== 'none') applyPreset('fixed');
+        if (!isPremium && premium.status !== 'unknown' && premium.status !== 'checking' && s.strategy !== 'fixed')
+            update({ strategy: 'fixed' });
     }, [isPremium, premium.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const pay = async () => {
@@ -181,45 +233,90 @@ const KapaAI = observer(() => {
 
     const engine = useMemo(
         () =>
-            new KapaEngine(derivApi, () => currencyRef.current, () => balanceRef.current, ratios, {
-                onStatus: (text, phase) => setStatus({ text, phase }),
-                onContract: c => setLive(c),
-                onTrade: t => setTrades(prev => [t, ...prev].slice(0, 500)),
-                onLog: (text, level) => log(text, level),
-                onStop: (reason, kind, pl) => {
-                    setRunning(false);
-                    if (kind === 'tp' || kind === 'sl' || kind === 'streak') setResult({ kind, pl });
-                    setStatus(prev => (prev.phase === 'won' || prev.phase === 'lost' ? prev : { text: reason, phase: 'idle' }));
-                },
-            }),
-        [ratios, log]
+            new KapaEngine(
+                derivApi,
+                () => currencyRef.current,
+                () => balanceRef.current,
+                {
+                    onStatus: (text, phase) => setStatus({ text, phase }),
+                    onContract: c => setLive(c),
+                    onTrade: t => setTrades(prev => [t, ...prev].slice(0, 500)),
+                    onLog: (text, level) => log(text, level),
+                    onStop: (reason, kind, pl) => {
+                        setRunning(false);
+                        if (kind === 'tp' || kind === 'sl' || kind === 'streak') setResult({ kind, pl });
+                        if (kind === 'error') refreshEntitlement(); // e.g. Premium ended during the session
+                        setStatus(prev =>
+                            prev.phase === 'won' || prev.phase === 'lost' ? prev : { text: reason, phase: 'idle' }
+                        );
+                    },
+                }
+            ),
+        [log]
     );
     useEffect(() => () => engine.requestStop(), [engine]);
 
-    // Session plan: re-simulate whenever settings, balance or known payouts change
-    const recomputePlan = useCallback(() => {
-        if (!(s.stake >= 0.35 && s.takeProfit > 0 && s.stopLoss > 0 && s.maxLosses >= 1)) return setPlan(null);
-        const baseR = ratios.known(s.symbol, s.ctype, s.barrier, s.duration);
-        const recR = ratios.known(s.symbol, s.ctype, recoveryBarrier(s), s.duration);
-        setPlanLive(baseR != null && (s.recMode === 'none' || recR != null));
-        setPlan(simulate(s, balance || 1000, baseR ?? estRatio(s.ctype, s.barrier), recR ?? estRatio(s.ctype, recoveryBarrier(s))));
-    }, [s, balance, ratios]);
+    // Session plan. The free strategy is simulated here; Premium strategies are simulated by the server.
     useEffect(() => {
-        const t = setTimeout(recomputePlan, 250);
-        return () => clearTimeout(t);
-    }, [recomputePlan]);
+        if (!(s.stake >= 0.35 && s.takeProfit > 0 && s.stopLoss > 0)) {
+            setPlan(null);
+            setPlanNote('Enter a stake, take-profit and stop-loss to see the plan.');
+            return;
+        }
+        let cancelled = false;
+        const t = setTimeout(
+            async () => {
+                if (s.strategy === 'fixed') {
+                    const r = ratios.known(s.symbol, 1);
+                    setPlan(simulateFixed(s, balance || 1000, r ?? estRatio(1)));
+                    setPlanNote(
+                        `Simulated 4,000 times with ${r != null ? "Deriv's live payouts" : 'estimated payouts'}`
+                    );
+                    return;
+                }
+                if (!premiumEnabled()) {
+                    setPlan(null);
+                    setPlanNote(
+                        'The plan for this strategy is computed by the Kapa server, which is not connected yet.'
+                    );
+                    return;
+                }
+                try {
+                    const sr = scanRatios.get(`${s.strategy}|${s.symbol}`);
+                    const res = await simulatePlan(s, balance || 1000, sr || {});
+                    if (cancelled) return;
+                    setPlan(res);
+                    setPlanNote(
+                        `Simulated ${res.sessions.toLocaleString()} times by the Kapa server with ${sr ? "Deriv's live payouts" : 'estimated payouts'}`
+                    );
+                } catch (e: any) {
+                    if (cancelled) return;
+                    setPlan(null);
+                    setPlanNote(
+                        e?.status === 400
+                            ? e.message
+                            : "Couldn't reach the Kapa server for the plan. It updates when you change a setting."
+                    );
+                }
+            },
+            s.strategy === 'fixed' ? 250 : 700
+        );
+        return () => {
+            cancelled = true;
+            clearTimeout(t);
+        };
+    }, [s, balance, ratioTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Fetch live payouts for the current strategy so the plan uses Deriv's real prices
+    // Deriv's live payout for the free strategy, so its plan uses real prices
     useEffect(() => {
-        if (!logged_in || !api_base.api) return;
+        if (!logged_in || !api_base.api || s.strategy !== 'fixed') return;
         let cancelled = false;
         (async () => {
             // The connection may still be authorizing right after login, so retry a few times
             for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
                 try {
-                    await ratios.get(derivApi, currency, s.symbol, s.ctype, s.barrier, s.duration);
-                    if (s.recMode !== 'none') await ratios.get(derivApi, currency, s.symbol, s.ctype, recoveryBarrier(s), s.duration);
-                    if (!cancelled) recomputePlan();
+                    await ratios.get(derivApi, currency, s.symbol, 1);
+                    if (!cancelled) setRatioTick(n => n + 1);
                     return;
                 } catch {
                     await new Promise(r => setTimeout(r, 2000)); // the plan uses estimated payouts meanwhile
@@ -229,7 +326,7 @@ const KapaAI = observer(() => {
         return () => {
             cancelled = true;
         };
-    }, [logged_in, currency, s.symbol, s.ctype, s.barrier, s.recovery, s.recMode, s.duration]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [logged_in, currency, s.symbol, s.strategy]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const login = async () => {
         const url = await generateOAuthURL();
@@ -245,49 +342,44 @@ const KapaAI = observer(() => {
         setScanning(true);
         setCards([]);
         setScanMsg('Scanning fresh synthetic-index ticks…');
-        const found: TScanCard[] = [];
-        const barriers = Array.from(new Set([s.barrier, 1, 2])).filter(b => b >= 0 && b <= 8);
+        const preset: TPresetKey = s.strategy !== 'custom' && STRATEGIES[s.strategy].premium ? s.strategy : 'pegasus';
         try {
-            await Promise.all(
-                SCAN_MARKETS.map(async sym => {
-                    let digits: number[] = [];
-                    try {
-                        const h = await derivApi.send({ ticks_history: sym, count: 100, end: 'latest', style: 'ticks' });
-                        const pip = h?.pip_size ?? PIP_SIZES[sym] ?? 2;
-                        digits = (h?.history?.prices || []).map((p: number) => {
-                            const str = Number(p).toFixed(pip);
-                            return +str[str.length - 1];
-                        });
-                    } catch {
-                        /* recent digits are optional */
-                    }
-                    await Promise.all(
-                        barriers.map(async b => {
-                            try {
-                                const r = await ratios.get(derivApi, currency, sym, 'DIGITOVER', b, 1);
-                                const p = winProb('DIGITOVER', b);
-                                const payout = s.stake * (1 + r);
-                                found.push({ sym, b, p, payout, ev: p * payout - s.stake, recent: digits.length ? digits.filter(d => d > b).length / digits.length : null, n: digits.length });
-                            } catch (e: any) {
-                                log(`Scan ${sym} Over ${b}: ${e?.message ?? e}`, 'warn');
-                            }
-                        })
-                    );
+            const { rows } = await scanMarkets(preset, currency);
+            rows.forEach(r =>
+                scanRatios.set(`${preset}|${r.symbol}`, {
+                    base: r.payout,
+                    ...(r.recovery_payout != null ? { rec: r.recovery_payout } : {}),
                 })
             );
-            await new Promise(r => setTimeout(r, 800));
+            const top = rows.slice(0, 3).map(r => ({
+                sym: r.symbol,
+                b: r.barrier,
+                rec: r.recovery,
+                p: r.win_chance,
+                payout: s.stake * (1 + r.payout),
+                ev: s.stake * r.expected,
+                recent: r.recent,
+                n: r.recent_ticks,
+                preset,
+            }));
+            setCards(top);
+            setScanMsg(
+                top.length
+                    ? `${top.length} live markets compared.`
+                    : 'No prices returned. Check your connection and try again.'
+            );
+            setRatioTick(n => n + 1);
+        } catch (e: any) {
+            setScanMsg('');
+            setError(e?.message ?? 'The scan failed. Try again.');
+            if (e?.status === 402) refreshEntitlement();
         } finally {
             setScanning(false);
         }
-        found.sort((a, b) => b.ev - a.ev);
-        const top = found.slice(0, 3);
-        setCards(top);
-        setScanMsg(top.length ? `${top.length} live markets compared.` : 'No prices returned. Check your connection and try again.');
-        recomputePlan();
     };
 
     const pickCard = (c: TScanCard) => {
-        update({ symbol: c.sym, ctype: 'DIGITOVER', barrier: c.b });
+        update({ symbol: c.sym, strategy: c.preset, maxStake: Math.max(s.stopLoss, s.stake) });
         setScanMsg(`${MARKETS[c.sym]} selected. Loading the strategy…`);
         setTimeout(() => setActivation(c), 500);
     };
@@ -295,10 +387,11 @@ const KapaAI = observer(() => {
     const start = () => {
         const err = validate(s, balance);
         if (err) return setError(err);
-        if (run_panel.is_running) return setError('A Bot Builder strategy is running. Stop it before starting KAPA AI.');
-        if (!isPremium && s.recMode !== 'none') {
+        if (run_panel.is_running)
+            return setError('A Bot Builder strategy is running. Stop it before starting KAPA AI.');
+        if (s.strategy !== 'fixed' && !isPremium) {
             openPremium();
-            return setError('Recovery strategies are part of KAPA AI Premium.');
+            return setError('This strategy is part of KAPA AI Premium.');
         }
         setError('');
         if (!client.is_virtual) return setConfirmReal(true);
@@ -308,7 +401,18 @@ const KapaAI = observer(() => {
         setConfirmReal(false);
         setRunning(true);
         setResult(null);
-        engine.run(s);
+        const policy =
+            s.strategy === 'fixed'
+                ? fixedPolicy(s)
+                : remotePolicy(s, scanRatios.get(`${s.strategy}|${s.symbol}`) || {});
+        engine.run(policy, {
+            name: strategyName(s.strategy),
+            delay: s.delay,
+            stake: s.stake,
+            takeProfit: s.takeProfit,
+            stopLoss: s.stopLoss,
+            symbol: s.symbol,
+        });
     };
     const stop = () => {
         engine.requestStop();
@@ -326,14 +430,18 @@ const KapaAI = observer(() => {
         return st;
     }, [trades]);
 
-    const preset = presetOf(s);
-    const recB = recoveryBarrier(s);
-    const recoveryLine =
-        s.recMode === 'recover'
-            ? `Recovery: ${TYPE_LABEL[s.ctype]} ${recB} · wins back losses in one trade`
-            : s.recMode === 'mult'
-              ? `Recovery: ${TYPE_LABEL[s.ctype]} ${recB} · stake ×${s.martingale} after each loss`
-              : 'Recovery: none · fixed stake';
+    const recoveryLine = (c?: TScanCard | null) => {
+        if (s.strategy === 'fixed') return 'Recovery: none · fixed stake';
+        if (s.strategy === 'custom') {
+            const { recMode, recovery, martingale } = s.custom;
+            if (recMode === 'recover') return `Recovery: Over ${recovery} · wins back losses in one trade`;
+            if (recMode === 'mult') return `Recovery: Over ${recovery} · stake ×${martingale} after each loss`;
+            return 'Recovery: none · fixed stake';
+        }
+        return c?.rec != null
+            ? `Recovery: Over ${c.rec} after a loss, sized by the KAPA AI server`
+            : 'Recovery: decided by the KAPA AI server after each loss';
+    };
     const tpPct = balance ? (s.takeProfit / balance) * 100 : null;
     const progress = { idle: 0, starting: 8, buying: 50, bought: 100, won: 100, lost: 100 }[status.phase];
 
@@ -343,13 +451,19 @@ const KapaAI = observer(() => {
                 <section className='kapa-card'>
                     <div className='kapa-eyebrow'>KAPA AI · Premium</div>
                     <h2 className='kapa-title'>Activate Kapa</h2>
-                    <p className='kapa-lede'>Set your stake, take-profit and stop-loss, check the session plan, then activate the scanner to compare live markets.</p>
+                    <p className='kapa-lede'>
+                        Set your stake, take-profit and stop-loss, check the session plan, then activate the scanner to
+                        compare live markets.
+                    </p>
 
-                    {premiumEnabled() && (
+                    {
                         <div className={classNames('kapa-premium', { 'kapa-premium--on': isPremium })} ref={premiumRef}>
                             {isPremium ? (
                                 <p className='kapa-premium__active'>
-                                    ✓ Premium active{premium.expiresAt ? ` until ${new Date(premium.expiresAt).toLocaleDateString()}` : ''}
+                                    ✓ Premium active
+                                    {premium.expiresAt
+                                        ? ` until ${new Date(premium.expiresAt).toLocaleDateString()}`
+                                        : ''}
                                 </p>
                             ) : (
                                 <>
@@ -357,32 +471,55 @@ const KapaAI = observer(() => {
                                     <h3>KAPA AI Premium</h3>
                                     <ul>
                                         <li>
-                                            <b>Recovery strategies</b> · Over 1 → Over 5 and Over 2 → Over 4 with ×2.2, and exact win-back recovery
+                                            <b>Recovery strategies</b> · Pegasus, Steady and Exact recovery, run by the
+                                            KAPA AI server
                                         </li>
                                         <li>
-                                            <b>Live market scanner</b> · compares Deriv&apos;s live prices across Volatility indices
+                                            <b>Live market scanner</b> · compares Deriv&apos;s live prices across
+                                            Volatility indices
                                         </li>
                                         <li>
-                                            <b>Advanced settings</b> · predictions, multiplier, maximum stake, loss limits, pauses
+                                            <b>Advanced settings</b> · predictions, multiplier, maximum stake, loss
+                                            limits, pauses
                                         </li>
                                         <li>
                                             <b>Premium bots</b> in the Free Bot library
                                         </li>
                                     </ul>
                                     <p className='kapa-premium__note'>
-                                        The session plan stays free for everyone. Premium adds tools; it does not change the odds: every Deriv contract still pays less than its true chance.
+                                        The session plan stays free for everyone. Premium adds tools; it does not change
+                                        the odds: every Deriv contract still pays less than its true chance.
                                     </p>
-                                    {plan_?.configured ? (
-                                        <button className='kapa-btn kapa-btn--gold' type='button' onClick={pay} disabled={!logged_in || paying}>
-                                            {paying ? 'Opening CinetPay…' : `Get Premium · ${plan_.price.toLocaleString()} ${plan_.currency} / ${plan_.days} days`}
+                                    {premium.status === 'off' ? (
+                                        <p className='kapa-premium__note'>KAPA AI Premium opens soon.</p>
+                                    ) : plan_?.configured ? (
+                                        <button
+                                            className='kapa-btn kapa-btn--gold'
+                                            type='button'
+                                            onClick={pay}
+                                            disabled={!logged_in || paying}
+                                        >
+                                            {paying
+                                                ? 'Opening CinetPay…'
+                                                : `Get Premium · ${plan_.price.toLocaleString()} ${plan_.currency} / ${plan_.days} days`}
                                         </button>
                                     ) : (
                                         <p className='kapa-premium__note'>Premium payments open soon.</p>
                                     )}
-                                    <small className='kapa-premium__methods'>Mobile money (Orange, MTN, Moov, Wave) or bank card, through CinetPay.</small>
-                                    {!logged_in && <small className='kapa-premium__methods'>Log in with Deriv first: Premium is linked to your Deriv account.</small>}
+                                    <small className='kapa-premium__methods'>
+                                        Mobile money (Orange, MTN, Moov, Wave) or bank card, through CinetPay.
+                                    </small>
+                                    {!logged_in && (
+                                        <small className='kapa-premium__methods'>
+                                            Log in with Deriv first: Premium is linked to your Deriv account.
+                                        </small>
+                                    )}
                                     {premium.status === 'unavailable' && (
-                                        <button className='kapa-link' type='button' onClick={() => refreshEntitlement()}>
+                                        <button
+                                            className='kapa-link'
+                                            type='button'
+                                            onClick={() => refreshEntitlement()}
+                                        >
                                             Couldn&apos;t reach the Premium server. Try again
                                         </button>
                                     )}
@@ -390,7 +527,7 @@ const KapaAI = observer(() => {
                             )}
                             {premiumMsg && <p className='kapa-premium__msg'>{premiumMsg}</p>}
                         </div>
-                    )}
+                    }
 
                     {!logged_in && (
                         <div className='kapa-login'>
@@ -403,11 +540,27 @@ const KapaAI = observer(() => {
 
                     <label className='kapa-field'>
                         <span>Stake ({currency})</span>
-                        <input type='number' inputMode='decimal' min={0.35} step={0.01} value={s.stake} onChange={num('stake')} disabled={running} />
+                        <input
+                            type='number'
+                            inputMode='decimal'
+                            min={0.35}
+                            step={0.01}
+                            value={s.stake}
+                            onChange={num('stake')}
+                            disabled={running}
+                        />
                     </label>
                     <label className='kapa-field'>
                         <span>Take-profit ({currency})</span>
-                        <input type='number' inputMode='decimal' min={0.01} step={0.01} value={s.takeProfit} onChange={num('takeProfit')} disabled={running} />
+                        <input
+                            type='number'
+                            inputMode='decimal'
+                            min={0.01}
+                            step={0.01}
+                            value={s.takeProfit}
+                            onChange={num('takeProfit')}
+                            disabled={running}
+                        />
                         {tpPct != null && (
                             <small>
                                 = {fmt(tpPct, tpPct < 10 ? 1 : 0)}% of your balance ({fmt(balance)} {currency})
@@ -422,29 +575,31 @@ const KapaAI = observer(() => {
                             min={0.01}
                             step={0.01}
                             value={s.stopLoss}
-                            onChange={e => update({ stopLoss: +e.target.value, ...(s.recMode !== 'none' ? { maxStake: Math.max(+e.target.value, s.stake) } : {}) })}
+                            onChange={e =>
+                                update({
+                                    stopLoss: +e.target.value,
+                                    ...(s.strategy !== 'fixed' ? { maxStake: Math.max(+e.target.value, s.stake) } : {}),
+                                })
+                            }
                             disabled={running}
                         />
                     </label>
                     <label className='kapa-field'>
                         <span>Strategy</span>
                         <select
-                            value={preset}
-                            onChange={e => {
-                                const k = e.target.value as TPresetKey | 'custom';
-                                if (k === 'custom') return;
-                                if (!isPremium && PRESETS[k].recMode !== 'none') return openPremium();
-                                applyPreset(k);
-                            }}
+                            value={s.strategy}
+                            onChange={e => chooseStrategy(e.target.value as TStrategy)}
                             disabled={running}
                         >
-                            {(Object.keys(PRESETS) as TPresetKey[]).map(k => (
+                            {(Object.keys(STRATEGIES) as TPresetKey[]).map(k => (
                                 <option key={k} value={k}>
-                                    {!isPremium && PRESETS[k].recMode !== 'none' ? '🔒 ' : ''}
-                                    {PRESETS[k].label}
+                                    {!isPremium && STRATEGIES[k].premium ? '🔒 ' : ''}
+                                    {STRATEGIES[k].label}
                                 </option>
                             ))}
-                            {preset === 'custom' && <option value='custom'>Custom</option>}
+                            {(isPremium || s.strategy === 'custom') && (
+                                <option value='custom'>Custom · my own rules (advanced settings)</option>
+                            )}
                         </select>
                     </label>
                     <label className='kapa-field'>
@@ -458,59 +613,129 @@ const KapaAI = observer(() => {
                         </select>
                     </label>
 
-                    <button className='kapa-link' type='button' onClick={() => (isPremium ? setShowAdvanced(v => !v) : openPremium())}>
-                        {!isPremium ? '🔒 Advanced settings (Premium)' : `${showAdvanced ? 'Hide' : 'Show'} advanced settings`}
+                    <button
+                        className='kapa-link'
+                        type='button'
+                        onClick={() => (isPremium ? setShowAdvanced(v => !v) : openPremium())}
+                    >
+                        {!isPremium
+                            ? '🔒 Advanced settings (Premium)'
+                            : `${showAdvanced ? 'Hide' : 'Show'} advanced settings`}
                     </button>
                     {showAdvanced && isPremium && (
                         <div className='kapa-grid2'>
-                            <label className='kapa-field'>
-                                <span>Prediction (Over)</span>
-                                <select value={s.barrier} onChange={e => update({ barrier: +e.target.value })} disabled={running}>
-                                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(d => (
-                                        <option key={d} value={d}>
-                                            Over {d} · {fmt(winProb('DIGITOVER', d) * 100, 0)}%
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label className='kapa-field'>
-                                <span>Recovery prediction</span>
-                                <select value={String(s.recovery)} onChange={e => update({ recovery: e.target.value === 'same' ? 'same' : +e.target.value })} disabled={running}>
-                                    <option value='same'>Same</option>
-                                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(d => (
-                                        <option key={d} value={d}>
-                                            Over {d}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label className='kapa-field'>
-                                <span>Recovery mode</span>
-                                <select value={s.recMode} onChange={e => update({ recMode: e.target.value as TSettings['recMode'] })} disabled={running}>
-                                    <option value='none'>None</option>
-                                    <option value='mult'>Multiply stake</option>
-                                    <option value='recover'>Win back losses</option>
-                                </select>
-                            </label>
-                            <label className='kapa-field'>
-                                <span>Multiplier</span>
-                                <input type='number' min={1} step={0.1} value={s.martingale} onChange={num('martingale')} disabled={running} />
-                            </label>
+                            {s.strategy === 'custom' ? (
+                                <>
+                                    <label className='kapa-field'>
+                                        <span>Prediction (Over)</span>
+                                        <select
+                                            value={s.custom.barrier}
+                                            onChange={e => setCustom({ barrier: +e.target.value })}
+                                            disabled={running}
+                                        >
+                                            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(d => (
+                                                <option key={d} value={d}>
+                                                    Over {d} · {fmt(overChance(d) * 100, 0)}%
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label className='kapa-field'>
+                                        <span>Recovery prediction</span>
+                                        <select
+                                            value={s.custom.recovery}
+                                            onChange={e => setCustom({ recovery: +e.target.value })}
+                                            disabled={running}
+                                        >
+                                            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(d => (
+                                                <option key={d} value={d}>
+                                                    Over {d}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label className='kapa-field'>
+                                        <span>Recovery mode</span>
+                                        <select
+                                            value={s.custom.recMode}
+                                            onChange={e =>
+                                                setCustom({ recMode: e.target.value as TSettings['custom']['recMode'] })
+                                            }
+                                            disabled={running}
+                                        >
+                                            <option value='none'>None</option>
+                                            <option value='mult'>Multiply stake</option>
+                                            <option value='recover'>Win back losses</option>
+                                        </select>
+                                    </label>
+                                    <label className='kapa-field'>
+                                        <span>Multiplier</span>
+                                        <input
+                                            type='number'
+                                            min={1}
+                                            max={5}
+                                            step={0.1}
+                                            value={s.custom.martingale}
+                                            onChange={e => setCustom({ martingale: +e.target.value })}
+                                            disabled={running}
+                                        />
+                                    </label>
+                                </>
+                            ) : (
+                                <p className='kapa-dim kapa-grid2__full'>
+                                    Choose “Custom” in Strategy to set your own prediction and recovery rules.
+                                </p>
+                            )}
                             <label className='kapa-field'>
                                 <span>Maximum stake</span>
-                                <input type='number' min={0.35} step={0.01} value={s.maxStake} onChange={num('maxStake')} disabled={running} />
+                                <input
+                                    type='number'
+                                    min={0.35}
+                                    step={0.01}
+                                    value={s.maxStake}
+                                    onChange={num('maxStake')}
+                                    disabled={running}
+                                />
                             </label>
                             <label className='kapa-field'>
                                 <span>Stop after N losses in a row</span>
-                                <input type='number' min={1} step={1} value={s.maxLosses} onChange={num('maxLosses')} disabled={running} />
+                                <input
+                                    type='number'
+                                    min={1}
+                                    max={20}
+                                    step={1}
+                                    placeholder='Strategy default'
+                                    value={s.maxLosses ?? ''}
+                                    onChange={e =>
+                                        update({
+                                            maxLosses:
+                                                e.target.value === '' ? null : Math.max(1, Math.floor(+e.target.value)),
+                                        })
+                                    }
+                                    disabled={running}
+                                />
                             </label>
                             <label className='kapa-field'>
                                 <span>Max trades (0 = no limit)</span>
-                                <input type='number' min={0} step={1} value={s.maxRuns} onChange={num('maxRuns')} disabled={running} />
+                                <input
+                                    type='number'
+                                    min={0}
+                                    step={1}
+                                    value={s.maxRuns}
+                                    onChange={num('maxRuns')}
+                                    disabled={running}
+                                />
                             </label>
                             <label className='kapa-field'>
                                 <span>Pause between trades (s)</span>
-                                <input type='number' min={0} step={0.5} value={s.delay} onChange={num('delay')} disabled={running} />
+                                <input
+                                    type='number'
+                                    min={0}
+                                    step={0.5}
+                                    value={s.delay}
+                                    onChange={num('delay')}
+                                    disabled={running}
+                                />
                             </label>
                         </div>
                     )}
@@ -518,7 +743,7 @@ const KapaAI = observer(() => {
                     <div className='kapa-plan'>
                         <div className='kapa-plan__head'>
                             <span>Session plan</span>
-                            <small>Simulated 4,000 times with {planLive ? "Deriv's live payouts" : 'estimated payouts'}</small>
+                            <small>{plan ? planNote : ''}</small>
                         </div>
                         {plan ? (
                             <>
@@ -545,14 +770,18 @@ const KapaAI = observer(() => {
                                     <i style={{ width: `${plan.bust * 100}%` }} />
                                 </div>
                                 <p className='kapa-plan__text'>
-                                    Out of 100 sessions like this, about {Math.round(plan.hit * 100)} reach +{fmt(s.takeProfit)} {currency}
-                                    {plan.bust > 0.005 ? ` and about ${Math.round(plan.bust * 100)} stop at a loss, losing ${fmt(Math.abs(plan.bustAvg))} ${currency} on average.` : '.'}{' '}
+                                    Out of 100 sessions like this, about {Math.round(plan.hit * 100)} reach +
+                                    {fmt(s.takeProfit)} {currency}
+                                    {plan.bust > 0.005
+                                        ? ` and about ${Math.round(plan.bust * 100)} stop at a loss, losing ${fmt(Math.abs(plan.bustAvg))} ${currency} on average.`
+                                        : '.'}{' '}
                                     Averaged over many sessions, that is {signed(plan.avg)} {currency} per session.
-                                    {plan.avg < 0 && ' Changing the target, stake or stop-loss changes how often you reach the target; the long-run average stays negative.'}
+                                    {plan.avg < 0 &&
+                                        ' Changing the target, stake or stop-loss changes how often you reach the target; the long-run average stays negative.'}
                                 </p>
                             </>
                         ) : (
-                            <p className='kapa-plan__text'>Enter a stake, take-profit and stop-loss to see the plan.</p>
+                            <p className='kapa-plan__text'>{planNote || 'Computing the plan…'}</p>
                         )}
                     </div>
 
@@ -583,16 +812,24 @@ const KapaAI = observer(() => {
                             <p>
                                 Over {c.b} · {c.sym} · true win chance
                             </p>
-                            <p className='kapa-sig__rec'>{recoveryLine}</p>
+                            <p className='kapa-sig__rec'>{recoveryLine(c)}</p>
                             <p>
-                                Payout if won: <span className='kapa-up'>+{fmt(c.payout - s.stake)} {currency}</span> ({fmt(((c.payout - s.stake) / s.stake) * 100, 1)}%)
+                                Payout if won:{' '}
+                                <span className='kapa-up'>
+                                    +{fmt(c.payout - s.stake)} {currency}
+                                </span>{' '}
+                                ({fmt(((c.payout - s.stake) / s.stake) * 100, 1)}%)
                             </p>
                             <p>
-                                Expected result per trade: <span className={c.ev >= 0 ? 'kapa-up' : 'kapa-down'}>{signed(c.ev)} {currency}</span>
+                                Expected result per trade:{' '}
+                                <span className={c.ev >= 0 ? 'kapa-up' : 'kapa-down'}>
+                                    {signed(c.ev)} {currency}
+                                </span>
                             </p>
                             {c.recent != null && (
                                 <p className='kapa-dim'>
-                                    Last {c.n} ticks: Over {c.b} came up {fmt(c.recent * 100, 1)}% of the time. Past ticks don&apos;t predict the next one.
+                                    Last {c.n} ticks: Over {c.b} came up {fmt(c.recent * 100, 1)}% of the time. Past
+                                    ticks don&apos;t predict the next one.
                                 </p>
                             )}
                             <button className='kapa-use' type='button' onClick={() => pickCard(c)}>
@@ -605,7 +842,12 @@ const KapaAI = observer(() => {
                 <section className='kapa-card kapa-card--panel'>
                     <div className='kapa-segs'>
                         {(['summary', 'transactions', 'journal'] as const).map(p => (
-                            <button key={p} type='button' className={classNames({ on: panel === p })} onClick={() => setPanel(p)}>
+                            <button
+                                key={p}
+                                type='button'
+                                className={classNames({ on: panel === p })}
+                                onClick={() => setPanel(p)}
+                            >
                                 {p[0].toUpperCase() + p.slice(1)}
                             </button>
                         ))}
@@ -614,7 +856,11 @@ const KapaAI = observer(() => {
                     {panel === 'summary' &&
                         (live ? (
                             <div className='kapa-cc'>
-                                <div className={classNames('kapa-cc__top', { win: live.open ? (live.profit ?? 0) >= 0 : live.won })}>
+                                <div
+                                    className={classNames('kapa-cc__top', {
+                                        win: live.open ? (live.profit ?? 0) >= 0 : live.won,
+                                    })}
+                                >
                                     <span>
                                         {MARKETS[live.symbol]} · {TYPE_LABEL[live.type]} {live.barrier}
                                     </span>
@@ -732,17 +978,29 @@ const KapaAI = observer(() => {
                         </div>
                         <div>
                             <small>Total profit/loss</small>
-                            <b className={stats.pl > 0 ? 'kapa-up' : stats.pl < 0 ? 'kapa-down' : ''}>{signed(stats.pl)}</b>
+                            <b className={stats.pl > 0 ? 'kapa-up' : stats.pl < 0 ? 'kapa-down' : ''}>
+                                {signed(stats.pl)}
+                            </b>
                         </div>
                     </div>
-                    <button className='kapa-link' type='button' disabled={running || !trades.length} onClick={() => (setTrades([]), setLive(null), setLogs([]))}>
+                    <button
+                        className='kapa-link'
+                        type='button'
+                        disabled={running || !trades.length}
+                        onClick={() => (setTrades([]), setLive(null), setLogs([]))}
+                    >
                         Reset stats
                     </button>
                 </section>
             </div>
 
             <div className='kapa-runbar'>
-                <button className={classNames('kapa-runbtn', { 'kapa-runbtn--stop': running })} type='button' onClick={running ? stop : start} disabled={!logged_in}>
+                <button
+                    className={classNames('kapa-runbtn', { 'kapa-runbtn--stop': running })}
+                    type='button'
+                    onClick={running ? stop : start}
+                    disabled={!logged_in}
+                >
                     {running ? '■ Stop' : '▶ Start KAPA AI'}
                 </button>
                 <div className={classNames('kapa-runstat', `kapa-runstat--${status.phase}`)}>
@@ -762,7 +1020,12 @@ const KapaAI = observer(() => {
             {activation && (
                 <div className='kapa-mask' role='dialog' aria-modal>
                     <div className='kapa-modal'>
-                        <button className='kapa-modal__x' type='button' onClick={() => setActivation(null)} aria-label='Close'>
+                        <button
+                            className='kapa-modal__x'
+                            type='button'
+                            onClick={() => setActivation(null)}
+                            aria-label='Close'
+                        >
                             ✕
                         </button>
                         <div className='kapa-modal__title'>KAPA ACTIVATED</div>
@@ -772,14 +1035,19 @@ const KapaAI = observer(() => {
                             <div className='kapa-hero__online'>KAPA CORE ONLINE</div>
                         </div>
                         <p className='kapa-modal__text'>
-                            KAPA AI is loaded with {MARKETS[activation.sym]} · Over {activation.b}. Stake {fmt(s.stake)}, take-profit {fmt(s.takeProfit)}, stop-loss {fmt(s.stopLoss)} {currency}. {recoveryLine}.
+                            KAPA AI is loaded with {MARKETS[activation.sym]} · Over {activation.b}. Stake {fmt(s.stake)}
+                            , take-profit {fmt(s.takeProfit)}, stop-loss {fmt(s.stopLoss)} {currency}.{' '}
+                            {recoveryLine(activation)}.
                         </p>
                         <button
                             className='kapa-btn kapa-btn--gold'
                             type='button'
                             onClick={() => {
                                 setActivation(null);
-                                log('KAPA AI strategy loaded. Review all settings and press Start when ready.', 'success');
+                                log(
+                                    'KAPA AI strategy loaded. Review all settings and press Start when ready.',
+                                    'success'
+                                );
                                 setScanMsg('Strategy loaded. Review all settings and press Start KAPA AI when ready.');
                             }}
                         >
@@ -797,8 +1065,13 @@ const KapaAI = observer(() => {
                     <div className='kapa-modal'>
                         <div className='kapa-modal__title kapa-modal__title--sm'>Trade with real money?</div>
                         <p className='kapa-modal__text'>
-                            KAPA AI will place real trades on {client.loginid}. Stake {fmt(s.stake)} {currency} ({fmt(balance ? (s.stake / balance) * 100 : 0, 0)}% of your balance), stop-loss {fmt(s.stopLoss)} {currency}.
-                            {plan && ` The session plan gives about ${Math.round(plan.bust * 100)} chances in 100 of stopping at a loss.`} Every contract pays less than its true odds, so over many sessions the expected result is a loss.
+                            KAPA AI will place real trades on {client.loginid}. Stake {fmt(s.stake)} {currency} (
+                            {fmt(balance ? (s.stake / balance) * 100 : 0, 0)}% of your balance), stop-loss{' '}
+                            {fmt(s.stopLoss)} {currency}.
+                            {plan &&
+                                ` The session plan gives about ${Math.round(plan.bust * 100)} chances in 100 of stopping at a loss.`}{' '}
+                            Every contract pays less than its true odds, so over many sessions the expected result is a
+                            loss.
                         </p>
                         <button className='kapa-btn kapa-btn--gold' type='button' onClick={go}>
                             Start real trading
@@ -814,15 +1087,30 @@ const KapaAI = observer(() => {
                 <div className='kapa-mask' role='dialog' aria-modal>
                     <div className='kapa-modal kapa-modal--result'>
                         <div className='kapa-result__hero' />
-                        <button className='kapa-modal__x' type='button' onClick={() => setResult(null)} aria-label='Close'>
+                        <button
+                            className='kapa-modal__x'
+                            type='button'
+                            onClick={() => setResult(null)}
+                            aria-label='Close'
+                        >
                             ✕
                         </button>
                         <div className='kapa-result'>
                             <span className={classNames('kapa-result__tag', { bad: result.kind !== 'tp' })}>
-                                {result.kind === 'tp' ? 'PROFIT TARGET REACHED' : result.kind === 'streak' ? 'LOSS LIMIT REACHED' : 'STOP-LOSS REACHED'}
+                                {result.kind === 'tp'
+                                    ? 'PROFIT TARGET REACHED'
+                                    : result.kind === 'streak'
+                                      ? 'LOSS LIMIT REACHED'
+                                      : 'STOP-LOSS REACHED'}
                             </span>
                             <div className='kapa-result__h1'>KAPA AI</div>
-                            <div className='kapa-result__h2'>{result.kind === 'tp' ? 'hit a profit of' : result.pl >= 0 ? 'stopped with a profit of' : 'stopped at a loss of'}</div>
+                            <div className='kapa-result__h2'>
+                                {result.kind === 'tp'
+                                    ? 'hit a profit of'
+                                    : result.pl >= 0
+                                      ? 'stopped with a profit of'
+                                      : 'stopped at a loss of'}
+                            </div>
                             <div className={classNames('kapa-result__amt', { bad: result.kind !== 'tp' })}>
                                 {fmt(Math.abs(result.pl))} {currency}
                             </div>

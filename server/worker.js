@@ -2,20 +2,41 @@
  * Kapa Premium server (Cloudflare Worker + KV).
  *
  * - Identifies users by asking Deriv which accounts their OAuth access token belongs to.
- * - Sells Premium through CinetPay (mobile money and cards) and only grants access after
- *   checking the transaction with CinetPay's verification API (notifications alone are not trusted).
- * - Stores entitlements per Deriv account in KV (`ent:<account_id>`), payments as `tx:<id>`.
- * - Admin endpoints are protected by the ADMIN_SECRET secret, which never leaves the server.
+ *   The token is used for that check only; it is never stored.
+ * - Runs the Premium strategies: the website sends each settled contract and receives the
+ *   next trade. Sessions are signed (HMAC) so they need no storage, and the membership is
+ *   checked again on every decision.
+ * - Scans markets itself over Deriv's public WebSocket, simulates session plans, and gives
+ *   Premium bot settings to members only.
+ * - Sells Premium through CinetPay (mobile money and cards) and grants access only after
+ *   checking the transaction with CinetPay's verification API.
+ * - Admin endpoints need ADMIN_SECRET; repeated wrong attempts lock the caller out.
  *
- * Bindings: KV namespace KAPA_KV. Secrets: CINETPAY_APIKEY, CINETPAY_SITE_ID, ADMIN_SECRET.
- * Vars: PRICE_XOF, PLAN_DAYS, CURRENCY, SITE_URL, ALLOWED_ORIGINS (comma separated), DERIV_API.
+ * Bindings: KV namespace KAPA_KV.
+ * Secrets: CINETPAY_APIKEY, CINETPAY_SITE_ID, ADMIN_SECRET, SESSION_KEY, and optionally PREMIUM_RULES.
+ * Vars: PRICE_XOF, PLAN_DAYS, CURRENCY, SITE_URL, ALLOWED_ORIGINS, DERIV_API, DERIV_PUBLIC_WS.
  */
+
+import { applyResult, cleanRatios, decide, estRatio, freshState, loadRules, simulate, validateSettings, winProb } from './strategy.js';
 
 const CINETPAY = 'https://api-checkout.cinetpay.com/v2';
 const DAY = 24 * 60 * 60 * 1000;
+const SESSION_TTL = 6 * 60 * 60 * 1000;
+const MAX_BODY = 16 * 1024;
+const TX_ID = /^kapa_[a-z0-9]+_[a-f0-9]{10}$/;
+const ACCOUNT_ID = /^[A-Za-z0-9]{4,32}$/;
 
-const json = (body, status = 200, headers = {}) =>
-    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
+const SECURITY_HEADERS = {
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer',
+    'x-frame-options': 'DENY',
+    'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
+    'strict-transport-security': 'max-age=31536000; includeSubDomains',
+};
+
+const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const fail = (status, error) => json({ error }, status);
 
 const corsHeaders = (req, env) => {
     const origin = req.headers.get('origin') || '';
@@ -25,30 +46,80 @@ const corsHeaders = (req, env) => {
         'access-control-allow-origin': origin,
         'access-control-allow-headers': 'authorization, content-type, x-admin-secret',
         'access-control-allow-methods': 'GET, POST, OPTIONS',
+        'access-control-max-age': '600',
         vary: 'Origin',
     };
 };
 
-const timingSafeEqual = (a, b) => {
-    if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length || !a.length) return false;
+const enc = new TextEncoder();
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64url = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+const sha256 = async text => b64url(await crypto.subtle.digest('SHA-256', enc.encode(text)));
+
+/** Constant-time comparison: hashes both sides first so length differences don't leak either. */
+const safeEqual = async (a, b) => {
+    if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false;
+    const [x, y] = await Promise.all([sha256(a), sha256(b)]);
     let diff = 0;
-    for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
     return diff === 0;
 };
 
-/** Returns the Deriv account ids the bearer token belongs to, or null if Deriv rejects it. */
+// ---------- Signed sessions (no storage needed) ----------
+const hmacKey = env => crypto.subtle.importKey('raw', enc.encode(env.SESSION_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+const signSession = async (env, payload) => {
+    const body = b64url(enc.encode(JSON.stringify(payload)));
+    const sig = b64url(await crypto.subtle.sign('HMAC', await hmacKey(env), enc.encode(body)));
+    return `${body}.${sig}`;
+};
+const readSession = async (env, token) => {
+    if (typeof token !== 'string' || token.length > 4096 || !/^[\w-]+\.[\w-]+$/.test(token)) return null;
+    const [body, sig] = token.split('.');
+    try {
+        const ok = await crypto.subtle.verify('HMAC', await hmacKey(env), unb64url(sig), enc.encode(body));
+        if (!ok) return null;
+        const p = JSON.parse(new TextDecoder().decode(unb64url(body)));
+        return p?.v === 1 && Array.isArray(p.acc) && p.exp > Date.now() ? p : null;
+    } catch {
+        return null;
+    }
+};
+
+// ---------- Best-effort rate limiting (per Worker instance) ----------
+const buckets = new Map();
+const rateLimited = (key, limit, windowMs = 60000) => {
+    const now = Date.now();
+    const b = buckets.get(key);
+    if (!b || now - b.start > windowMs) {
+        buckets.set(key, { start: now, count: 1 });
+        if (buckets.size > 5000) buckets.clear();
+        return false;
+    }
+    b.count++;
+    return b.count > limit;
+};
+const clientIp = req => req.headers.get('cf-connecting-ip') || 'unknown';
+
+// ---------- Deriv identity (cached briefly, keyed by a hash of the token) ----------
 const derivAccounts = async (req, env) => {
     const auth = req.headers.get('authorization') || '';
-    if (!/^Bearer \S+$/.test(auth)) return null;
+    if (!/^Bearer [\w.~+/=-]{10,4096}$/.test(auth)) return null;
+    const cacheKey = new Request(`https://kapa-identity.internal/${await sha256(auth)}`);
+    const cache = typeof caches !== 'undefined' ? caches.default : null;
+    const hit = cache && (await cache.match(cacheKey));
+    if (hit) return hit.json();
     const res = await fetch(`${env.DERIV_API || 'https://api.derivws.com'}/trading/v1/options/accounts`, {
         headers: { authorization: auth, accept: 'application/json' },
     });
     if (!res.ok) return null;
     const body = await res.json().catch(() => ({}));
-    const ids = (Array.isArray(body?.data) ? body.data : []).map(a => String(a.account_id || '')).filter(Boolean);
-    return ids.length ? ids : null;
+    const ids = (Array.isArray(body?.data) ? body.data : []).map(a => String(a.account_id || '')).filter(id => ACCOUNT_ID.test(id));
+    if (!ids.length) return null;
+    if (cache) await cache.put(cacheKey, new Response(JSON.stringify(ids), { headers: { 'cache-control': 'max-age=120' } }));
+    return ids;
 };
 
+// ---------- Entitlements ----------
 const activeEntitlement = async (env, ids) => {
     let best = null;
     for (const id of ids) {
@@ -58,11 +129,16 @@ const activeEntitlement = async (env, ids) => {
     return best;
 };
 
-const grant = async (env, ids, days, source) => {
+/** Adds `days` of Premium. `ref` makes it idempotent: a payment already applied is never applied twice. */
+const grant = async (env, ids, days, source, ref) => {
+    if (ref) {
+        if (await env.KAPA_KV.get(`granted:${ref}`)) return activeEntitlement(env, ids);
+        await env.KAPA_KV.put(`granted:${ref}`, String(Date.now()));
+    }
     const current = await activeEntitlement(env, ids);
     const from = current ? current.expiresAt : Date.now(); // a renewal extends the current period
-    const ent = { plan: 'premium', expiresAt: from + days * DAY, grantedAt: Date.now(), source };
-    for (const id of ids) await env.KAPA_KV.put(`ent:${id}`, JSON.stringify({ ...ent, accounts: ids }));
+    const ent = { plan: 'premium', expiresAt: from + days * DAY, grantedAt: Date.now(), source, accounts: ids };
+    for (const id of ids) await env.KAPA_KV.put(`ent:${id}`, JSON.stringify(ent));
     return ent;
 };
 
@@ -75,7 +151,7 @@ const cinetpayCheck = async (env, transactionId) => {
     return res.json().catch(() => ({}));
 };
 
-/** Verifies a payment with CinetPay and grants Premium once. Safe to call repeatedly. */
+/** Verifies a payment with CinetPay and grants Premium once. Safe to call repeatedly and concurrently. */
 const settle = async (env, transactionId) => {
     const tx = await env.KAPA_KV.get(`tx:${transactionId}`, 'json');
     if (!tx) return { status: 'unknown' };
@@ -84,10 +160,12 @@ const settle = async (env, transactionId) => {
     const status = check?.data?.status;
     const paidAmount = Number(check?.data?.amount);
     if (check?.code === '00' && status === 'ACCEPTED' && paidAmount >= tx.amount && (!check?.data?.currency || check.data.currency === tx.currency)) {
-        const ent = await grant(env, tx.accounts, tx.days, `cinetpay:${transactionId}`);
-        Object.assign(tx, { status: 'paid', paidAt: Date.now(), method: check.data.payment_method || null, expiresAt: ent.expiresAt });
+        const ent = await grant(env, tx.accounts, tx.days, `cinetpay:${transactionId}`, transactionId);
+        Object.assign(tx, { status: 'paid', paidAt: Date.now(), method: String(check.data.payment_method || '').slice(0, 32) || null, expiresAt: ent?.expiresAt });
     } else if (status === 'REFUSED' || status === 'CANCELED') {
         Object.assign(tx, { status: 'failed', reason: status });
+    } else {
+        return tx; // still pending: nothing to write
     }
     await env.KAPA_KV.put(`tx:${transactionId}`, JSON.stringify(tx));
     return tx;
@@ -104,52 +182,136 @@ const listPrefix = async (env, prefix) => {
     return out;
 };
 
+const readJson = async req => {
+    const len = Number(req.headers.get('content-length') || 0);
+    if (len > MAX_BODY) return null;
+    const text = await req.text();
+    if (text.length > MAX_BODY) return null;
+    try {
+        return text ? JSON.parse(text) : {};
+    } catch {
+        return null;
+    }
+};
+
+// ---------- Deriv public WebSocket (prices and ticks need no login) ----------
+const openDerivSocket = async env => {
+    if (env.OPEN_SOCKET) return env.OPEN_SOCKET(); // test hook; never set in production
+    const res = await fetch(env.DERIV_PUBLIC_WS || 'https://api.derivws.com/trading/v1/options/ws/public', { headers: { Upgrade: 'websocket' } });
+    const ws = res.webSocket;
+    if (!ws) throw new Error('Deriv market data is unavailable');
+    ws.accept();
+    return ws;
+};
+
+/** Sends several requests over one socket and returns the answers in order (null for failures). */
+const derivBatch = async (env, requests, timeoutMs = 8000) => {
+    const ws = await openDerivSocket(env);
+    const results = new Array(requests.length).fill(null);
+    let pending = requests.length;
+    await new Promise(resolve => {
+        const timer = setTimeout(resolve, timeoutMs);
+        ws.addEventListener('message', ev => {
+            let msg;
+            try {
+                msg = JSON.parse(typeof ev.data === 'string' ? ev.data : new TextDecoder().decode(ev.data));
+            } catch {
+                return;
+            }
+            const i = Number(msg.req_id) - 1;
+            if (i >= 0 && i < results.length && results[i] === null) {
+                results[i] = msg.error ? { error: msg.error } : msg;
+                if (--pending === 0) {
+                    clearTimeout(timer);
+                    resolve();
+                }
+            }
+        });
+        requests.forEach((r, i) => ws.send(JSON.stringify({ ...r, req_id: i + 1 })));
+    });
+    try {
+        ws.close(1000, 'done');
+    } catch {
+        /* already closed */
+    }
+    return results;
+};
+
+const SCAN_SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100'];
+const PIP = { R_10: 3, R_25: 3, R_50: 4, R_75: 4, R_100: 2 };
+const quote = (sym, barrier, currency) => ({ proposal: 1, amount: 10, basis: 'stake', contract_type: 'DIGITOVER', currency, duration: 1, duration_unit: 't', underlying_symbol: sym, barrier: String(barrier) });
+const ratioOf = r => (r?.proposal ? (Number(r.proposal.payout) - Number(r.proposal.ask_price)) / Number(r.proposal.ask_price) : null);
+
+// ---------- Routes ----------
 const handle = async (req, env) => {
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
+    const ip = clientIp(req);
     const price = Number(env.PRICE_XOF || 0);
     const days = Number(env.PLAN_DAYS || 30);
     const currency = env.CURRENCY || 'XOF';
+    if (rateLimited(`all:${ip}`, 240)) return fail(429, 'Too many requests. Wait a minute and try again.');
+    let loaded;
+    const rules = () => (loaded ??= loadRules(env)); // only Premium routes need them; payments keep working if they're misconfigured
 
     if (req.method === 'GET' && path === '/plan') return json({ price, currency, days, configured: Boolean(env.CINETPAY_APIKEY && env.CINETPAY_SITE_ID && price > 0) });
 
-    // CinetPay calls this after each payment attempt; the body is not trusted, only the transaction id is used
+    // CinetPay calls this after each payment attempt; only the transaction id is used, then verified with CinetPay
     if (path === '/cinetpay/notify') {
-        if (req.method !== 'POST') return new Response('OK'); // CinetPay pings the URL with GET when it is registered
+        if (req.method !== 'POST') return new Response('OK');
         const form = await req.formData().catch(() => null);
-        const id = form?.get('cpm_trans_id');
-        if (id && /^kapa_[a-z0-9_]+$/i.test(String(id))) await settle(env, String(id));
+        const id = String(form?.get('cpm_trans_id') || '');
+        if (TX_ID.test(id) && !rateLimited(`notify:${id}`, 10)) await settle(env, id);
         return new Response('OK');
     }
 
+    // Where CinetPay sends the buyer back (GET or POST): settle, then return to the site
+    if (path === '/return') {
+        const id = url.searchParams.get('tx') || '';
+        const valid = TX_ID.test(id);
+        if (valid) await settle(env, id);
+        return new Response(null, { status: 303, headers: { location: `${env.SITE_URL}${valid ? `?premium_tx=${id}` : ''}#kapa_ai` } });
+    }
+
     if (path.startsWith('/admin/')) {
-        if (!timingSafeEqual(req.headers.get('x-admin-secret') || '', env.ADMIN_SECRET || '')) return json({ error: 'Wrong admin secret' }, 401);
+        if (rateLimited(`admin:${ip}`, 20)) return fail(429, 'Too many attempts. Wait a minute.');
+        const lockKey = `adminfail:${await sha256(ip)}`;
+        const fails = Number((await env.KAPA_KV.get(lockKey)) || 0);
+        if (fails >= 10) return fail(429, 'Too many wrong attempts. Try again in an hour.');
+        if (!(env.ADMIN_SECRET && env.ADMIN_SECRET.length >= 20 && (await safeEqual(req.headers.get('x-admin-secret') || '', env.ADMIN_SECRET)))) {
+            await env.KAPA_KV.put(lockKey, String(fails + 1), { expirationTtl: 3600 });
+            return fail(401, 'Wrong admin secret');
+        }
         if (req.method === 'GET' && path === '/admin/entitlements') return json({ entitlements: await listPrefix(env, 'ent:') });
         if (req.method === 'GET' && path === '/admin/payments') return json({ payments: await listPrefix(env, 'tx:') });
-        const body = await req.json().catch(() => ({}));
-        const id = String(body.account_id || '').trim();
-        if (!/^[A-Za-z0-9]{4,32}$/.test(id)) return json({ error: 'Enter a Deriv account ID, e.g. ROT90001' }, 400);
+        const body = await readJson(req);
+        const id = String(body?.account_id || '').trim();
+        if (!ACCOUNT_ID.test(id)) return fail(400, 'Enter a Deriv account ID, e.g. ROT90001');
         if (req.method === 'POST' && path === '/admin/grant') {
-            const d = Math.min(3650, Math.max(1, Number(body.days) || days));
+            const d = Math.min(3650, Math.max(1, Math.floor(Number(body.days) || days)));
             return json({ entitlement: await grant(env, [id], d, 'admin') });
         }
         if (req.method === 'POST' && path === '/admin/revoke') {
             await env.KAPA_KV.delete(`ent:${id}`);
             return json({ revoked: id });
         }
-        return json({ error: 'Not found' }, 404);
+        return fail(404, 'Not found');
     }
 
-    // Where CinetPay sends the customer back (GET or POST): settle, then go back to the site
-    if (path === '/return') {
-        const id = url.searchParams.get('tx') || '';
-        if (/^kapa_[a-z0-9_]+$/i.test(id)) await settle(env, id);
-        return new Response(null, { status: 303, headers: { location: `${env.SITE_URL}?premium_tx=${encodeURIComponent(id)}#kapa_ai` } });
+    // Session plan: free for everyone (it shows the risk before anyone pays), CPU-bounded
+    if (req.method === 'POST' && path === '/plan/simulate') {
+        if (rateLimited(`sim:${ip}`, 30)) return fail(429, 'Too many simulations. Wait a minute.');
+        const body = await readJson(req);
+        const v = validateSettings(body, rules().presets);
+        if (v.error) return fail(400, v.error);
+        const s = v.settings;
+        const capital = Number.isFinite(body.capital) && body.capital > 0 ? Math.min(body.capital, 1e8) : 1000;
+        return json(simulate(s, capital, cleanRatios(body.ratios)));
     }
 
     // Everything below needs a signed-in Deriv user
     const ids = await derivAccounts(req, env);
-    if (!ids) return json({ error: 'Log in with Deriv first' }, 401);
+    if (!ids) return fail(401, 'Log in with Deriv first');
 
     if (req.method === 'GET' && path === '/entitlement') {
         const e = await activeEntitlement(env, ids);
@@ -157,8 +319,9 @@ const handle = async (req, env) => {
     }
 
     if (req.method === 'POST' && path === '/checkout') {
-        if (!(env.CINETPAY_APIKEY && env.CINETPAY_SITE_ID && price > 0)) return json({ error: 'Payments are not set up yet' }, 503);
-        const transactionId = `kapa_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
+        if (!(env.CINETPAY_APIKEY && env.CINETPAY_SITE_ID && price > 0)) return fail(503, 'Payments are not set up yet');
+        if (rateLimited(`checkout:${ids[0]}`, 5, 10 * 60000)) return fail(429, 'Too many payment attempts. Wait a few minutes.');
+        const transactionId = `kapa_${Date.now().toString(36)}_${[...crypto.getRandomValues(new Uint8Array(5))].map(x => x.toString(16).padStart(2, '0')).join('')}`;
         const tx = { status: 'pending', accounts: ids, amount: price, currency, days, createdAt: Date.now() };
         await env.KAPA_KV.put(`tx:${transactionId}`, JSON.stringify(tx));
         const res = await fetch(`${CINETPAY}/payment`, {
@@ -175,41 +338,135 @@ const handle = async (req, env) => {
                 return_url: `${url.origin}/return?tx=${transactionId}`, // CinetPay may POST here; GitHub Pages can't accept POST
                 channels: 'ALL',
                 lang: 'FR',
-                metadata: ids[0],
             }),
         });
         const body = await res.json().catch(() => ({}));
-        if (body?.code !== '201' || !body?.data?.payment_url) {
-            await env.KAPA_KV.put(`tx:${transactionId}`, JSON.stringify({ ...tx, status: 'failed', reason: body?.message || 'init failed' }));
-            return json({ error: body?.description || body?.message || 'The payment could not be started' }, 502);
+        if (body?.code !== '201' || !body?.data?.payment_url || !/^https:\/\/[\w.-]*cinetpay\.com\//.test(body.data.payment_url)) {
+            await env.KAPA_KV.put(`tx:${transactionId}`, JSON.stringify({ ...tx, status: 'failed', reason: 'init failed' }));
+            return fail(502, 'The payment could not be started. Try again later.');
         }
         return json({ transaction_id: transactionId, payment_url: body.data.payment_url });
     }
 
     if (req.method === 'GET' && path === '/checkout/status') {
         const id = url.searchParams.get('tx') || '';
+        if (!TX_ID.test(id)) return fail(404, 'Payment not found');
         const tx = await env.KAPA_KV.get(`tx:${id}`, 'json');
-        if (!tx || !tx.accounts.some(a => ids.includes(a))) return json({ error: 'Payment not found' }, 404);
+        if (!tx || !tx.accounts.some(a => ids.includes(a))) return fail(404, 'Payment not found');
         const settled = await settle(env, id);
         return json({ status: settled.status, expiresAt: settled.expiresAt });
     }
 
-    return json({ error: 'Not found' }, 404);
+    // ----- Premium only from here -----
+    const ent = await activeEntitlement(env, ids);
+    if (!ent) return fail(402, 'This is part of KAPA AI Premium.');
+    if (rateLimited(`premium:${ids[0]}`, 120)) return fail(429, 'Too many requests. Wait a minute.');
+
+    if (req.method === 'POST' && path === '/session/start') {
+        if (!env.SESSION_KEY || env.SESSION_KEY.length < 32) return fail(503, 'Strategy sessions are not set up yet');
+        const body = await readJson(req);
+        const v = validateSettings(body, rules().presets);
+        if (v.error) return fail(400, v.error);
+        const s = v.settings;
+        const ratios = cleanRatios(body.ratios);
+        const st = freshState(s);
+        const decision = decide(s, st, ratios);
+        const token = await signSession(env, { v: 1, acc: ids, s, st, r: ratios, last: null, d: decision, exp: Date.now() + SESSION_TTL });
+        return json({ session: token, decision });
+    }
+
+    if (req.method === 'POST' && path === '/session/next') {
+        if (!env.SESSION_KEY) return fail(503, 'Strategy sessions are not set up yet');
+        const body = await readJson(req);
+        const p = await readSession(env, body?.session);
+        if (!p || !p.acc.some(a => ids.includes(a))) return fail(400, 'This strategy session has expired. Start KAPA AI again.');
+        const r = body.result || {};
+        const contractId = Number(r.contract_id);
+        const buy = Number(r.buy_price);
+        const profit = Number(r.profit);
+        if (!Number.isSafeInteger(contractId) || contractId <= 0) return fail(400, 'Invalid contract.');
+        if (p.last === contractId) return json({ session: body.session, decision: p.d }); // the same result sent twice
+        if (!(buy >= 0.35 && buy <= p.s.maxStake * 1.01 + 0.01) || !(profit >= -buy - 0.01 && profit <= buy * 20)) return fail(400, 'Invalid contract result.');
+        const ratios = { ...p.r, ...Object.fromEntries(Object.entries(cleanRatios(body.ratios)).filter(([, x]) => x !== null)) };
+        const st = applyResult(p.s, p.st, { buy_price: buy, profit });
+        const decision = decide(p.s, st, ratios);
+        const token = await signSession(env, { ...p, st, r: ratios, last: contractId, d: decision });
+        return json({ session: token, decision, state: { pl: st.pl, runs: st.runs, streak: st.streak } });
+    }
+
+    if (req.method === 'POST' && path === '/scan') {
+        if (rateLimited(`scan:${ids[0]}`, 10)) return fail(429, 'Too many scans. Wait a minute.');
+        const body = await readJson(req);
+        const { presets } = rules();
+        const preset = Object.hasOwn(presets, body?.preset) ? body.preset : 'martingale';
+        const r0 = presets[preset];
+        const cur = /^[A-Z]{3}$/.test(body?.currency || '') ? body.currency : 'USD';
+        const symbols = Array.isArray(body?.symbols) ? body.symbols.filter(sym => SCAN_SYMBOLS.includes(sym)).slice(0, 5) : SCAN_SYMBOLS;
+        const reqs = [];
+        symbols.forEach(sym => {
+            reqs.push({ ticks_history: sym, count: 100, end: 'latest', style: 'ticks' });
+            reqs.push(quote(sym, r0.barrier, cur));
+            if (r0.recMode !== 'none') reqs.push(quote(sym, r0.recovery, cur));
+        });
+        let res;
+        try {
+            res = await derivBatch(env, reqs);
+        } catch {
+            return fail(503, 'Deriv market data is unavailable. Try again shortly.');
+        }
+        const per = r0.recMode !== 'none' ? 3 : 2;
+        const rows = symbols
+            .map((sym, i) => {
+                const [hist, base, rec] = res.slice(i * per, i * per + per);
+                const r = ratioOf(base);
+                if (r === null) return null;
+                const pip = hist?.pip_size ?? PIP[sym] ?? 2;
+                const digits = (hist?.history?.prices || []).map(x => {
+                    const t = Number(x).toFixed(pip);
+                    return +t[t.length - 1];
+                });
+                const p = winProb(r0.barrier);
+                return {
+                    symbol: sym,
+                    barrier: r0.barrier,
+                    recovery: r0.recMode !== 'none' ? r0.recovery : null,
+                    win_chance: p,
+                    payout: r,
+                    recovery_payout: per === 3 ? ratioOf(rec) : null,
+                    expected: p * (1 + r) - 1,
+                    recent: digits.length ? digits.filter(d => d > r0.barrier).length / digits.length : null,
+                    recent_ticks: digits.length,
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.expected - a.expected);
+        return json({ preset, rows });
+    }
+
+    const bot = path.match(/^\/bots\/([a-z0-9-]{1,40})$/);
+    if (req.method === 'GET' && bot) {
+        const { bots } = rules();
+        const data = Object.hasOwn(bots, bot[1]) ? bots[bot[1]] : null;
+        return data ? json({ id: bot[1], data }) : fail(404, 'Bot not found');
+    }
+
+    return fail(404, 'Not found');
 };
 
 export default {
     async fetch(req, env) {
         const cors = corsHeaders(req, env);
-        if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...cors, ...SECURITY_HEADERS } });
         let res;
         try {
             res = await handle(req, env);
-        } catch (e) {
-            res = json({ error: 'Server error' }, 500);
+        } catch {
+            res = fail(500, 'Server error');
         }
         const out = new Response(res.body, res);
-        Object.entries(cors).forEach(([k, v]) => out.headers.set(k, v));
-        out.headers.set('cache-control', 'no-store');
+        Object.entries({ ...SECURITY_HEADERS, ...cors }).forEach(([k, v]) => out.headers.set(k, v));
         return out;
     },
 };
+
+export { estRatio }; // re-exported for tests

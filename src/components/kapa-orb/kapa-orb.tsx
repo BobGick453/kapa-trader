@@ -1,30 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
-import { api_base } from '@/external/bot-skeleton';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
-import { MARKETS, PIP_SIZES, PRESETS, RatioCache, recoveryBarrier, TApi, TPresetKey, winProb } from '@/pages/kapa-ai/engine';
-import { premiumEnabled } from '@/pages/premium/premium-api';
+import { MARKETS, PREMIUM_PRESETS, SCAN_MARKETS, STRATEGIES, TPresetKey } from '@/pages/kapa-ai/engine';
+import { refreshEntitlement, scanMarkets, TScanRow } from '@/pages/premium/premium-api';
 import { openPremium, usePremium } from '@/pages/premium/use-premium';
 import './kapa-orb.scss';
-
-const SCAN_MARKETS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100'];
-const api: TApi = {
-    send: req => (api_base.api as any).send(req),
-    onMessage: () => (api_base.api as any).onMessage(),
-};
-const ratios = new RatioCache();
-
-type TRow = { sym: string; p: number; ret: number; ev: number; recent: number | null; n: number; recRet: number | null };
 
 /** Floating "AI" orb with the live connection state; opens the KAPA Live Scanner. A risk-warning button sits on the left. */
 const KapaOrb = observer(() => {
     const { client } = useStore();
     const { connectionStatus } = useApiBase();
     const premium = usePremium();
-    const isPremium = !premiumEnabled() || premium.status === 'active';
+    const isPremium = premium.status === 'active';
     const [wasOpen, setWasOpen] = useState(false);
     const [open, setOpen] = useState(false);
     const [risk, setRisk] = useState(false);
@@ -33,7 +23,8 @@ const KapaOrb = observer(() => {
     const [all, setAll] = useState(true);
     const [single, setSingle] = useState('R_100');
     const [busy, setBusy] = useState(false);
-    const [rows, setRows] = useState<TRow[] | null>(null);
+    const [rows, setRows] = useState<TScanRow[] | null>(null);
+    const [scanned, setScanned] = useState<TPresetKey>('martingale');
     const [error, setError] = useState('');
 
     if (connectionStatus === CONNECTION_STATUS.OPENED && !wasOpen) setWasOpen(true);
@@ -46,68 +37,39 @@ const KapaOrb = observer(() => {
                 ? 'reconnecting'
                 : 'offline';
     const live = state === 'live';
-    const p = PRESETS[preset];
-    const recB = recoveryBarrier(p);
     const currency = (client.is_logged_in && client.currency) || 'USD';
-
-    const description = useMemo(
-        () =>
-            `Scan active synthetic indices for one qualified Over ${p.barrier} market. ${
-                p.recMode === 'none' ? 'The strategy keeps a fixed stake.' : `The loaded strategy switches to Over ${recB} recovery after a loss.`
-            }`,
-        [p, recB]
-    );
+    const description =
+        'Scans active synthetic indices with the selected strategy and ranks them by Deriv’s live payout. The scan runs on the KAPA AI server.';
 
     const scan = async () => {
         if (!isPremium) {
             setOpen(false);
             return openPremium();
         }
-        if (!live || !api_base.api) return setError('Market data is offline. Wait for the LIVE badge, then scan again.');
         if (!(stake >= 0.35)) return setError('Minimum stake is 0.35.');
         setError('');
         setBusy(true);
         setRows(null);
-        const out: TRow[] = [];
-        await Promise.all(
-            (all ? SCAN_MARKETS : [single]).map(async sym => {
-                try {
-                    const r = await ratios.get(api, currency, sym, 'DIGITOVER', p.barrier, 1);
-                    const rr = p.recMode !== 'none' ? await ratios.get(api, currency, sym, 'DIGITOVER', recB, 1) : null;
-                    let digits: number[] = [];
-                    try {
-                        const h = await api.send({ ticks_history: sym, count: 100, end: 'latest', style: 'ticks' });
-                        const pip = h?.pip_size ?? PIP_SIZES[sym] ?? 2;
-                        digits = (h?.history?.prices || []).map((x: number) => {
-                            const t = Number(x).toFixed(pip);
-                            return +t[t.length - 1];
-                        });
-                    } catch {
-                        /* recent frequency is optional */
-                    }
-                    const prob = winProb('DIGITOVER', p.barrier);
-                    out.push({
-                        sym,
-                        p: prob,
-                        ret: r,
-                        ev: prob * (1 + r) - 1,
-                        recent: digits.length ? digits.filter(d => d > p.barrier).length / digits.length : null,
-                        n: digits.length,
-                        recRet: rr,
-                    });
-                } catch {
-                    /* skip markets Deriv didn't price */
-                }
-            })
-        );
-        out.sort((a, b) => b.ev - a.ev);
-        setRows(out);
-        setBusy(false);
-        if (!out.length) setError('Deriv returned no prices. Try again in a moment.');
+        try {
+            const res = await scanMarkets(preset, currency, all ? undefined : [single]);
+            setRows(res.rows);
+            setScanned(preset);
+            if (!res.rows.length) setError('Deriv returned no prices. Try again in a moment.');
+        } catch (e: any) {
+            setError(e?.message ?? 'The scan failed. Try again.');
+            if (e?.status === 402) refreshEntitlement();
+        } finally {
+            setBusy(false);
+        }
     };
 
-    const sendToKapa = (sym: string) => {
-        const detail = { symbol: sym, preset, stake };
+    const sendToKapa = (r: TScanRow) => {
+        const detail = {
+            symbol: r.symbol,
+            preset: scanned,
+            stake,
+            ratios: { base: r.payout, ...(r.recovery_payout != null ? { rec: r.recovery_payout } : {}) },
+        };
         try {
             sessionStorage.setItem('kapa_pending_market', JSON.stringify(detail)); // picked up when KAPA AI mounts
         } catch {
@@ -119,12 +81,25 @@ const KapaOrb = observer(() => {
 
     return (
         <>
-            <button type='button' className={classNames('kapa-fab-orb', `kapa-fab-orb--${state}`)} onClick={() => setOpen(true)} aria-label={`KAPA Live Scanner, ${state}`}>
+            <button
+                type='button'
+                className={classNames('kapa-fab-orb', `kapa-fab-orb--${state}`)}
+                onClick={() => setOpen(true)}
+                aria-label={`KAPA Live Scanner, ${state}`}
+            >
                 AI
                 <span className='kapa-fab-orb__badge'>{state.toUpperCase()}</span>
             </button>
             <button type='button' className='kapa-fab-risk' onClick={() => setRisk(true)} aria-label='Risk warning'>
-                <svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' strokeWidth='2' aria-hidden>
+                <svg
+                    viewBox='0 0 24 24'
+                    width='22'
+                    height='22'
+                    fill='none'
+                    stroke='currentColor'
+                    strokeWidth='2'
+                    aria-hidden
+                >
                     <path d='M12 3l10 18H2z' />
                     <path d='M12 10v5M12 18h.01' />
                 </svg>
@@ -135,7 +110,12 @@ const KapaOrb = observer(() => {
                     <div className='kapa-scan__head'>
                         <span className='kapa-scan__logo'>KA</span>
                         <b>KAPA LIVE SCANNER</b>
-                        <button type='button' className='kapa-scan__x' onClick={() => setOpen(false)} aria-label='Close'>
+                        <button
+                            type='button'
+                            className='kapa-scan__x'
+                            onClick={() => setOpen(false)}
+                            aria-label='Close'
+                        >
                             ✕
                         </button>
                     </div>
@@ -144,16 +124,22 @@ const KapaOrb = observer(() => {
                             <label>
                                 <span>Scanner strategy</span>
                                 <select value={preset} onChange={e => setPreset(e.target.value as TPresetKey)}>
-                                    {(Object.keys(PRESETS) as TPresetKey[]).map(k => (
+                                    {PREMIUM_PRESETS.map(k => (
                                         <option key={k} value={k}>
-                                            {PRESETS[k].label}
+                                            {STRATEGIES[k].label}
                                         </option>
                                     ))}
                                 </select>
                             </label>
                             <label>
                                 <span>Initial stake</span>
-                                <input type='number' min={0.35} step={0.01} value={stake} onChange={e => setStake(+e.target.value)} />
+                                <input
+                                    type='number'
+                                    min={0.35}
+                                    step={0.01}
+                                    value={stake}
+                                    onChange={e => setStake(+e.target.value)}
+                                />
                             </label>
                             <label>
                                 <span>Duration</span>
@@ -193,30 +179,36 @@ const KapaOrb = observer(() => {
                             )}
                             {busy && <h4>Scanning live markets…</h4>}
                             {rows?.map((r, i) => (
-                                <div key={r.sym} className={classNames('kapa-scan__row', { best: i === 0 })}>
+                                <div key={r.symbol} className={classNames('kapa-scan__row', { best: i === 0 })}>
                                     <div className='kapa-scan__row-head'>
-                                        <b>{MARKETS[r.sym]}</b>
+                                        <b>{MARKETS[r.symbol]}</b>
                                         {i === 0 && <span>BEST PRICE</span>}
                                     </div>
                                     <div className='kapa-scan__grid'>
                                         <div>
                                             <small>Win chance</small>
-                                            <b>{(r.p * 100).toFixed(0)}%</b>
+                                            <b>{(r.win_chance * 100).toFixed(0)}%</b>
                                         </div>
                                         <div>
                                             <small>Payout</small>
-                                            <b>+{(r.ret * 100).toFixed(1)}%</b>
+                                            <b>+{(r.payout * 100).toFixed(1)}%</b>
                                         </div>
                                         <div>
                                             <small>Avg. per trade</small>
-                                            <b className={r.ev >= 0 ? 'up' : 'down'}>{(r.ev * 100).toFixed(1)}%</b>
+                                            <b className={r.expected >= 0 ? 'up' : 'down'}>
+                                                {(r.expected * 100).toFixed(1)}%
+                                            </b>
                                         </div>
                                     </div>
                                     <p>
-                                        {r.recRet != null && `Recovery Over ${recB} pays +${(r.recRet * 100).toFixed(0)}%. `}
-                                        {r.recent != null && `Last ${r.n} ticks: Over ${p.barrier} came up ${(r.recent * 100).toFixed(0)}% of the time.`}
+                                        Over {r.barrier}.{' '}
+                                        {r.recovery != null &&
+                                            r.recovery_payout != null &&
+                                            `Recovery Over ${r.recovery} pays +${(r.recovery_payout * 100).toFixed(0)}%. `}
+                                        {r.recent != null &&
+                                            `Last ${r.recent_ticks} ticks: Over ${r.barrier} came up ${(r.recent * 100).toFixed(0)}% of the time.`}
                                     </p>
-                                    <button type='button' onClick={() => sendToKapa(r.sym)}>
+                                    <button type='button' onClick={() => sendToKapa(r)}>
                                         Use in KAPA AI
                                     </button>
                                 </div>
@@ -224,7 +216,8 @@ const KapaOrb = observer(() => {
                             {error && <p className='kapa-scan__error'>{error}</p>}
                         </section>
                         <p className='kapa-scan__note'>
-                            Win chance is the true probability of the contract. Recent frequency describes the latest ticks only and doesn&apos;t predict the next one. This scanner never places trades.
+                            Win chance is the true probability of the contract. Recent frequency describes the latest
+                            ticks only and doesn&apos;t predict the next one. This scanner never places trades.
                         </p>
                     </div>
                     <div className='kapa-scan__foot'>
@@ -239,7 +232,13 @@ const KapaOrb = observer(() => {
             )}
 
             {risk && (
-                <div className='kapa-risk' role='dialog' aria-modal aria-label='Risk warning' onClick={() => setRisk(false)}>
+                <div
+                    className='kapa-risk'
+                    role='dialog'
+                    aria-modal
+                    aria-label='Risk warning'
+                    onClick={() => setRisk(false)}
+                >
                     <div className='kapa-risk__box' onClick={e => e.stopPropagation()}>
                         <div className='kapa-risk__head'>
                             <span aria-hidden>⚠</span>
@@ -249,11 +248,17 @@ const KapaOrb = observer(() => {
                             </button>
                         </div>
                         <p>
-                            Deriv offers complex derivatives, such as options and contracts for difference (&quot;CFDs&quot;). These products may not be suitable for all clients, and trading them puts you at risk. Please make
-                            sure that you understand the following risks before trading Deriv products: a) you may lose some or all of the money you invest in the trade, b) if your trade involves currency conversion,
-                            exchange rates will affect your profit and loss. You should never trade with borrowed money or with money that you cannot afford to lose.
+                            Deriv offers complex derivatives, such as options and contracts for difference
+                            (&quot;CFDs&quot;). These products may not be suitable for all clients, and trading them
+                            puts you at risk. Please make sure that you understand the following risks before trading
+                            Deriv products: a) you may lose some or all of the money you invest in the trade, b) if your
+                            trade involves currency conversion, exchange rates will affect your profit and loss. You
+                            should never trade with borrowed money or with money that you cannot afford to lose.
                         </p>
-                        <p>Synthetic indices are random. No bot, scanner or strategy can predict the next tick, and every contract pays less than its true odds.</p>
+                        <p>
+                            Synthetic indices are random. No bot, scanner or strategy can predict the next tick, and
+                            every contract pays less than its true odds.
+                        </p>
                         <button type='button' className='kapa-risk__close' onClick={() => setRisk(false)}>
                             Close
                         </button>

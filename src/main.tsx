@@ -14,4 +14,14 @@ performVersionCheck();
 
 // Removed AnalyticsInitializer() call - analytics dependency removed
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<AuthWrapper />);
+// Never run inside another website's frame (clickjacking). GitHub Pages can't send a frame-ancestors header,
+// so the page checks for itself and refuses to render when framed.
+if (window.top !== window.self) {
+    try {
+        window.top!.location.replace(window.location.href);
+    } catch {
+        /* a sandboxed frame can't be escaped; the page simply stays empty */
+    }
+} else {
+    ReactDOM.createRoot(document.getElementById('root')!).render(<AuthWrapper />);
+}
