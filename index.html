@@ -309,13 +309,15 @@
         <div class="fld"><label for="clientId">Deriv OAuth client ID</label><input class="inp sm" id="clientId" autocomplete="off" placeholder="From your app on developers.deriv.com"></div>
         <div class="fld"><label for="appId">Legacy App ID (accounts on Deriv's older platform)</label><input class="inp sm" id="appId" inputmode="numeric" placeholder="e.g. 12345">
           <div class="hint">Deriv sends older accounts to this app instead. Without it, Deriv may leave you on its own dashboard after login. Register it at api.deriv.com with the same redirect URL.</div></div>
-        <div class="fld"><label for="redirectUri">Redirect URL to register with Deriv</label>
-          <div class="row"><input class="inp sm" id="redirectUri" readonly style="flex:1;min-width:0"><button class="btn line" id="copyRedirect" type="button">Copy</button></div></div>
+        <div class="fld"><label for="redirectUri">Redirect URL (must match your app on developers.deriv.com exactly)</label>
+          <div class="row"><input class="inp sm" id="redirectUri" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="btn line" id="copyRedirect" type="button">Copy</button></div>
+          <div class="hint">If your app has a different redirect URL registered, type it here exactly as Deriv shows it. It must still open this bot.</div></div>
         <div class="grid2">
           <div class="fld"><label for="oauthScope">Scopes</label><input class="inp sm" id="oauthScope" placeholder="trade"></div>
           <div class="fld"><label for="tokenProxy">Token exchange URL</label><input class="inp sm" id="tokenProxy" placeholder="Deriv's token endpoint"></div>
         </div>
         <label class="check"><input type="checkbox" id="autoLink" checked> Link automatically when the page opens</label>
+        <div class="alert warn" id="loginSummary" style="white-space:pre-line;font-size:13px"></div>
       </details>
 
       <details class="more">
@@ -811,13 +813,20 @@
   const DEFAULT_CLIENT_ID = '019e2b5f-1453-7ae6-a6c4-0f71c4bbe71e'; // Kapa Trader's OAuth app on developers.deriv.com
   const V2 = Object.assign({ auth: 'https://auth.deriv.com/oauth2/auth', token: 'https://auth.deriv.com/oauth2/token', api: 'https://api.derivws.com' },
     (() => { try { return JSON.parse(store.get('dt_v2_override') || '{}'); } catch { return {}; } })()); // override is for local testing only
-  const redirectUri = () => location.origin + location.pathname.replace(/index\.html$/, '');
+  const defaultRedirect = () => location.origin + location.pathname.replace(/index\.html$/, '');
+  const redirectUri = () => ($('redirectUri').value.trim() || defaultRedirect());
   const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const randomStr = (n = 48) => b64url(crypto.getRandomValues(new Uint8Array(n)));
   const clientId = () => ($('clientId').value || DEFAULT_CLIENT_ID).trim();
   const DEFAULT_LEGACY_APP_ID = '';
   const legacyAppId = () => ($('appId').value || DEFAULT_LEGACY_APP_ID).trim();
   const wsAppId = () => legacyAppId() || '1089'; // 1089 = Deriv's public test app, enough for API-token connections
+  // Only a real legacy app of yours may be sent with the new login: a stray ID makes Deriv route you elsewhere
+  const routingAppId = () => (/^\d{3,}$/.test(legacyAppId()) && legacyAppId() !== '1089' ? legacyAppId() : '');
+  function renderLoginSummary() {
+    const app = routingAppId();
+    $('loginSummary').textContent = `The bot sends Deriv:\nclient_id: ${clientId() || '(missing)'}\nredirect_uri: ${redirectUri()}\nscope: ${$('oauthScope').value.trim() || 'trade'}\napp_id: ${app || 'none'}\n\nThe client ID and redirect URL must match your app on developers.deriv.com exactly, including the final "/".`;
+  }
 
   function v2Tokens() { try { return JSON.parse(store.get('dt_v2') || 'null'); } catch { return null; } }
   function saveV2Tokens(t) { store.del('dt_v2'); store.set('dt_v2', JSON.stringify(t), store.get('dt_remember') !== '0'); }
@@ -829,13 +838,14 @@
     store.set('dt_client_id', id, true); store.set('dt_scope', $('oauthScope').value.trim(), true); store.set('dt_token_proxy', $('tokenProxy').value.trim(), true);
     store.set('dt_remember', $('remember').checked ? '1' : '0', true);
     store.set('dt_appid', $('appId').value.trim(), true);
+    store.set('dt_redirect', $('redirectUri').value.trim() === defaultRedirect() ? '' : $('redirectUri').value.trim(), true);
     const verifier = randomStr(48), state = randomStr(16);
     const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     try { sessionStorage.setItem('dt_pkce', JSON.stringify({ verifier, state })); } catch {}
     const p = new URLSearchParams({ response_type: 'code', client_id: id, redirect_uri: redirectUri(), code_challenge: challenge, code_challenge_method: 'S256', state });
     p.set('scope', $('oauthScope').value.trim() || 'trade'); // Deriv rejects scopes the app isn't registered for; trade is the minimum
     p.set('lang', (navigator.language || 'en').slice(0, 2).toUpperCase()); // Deriv's login page in the visitor's language
-    if (legacyAppId()) p.set('app_id', legacyAppId()); // lets Deriv route older-platform accounts back here
+    if (routingAppId()) p.set('app_id', routingAppId()); // lets Deriv route older-platform accounts back here
     store.set('dt_login_started', String(Date.now()), true); // lets the next page load notice if Deriv never sent us back
     showLinking('Opening Deriv…');
     location.href = `${V2.auth}?${p}`;
@@ -1272,7 +1282,9 @@
   $('clientId').value = DEFAULT_CLIENT_ID || store.get('dt_client_id') || ''; // the built-in ID wins over anything typed on an older version
   $('oauthScope').value = store.get('dt_scope') || '';
   $('tokenProxy').value = store.get('dt_token_proxy') || '';
-  $('redirectUri').value = redirectUri();
+  $('redirectUri').value = store.get('dt_redirect') || defaultRedirect();
+  ['clientId', 'redirectUri', 'appId', 'oauthScope'].forEach((id) => $(id).addEventListener('input', renderLoginSummary));
+  renderLoginSummary();
   $('autoLink').checked = store.get('dt_autolink') !== '0';
   $('remember').checked = store.get('dt_remember') !== '0';
   if (!clientId()) $('v2Setup').open = true;
@@ -1303,9 +1315,7 @@
   } else if (loginStarted && Date.now() - loginStarted < 30 * 60 * 1000) {
     // A login was started but Deriv never sent the browser back here (for example it showed its own dashboard or a 404).
     blockAutoLink(); $('v2Setup').open = true;
-    showConnectErr(legacyAppId()
-      ? 'Deriv didn\'t send you back to the bot after login. Check that the redirect URL below is registered exactly, in both your developers.deriv.com app and your legacy app on api.deriv.com.'
-      : 'Deriv didn\'t send you back to the bot after login. This happens when your Deriv account is on Deriv\'s older platform: add your Legacy App ID below, then tap Log in with Deriv again.');
+    showConnectErr('Deriv didn\'t send you back to the bot after login. Most often the redirect URL registered on developers.deriv.com doesn\'t exactly match the one below (check the final "/"). If they match, your Deriv account may be on Deriv\'s older platform: add your Legacy App ID below.');
   } else if (v2Tokens()) {
     showLinking('Connecting to your Deriv account…');
     startV2Session();
