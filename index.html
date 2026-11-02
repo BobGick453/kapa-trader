@@ -808,7 +808,7 @@
   // ---------- Deriv OAuth 2.0 (new API platform) ----------
   // Authorization code + PKCE at auth.deriv.com, account list and a one-time
   // WebSocket password from api.derivws.com. No password or token is ever typed in.
-  const DEFAULT_CLIENT_ID = '';
+  const DEFAULT_CLIENT_ID = '019e2b5f-1453-7ae6-a6c4-0f71c4bbe71e'; // Kapa Trader's OAuth app on developers.deriv.com
   const V2 = Object.assign({ auth: 'https://auth.deriv.com/oauth2/auth', token: 'https://auth.deriv.com/oauth2/token', api: 'https://api.derivws.com' },
     (() => { try { return JSON.parse(store.get('dt_v2_override') || '{}'); } catch { return {}; } })()); // override is for local testing only
   const redirectUri = () => location.origin + location.pathname.replace(/index\.html$/, '');
@@ -1269,7 +1269,7 @@
   const savedApp = store.get('dt_appid'); if (savedApp) $('appId').value = savedApp;
   const savedServer = store.get('dt_server'); if (savedServer) $('server').value = savedServer;
 
-  $('clientId').value = store.get('dt_client_id') || DEFAULT_CLIENT_ID;
+  $('clientId').value = DEFAULT_CLIENT_ID || store.get('dt_client_id') || ''; // the built-in ID wins over anything typed on an older version
   $('oauthScope').value = store.get('dt_scope') || '';
   $('tokenProxy').value = store.get('dt_token_proxy') || '';
   $('redirectUri').value = redirectUri();
