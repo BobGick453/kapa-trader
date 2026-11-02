@@ -1484,8 +1484,11 @@
   let saved = {}; try { saved = JSON.parse(store.get('dt_settings') || '{}'); } catch {}
   restoreSettings(saved);
   syncPreset(); schedulePlan();
-  const splash = $('splash'), hideSplash = () => { splash.classList.add('out'); setTimeout(() => splash.remove(), 600); };
-  splash.onclick = hideSplash; setTimeout(hideSplash, 1600);
+  const splash = $('splash');
+  const splashGone = new Promise((resolve) => {
+    const hide = () => { if (!splash.isConnected || splash.classList.contains('out')) return; splash.classList.add('out'); setTimeout(() => { splash.remove(); resolve(); }, 500); };
+    splash.onclick = hide; setTimeout(hide, 1600);
+  });
   renderStats(); renderTx(); renderSummary(); renderAccount(); setRunButton(false);
   $('navwrap').classList.add('hidden');
   go('connect');
@@ -1539,8 +1542,9 @@
     else if (clientId() && $('autoLink').checked && !noAutoLink && store.get('dt_linked') === '1') {
       // This device has linked before and the login lapsed: re-link automatically, with a moment to cancel.
       blockAutoLink(); // at most once per tab, so a failed login can never loop
-      const t = setTimeout(beginV2Login, 1500);
-      showLinking('Reconnecting to Deriv…', () => clearTimeout(t));
+      let t = null, cancelled = false;
+      showLinking('Reconnecting to Deriv…', () => { cancelled = true; clearTimeout(t); });
+      splashGone.then(() => { if (!cancelled) t = setTimeout(beginV2Login, 2000); }); // leave time to see and tap Cancel
     }
   }
 
