@@ -26,7 +26,11 @@ Tap **Log in with Deriv**. The app uses Deriv's OAuth 2.0 login with the App ID 
 
 ## Premium
 
-Premium unlocks the recovery strategies, the scanner, advanced settings and the Premium bots. The session plan stays free. These tools run on a small server you run on Cloudflare: the website only receives the next trade, so editing the page can't unlock them. Payments go through **CinetPay** (mobile money and cards). The server's source and setup guide are in `server/` on the `platform-source` branch. Until that server's address is added to the build, only the free tools work.
+Premium unlocks the recovery strategies, the scanner, advanced settings and the Premium bots. The session plan stays free.
+
+It opens with a **secret code**. The owner chooses the code in the Admin tab, uses it on their own devices, and sends it to customers once they have paid. Payments go through **CinetPay** (mobile money and cards). The owner can change the code at any time; every device then needs the new one.
+
+The code is checked by a small server on Cloudflare, never by the page itself. The Premium tools also run on that server, so editing the page can't unlock them. The server's source and setup guide are in `server/` on the `platform-source` branch. Until its address is added to the build, only the free tools work.
 
 ## KAPA AI
 
