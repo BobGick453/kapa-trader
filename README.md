@@ -19,6 +19,19 @@ Tap **Log in with Deriv**. The app uses Deriv's OAuth 2.0 login with the App ID 
 
 The classic bot at `/kapa-trader/classic/` returns to its own address after login. To use its "Log in with Deriv" button, add `https://bobgick453.github.io/kapa-trader/classic/` as a second redirect URL on developers.deriv.com.
 
+## Screens, as in the reference bot
+
+- Splash screen, then pill tabs: **Admin · KAPA AI · Dashboard · Bot Builder · Free Bot · Charts · Tutorials**
+- **Dashboard**: WhatsApp and Telegram icons (links go in `brand.config.json` → `platform.social`), and cards for My computer, Google Drive, Quick strategy, Speed Bot (coming soon) and Bot Builder
+- **AI orb on every page**: shows LIVE, CONNECTING, RECONNECTING or OFFLINE, and opens the **KAPA Live Scanner**. It shows true win chances and Deriv's live payouts, and never places trades
+- **⚠ button**: risk warning
+- **Free Bot**: a library of Kapa bots that load into Bot Builder
+- **Admin**: Premium members and payments
+
+## Premium
+
+Premium unlocks the recovery strategies, the scanner, advanced settings and the Premium bots. The session plan stays free. Payments go through **CinetPay** (mobile money and cards) to a small server you run on Cloudflare. Its source and setup guide are in `server/` on the `platform-source` branch. Until that server's address is added to the build, Premium is off and everything is open.
+
 ## KAPA AI
 
 - **Strategies**:
