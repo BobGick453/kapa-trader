@@ -127,7 +127,8 @@ const rateLimited = (key, limit, windowMs = 60000) => {
     b.count++;
     return b.count > limit;
 };
-const clientIp = req => req.headers.get('cf-connecting-ip') || 'unknown';
+// The visitor's address as set by the host (Cloudflare or Netlify); never taken from headers a visitor can forge
+const clientIp = req => req.headers.get('cf-connecting-ip') || req.headers.get('x-nf-client-connection-ip') || 'unknown';
 
 // ---------- Deriv identity (cached briefly, keyed by a hash of the token) ----------
 const derivAccounts = async (req, env) => {
@@ -258,9 +259,19 @@ const readJson = async req => {
 // ---------- Deriv public WebSocket (prices and ticks need no login) ----------
 const openDerivSocket = async env => {
     if (env.OPEN_SOCKET) return env.OPEN_SOCKET(); // test hook; never set in production
-    const res = await fetch(env.DERIV_PUBLIC_WS || 'https://api.derivws.com/trading/v1/options/ws/public', {
-        headers: { Upgrade: 'websocket' },
-    });
+    const url = env.DERIV_PUBLIC_WS || 'https://api.derivws.com/trading/v1/options/ws/public';
+    if (typeof WebSocketPair === 'undefined' && typeof WebSocket !== 'undefined') {
+        // Node (Netlify): a standard WebSocket client
+        const ws = new WebSocket(url.replace(/^http/, 'ws'));
+        await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Deriv market data is unavailable')), 6000);
+            ws.addEventListener('open', () => (clearTimeout(timer), resolve()));
+            ws.addEventListener('error', () => (clearTimeout(timer), reject(new Error('Deriv market data is unavailable'))));
+        });
+        return ws;
+    }
+    // Cloudflare Workers
+    const res = await fetch(url, { headers: { Upgrade: 'websocket' } });
     const ws = res.webSocket;
     if (!ws) throw new Error('Deriv market data is unavailable');
     ws.accept();

@@ -1,5 +1,7 @@
 # Serveur Premium de Kapa Trader
 
+> **Hébergement recommandé : Netlify.** Le serveur tourne sur Netlify sans aucun code à copier. Netlify importe le dépôt `kapa-trader` (branche `main`), qui contient `netlify.toml`, la fonction `premium-server/netlify/functions/kapa.mjs` (copie de `server/netlify/kapa.mjs`) et le serveur en un fichier (`node server/bundle.mjs`). Le guide pas à pas est dans `premium-server/GUIDE-NETLIFY.md` sur `main`. Sur Netlify, le stockage est Netlify Blobs et `SESSION_KEY` est créée automatiquement : seules les variables `ADMIN_SECRET` et `PREMIUM_CODE` sont à saisir. La suite de ce document décrit l'hébergement Cloudflare, qui reste possible.
+
 Ce petit serveur (un *Cloudflare Worker*, gratuit jusqu'à 100 000 requêtes par jour) gère le Premium :
 
 - il vérifie auprès de Deriv à quel compte appartient chaque visiteur connecté ;
