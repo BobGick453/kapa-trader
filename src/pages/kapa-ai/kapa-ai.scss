@@ -1387,3 +1387,163 @@
         color: #ffb3bb;
     }
 }
+
+// ============================================================================
+// Kapa robot artwork and animations (activation and result dialogs)
+// ============================================================================
+@keyframes kapa-pop {
+    from {
+        opacity: 0;
+        transform: translateY(1.6rem) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes kapa-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-0.8rem);
+    }
+}
+
+@keyframes kapa-scan {
+    from {
+        transform: translateY(-100%);
+    }
+
+    to {
+        transform: translateY(100%);
+    }
+}
+
+@keyframes kapa-glow {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 1px rgb(57 198 255 / 25%),
+            0 0 2.4rem rgb(37 99 235 / 25%);
+    }
+
+    50% {
+        box-shadow:
+            0 0 0 1px rgb(57 198 255 / 55%),
+            0 0 4rem rgb(57 198 255 / 45%);
+    }
+}
+
+@keyframes kapa-amount {
+    from {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.kapa-mask .kapa-modal {
+    animation: kapa-pop 0.35s ease-out both;
+}
+
+// "KAPA ACTIVATED": the robot at its console, floating, with a scan line
+.kapa-hero--art {
+    height: auto;
+    aspect-ratio: 640 / 524;
+    background: #071026;
+    animation: kapa-glow 3s ease-in-out infinite;
+
+    &::before {
+        display: none;
+    }
+
+    img {
+        position: absolute;
+        inset: -0.8rem 0 0;
+        width: 100%;
+        height: calc(100% + 0.8rem);
+        object-fit: cover;
+        animation: kapa-float 4s ease-in-out infinite;
+    }
+}
+
+.kapa-hero__scan {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        180deg,
+        transparent 0%,
+        rgb(57 198 255 / 0%) 40%,
+        rgb(57 198 255 / 22%) 50%,
+        rgb(57 198 255 / 0%) 60%,
+        transparent 100%
+    );
+    animation: kapa-scan 2.6s linear infinite;
+}
+
+// Session result: the robot celebrates a profit or worries over a loss
+.kapa-result__media {
+    position: relative;
+    margin: 0 -2rem;
+    aspect-ratio: 480 / 436;
+    max-height: 32rem;
+    overflow: hidden;
+    border-radius: 2rem 2rem 0 0;
+    background: #071026;
+
+    video,
+    img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    // fades into the dialog so the text below sits on a calm background
+    &::after {
+        content: '';
+        position: absolute;
+        inset: auto 0 0;
+        height: 45%;
+        background: linear-gradient(180deg, transparent, #0a132d 92%);
+    }
+}
+
+.kapa-modal--result .kapa-result {
+    margin-top: -5.6rem;
+    z-index: 1;
+}
+
+.kapa-modal--loss .kapa-result__media {
+    aspect-ratio: 480 / 436;
+}
+
+.kapa-result__amt {
+    animation: kapa-amount 0.6s 0.15s ease-out both;
+    font-variant-numeric: tabular-nums;
+}
+
+.kapa-modal--result .kapa-modal__x {
+    z-index: 2;
+    background: rgb(5 11 30 / 60%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kapa-mask .kapa-modal,
+    .kapa-hero--art,
+    .kapa-hero--art img,
+    .kapa-hero__scan,
+    .kapa-result__amt {
+        animation: none;
+    }
+}

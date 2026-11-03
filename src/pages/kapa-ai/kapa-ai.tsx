@@ -44,6 +44,8 @@ import {
     TYPE_LABEL,
     validate,
 } from './engine';
+import { CountUp, KapaClip } from './kapa-clip';
+import activatedArt from './media/kapa-activated.jpg';
 import './kapa-ai.scss';
 
 const STORAGE_KEY = 'kapa_ai_settings_v2';
@@ -1124,10 +1126,9 @@ const KapaAI = observer(() => {
                             ✕
                         </button>
                         <div className='kapa-modal__title'>KAPA ACTIVATED</div>
-                        <div className='kapa-hero'>
-                            <div className='kapa-hero__ring' />
-                            <div className='kapa-hero__big'>KA</div>
-                            <div className='kapa-hero__online'>KAPA CORE ONLINE</div>
+                        <div className='kapa-hero kapa-hero--art'>
+                            <img src={activatedArt} alt='' />
+                            <span className='kapa-hero__scan' aria-hidden />
                         </div>
                         <p className='kapa-modal__text'>
                             KAPA AI is loaded with {MARKETS[activation.sym]} · Over {activation.b}. Stake {fmt(s.stake)}
@@ -1180,8 +1181,10 @@ const KapaAI = observer(() => {
 
             {result && (
                 <div className='kapa-mask' role='dialog' aria-modal>
-                    <div className='kapa-modal kapa-modal--result'>
-                        <div className='kapa-result__hero' />
+                    <div className={classNames('kapa-modal kapa-modal--result', { 'kapa-modal--loss': result.pl < 0 })}>
+                        <div className='kapa-result__media'>
+                            <KapaClip win={result.pl >= 0} />
+                        </div>
                         <button
                             className='kapa-modal__x'
                             type='button'
@@ -1206,8 +1209,8 @@ const KapaAI = observer(() => {
                                       ? 'stopped with a profit of'
                                       : 'stopped at a loss of'}
                             </div>
-                            <div className={classNames('kapa-result__amt', { bad: result.kind !== 'tp' })}>
-                                {fmt(Math.abs(result.pl))} {currency}
+                            <div className={classNames('kapa-result__amt', { bad: result.pl < 0 })}>
+                                <CountUp value={Math.abs(result.pl)} /> {currency}
                             </div>
                             <button className='kapa-btn kapa-btn--lime' type='button' onClick={() => setResult(null)}>
                                 Continue
