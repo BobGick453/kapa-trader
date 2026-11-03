@@ -9,6 +9,7 @@ import { useAccountSwitching } from '@/hooks/useAccountSwitching';
 import { useLanguageFromURL } from '@/hooks/useLanguageFromURL';
 import { useOAuthCallback } from '@/hooks/useOAuthCallback';
 import { markDerivLinked, maybeAutoLogin } from '@/utils/kapa-autologin';
+import { recordDiag } from '@/utils/kapa-diagnostics';
 import { ROUTER_BASENAME } from '@/utils/base-path';
 import { StoreProvider } from '@/hooks/useStore';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
@@ -86,9 +87,11 @@ function App() {
             OAuthTokenExchangeService.exchangeCodeForToken(params.code)
                 .then(response => {
                     if (response.access_token) {
+                        recordDiag('login', 'Deriv login succeeded');
                         markDerivLinked(); // next visits reconnect to Deriv automatically
                         cleanupURL();
                     } else if (response.error) {
+                        recordDiag('login', `Deriv login failed: ${response.error_description || response.error}`);
                         console.error('❌ Token exchange failed:', response.error);
                         console.error('Error description:', response.error_description);
                         // Clean up URL even on error
@@ -96,11 +99,13 @@ function App() {
                     }
                 })
                 .catch(error => {
+                    recordDiag('login', `Deriv login request failed: ${error?.message ?? error}`);
                     console.error('❌ Token exchange request failed:', error);
                     // Clean up URL even on error
                     cleanupURL();
                 });
         } else if (!isProcessing && error) {
+            recordDiag('login', `Deriv login was not completed: ${error}`);
             console.error('OAuth callback error:', error);
         } else if (!isProcessing && !params.code) {
             // Linked before but no session in this tab: reconnect to the Deriv account open in the browser

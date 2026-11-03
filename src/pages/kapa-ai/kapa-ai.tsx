@@ -5,6 +5,7 @@ import { generateOAuthURL } from '@/components/shared';
 import brandConfig from '@/../brand.config.json';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
+import { onDiag, readDiag, TDiag } from '@/utils/kapa-diagnostics';
 import {
     fetchPlan,
     lockPremium,
@@ -221,6 +222,10 @@ const KapaAI = observer(() => {
         if (!isPremium && premium.status !== 'unknown' && premium.status !== 'checking' && s.strategy !== 'fixed')
             update({ strategy: 'fixed' });
     }, [isPremium, premium.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // What blocked the Deriv connection on this device, if anything (shown under Log in)
+    const [diag, setDiag] = useState<TDiag[]>(readDiag);
+    useEffect(() => onDiag(() => setDiag(readDiag())), []);
 
     const [code, setCode] = useState('');
     const [unlocking, setUnlocking] = useState(false);
@@ -602,6 +607,18 @@ const KapaAI = observer(() => {
                             <button className='kapa-btn kapa-btn--gold' onClick={login} type='button'>
                                 Log in with Deriv
                             </button>
+                            {diag.length > 0 && (
+                                <details className='kapa-diag' open>
+                                    <summary>Connection details</summary>
+                                    <ul>
+                                        {diag.slice(-8).map((d, i) => (
+                                            <li key={`${d.at}-${i}`} className={`kapa-diag__${d.kind}`}>
+                                                <time>{new Date(d.at).toLocaleTimeString()}</time> {d.text}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </details>
+                            )}
                         </div>
                     )}
 

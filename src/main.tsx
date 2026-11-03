@@ -4,6 +4,7 @@ import { AuthWrapper } from './app/AuthWrapper';
 // Removed AnalyticsInitializer import - analytics dependency removed
 // See migrate-docs/ANALYTICS_IMPLEMENTATION_GUIDE.md for re-implementation
 import { clearStaleLogin } from './utils/kapa-autologin';
+import { installDiagnostics } from './utils/kapa-diagnostics';
 import { performVersionCheck } from './utils/version-check';
 import './styles/index.scss';
 
@@ -15,6 +16,8 @@ performVersionCheck();
 
 // A Deriv session that ended leaves account details behind; drop them so the Log in button shows
 clearStaleLogin();
+// Records what blocks the Deriv connection, shown in the KAPA AI login card
+installDiagnostics();
 
 // Removed AnalyticsInitializer() call - analytics dependency removed
 

@@ -1357,3 +1357,33 @@
         }
     }
 }
+
+// Connection details under "Log in with Deriv"
+.kapa-diag {
+    margin-top: 1.2rem;
+    text-align: left;
+    font-size: 1.2rem;
+    color: var(--k-muted);
+
+    summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: #c8d1ec;
+    }
+    ul {
+        margin: 0.6rem 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 0.4rem;
+        word-break: break-word;
+    }
+    time {
+        font-variant-numeric: tabular-nums;
+        margin-right: 0.4rem;
+    }
+    &__csp,
+    &__login {
+        color: #ffb3bb;
+    }
+}
