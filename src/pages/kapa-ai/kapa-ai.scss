@@ -1285,7 +1285,7 @@
             display: flex;
             gap: 0.8rem;
 
-            @media (max-width: 380px) {
+            @media (width <= 380px) {
                 flex-direction: column;
             }
         }
@@ -1370,6 +1370,7 @@
         font-weight: 600;
         color: #c8d1ec;
     }
+
     ul {
         margin: 0.6rem 0 0;
         padding: 0;
@@ -1378,10 +1379,12 @@
         gap: 0.4rem;
         word-break: break-word;
     }
+
     time {
         font-variant-numeric: tabular-nums;
         margin-right: 0.4rem;
     }
+
     &__csp,
     &__login {
         color: #ffb3bb;
@@ -1462,7 +1465,7 @@
     background: #071026;
     animation: kapa-glow 3s ease-in-out infinite;
 
-    &::before {
+    &:before {
         display: none;
     }
 
@@ -1510,7 +1513,7 @@
     }
 
     // fades into the dialog so the text below sits on a calm background
-    &::after {
+    &:after {
         content: '';
         position: absolute;
         inset: auto 0 0;
@@ -1545,5 +1548,195 @@
     .kapa-hero__scan,
     .kapa-result__amt {
         animation: none;
+    }
+}
+
+// ============================================================================
+// Layout like the reference bot: one main card; settings behind a discreet ⚙;
+// Summary / Transactions / Journal in a drawer above the Start bar on phones
+// ============================================================================
+.kapa-ai__scroll {
+    @media (width <= 1099px) {
+        > .kapa-card--main {
+            width: 100%;
+            max-width: 56rem;
+            justify-self: center;
+        }
+    }
+}
+
+.kapa-card--main {
+    position: relative;
+}
+
+.kapa-gear {
+    position: absolute;
+    top: 1.4rem;
+    left: 1.4rem;
+    width: 3.8rem;
+    height: 3.8rem;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--k-line-2);
+    background: rgb(7 16 38 / 60%);
+    color: var(--k-muted);
+    cursor: pointer;
+    transition:
+        color 0.15s,
+        border-color 0.15s,
+        transform 0.3s;
+
+    &:hover,
+    &:focus-visible {
+        color: var(--k-text);
+        border-color: #4a64b0;
+        transform: rotate(45deg);
+    }
+}
+
+// Settings: a sheet from the bottom on phones, a centered panel on larger screens
+.kapa-mask--sheet {
+    @media (width <= 767px) {
+        align-items: flex-end;
+        padding: 0;
+    }
+}
+
+.kapa-settings {
+    width: 100%;
+    max-width: 52rem;
+    max-height: calc(100dvh - 3.2rem);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--k-line-2, #2a3f78);
+    border-radius: 2rem;
+    background: linear-gradient(180deg, #0f1c40, #0a132d);
+    color: var(--k-text, #eef2ff);
+    box-shadow: 0 3rem 8rem rgb(0 0 0 / 60%);
+    animation: kapa-pop 0.3s ease-out both;
+    overflow: hidden;
+
+    @media (width <= 767px) {
+        max-height: 92dvh;
+        border-radius: 2rem 2rem 0 0;
+        border-bottom: 0;
+        animation: kapa-sheet-up 0.3s ease-out both;
+    }
+
+    &__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.4rem 1.6rem;
+        border-bottom: 1px solid var(--k-line, #1d2e5c);
+
+        b {
+            font-size: 1.7rem;
+        }
+
+        .kapa-modal__x {
+            position: static;
+        }
+    }
+
+    &__body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 1.6rem;
+    }
+
+    &__foot {
+        padding: 1.2rem 1.6rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--k-line, #1d2e5c);
+
+        .kapa-btn {
+            margin: 0;
+        }
+    }
+}
+
+@keyframes kapa-sheet-up {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: none;
+    }
+}
+
+// Bottom dock: drawer handle, then the Start bar
+.kapa-dock {
+    position: relative;
+    flex: none;
+    z-index: 6;
+
+    .kapa-runbar {
+        position: relative;
+    }
+
+    &__handle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 3.4rem;
+        border: 0;
+        border-top: 1px solid var(--k-line);
+        background: #091228;
+        color: var(--k-muted);
+        cursor: pointer;
+
+        svg {
+            transition: transform 0.25s;
+        }
+
+        &:hover {
+            color: var(--k-text);
+        }
+    }
+
+    &--open &__handle svg {
+        transform: rotate(180deg);
+    }
+
+    &__drawer {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 100%;
+        max-height: 62dvh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        transform: translateY(calc(100% + 10rem));
+        visibility: hidden;
+        transition:
+            transform 0.3s ease,
+            visibility 0.3s;
+
+        .kapa-card--panel {
+            border-radius: 2rem 2rem 0 0;
+            border-bottom: 0;
+            background: #0c1734; // opaque: the card underneath must not show through
+            box-shadow: 0 -1.6rem 4rem rgb(0 0 0 / 45%);
+        }
+    }
+
+    &--open &__drawer {
+        transform: none;
+        visibility: visible;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kapa-settings,
+    .kapa-dock__drawer,
+    .kapa-gear {
+        animation: none;
+        transition: none;
     }
 }
