@@ -569,6 +569,9 @@ const handle = async (req, env) => {
     let loaded;
     const rules = () => (loaded ??= loadRules(env)); // only Premium routes need them; payments keep working if they're misconfigured
 
+    if (req.method === 'GET' && path === '/')
+        return json({ service: 'Kapa Premium server', status: 'online', premium_code: Boolean(await currentCode(env).catch(() => null)) });
+
     if (req.method === 'GET' && path === '/plan')
         return json({
             price,
