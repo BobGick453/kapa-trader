@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useStore } from '@/hooks/useStore';
 import { ErrorLogger } from '@/utils/error-logger';
+import { clearDerivLinked } from '@/utils/kapa-autologin';
 
 /**
  * Custom hook to handle logout functionality
@@ -12,6 +13,8 @@ export const useLogout = () => {
 
     return useCallback(async () => {
         try {
+            // A deliberate logout also stops the automatic reconnection to Deriv on this device
+            clearDerivLinked();
             // Call the client store logout method which clears all storage
             await client?.logout();
             // Analytics.reset() removed - Analytics package has been removed from the project

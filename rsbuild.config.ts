@@ -25,12 +25,12 @@ const contentSecurityPolicy = () => {
         "img-src 'self' data: blob: https:",
         "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
         "media-src 'self' blob: https:",
-        `connect-src 'self' https://*.deriv.com https://*.derivws.com wss://*.derivws.com https://www.googleapis.com https://content.googleapis.com https://accounts.google.com ${kapaApi}`.trim(),
+        `connect-src 'self' https://deriv.com https://*.deriv.com wss://*.deriv.com https://*.derivws.com wss://*.derivws.com https://www.googleapis.com https://content.googleapis.com https://accounts.google.com ${kapaApi}`.trim(),
         'frame-src https://www.youtube.com https://iframe.cloudflarestream.com https://charts.deriv.com https://accounts.google.com https://docs.google.com https://content.googleapis.com',
         "worker-src 'self' blob:",
         "object-src 'none'",
         "base-uri 'self'",
-        "form-action 'self'",
+        "form-action 'self' https://deriv.com https://*.deriv.com",
     ].join('; ');
 };
 

@@ -8,6 +8,7 @@ import RoutePromptDialog from '@/components/route-prompt-dialog';
 import { useAccountSwitching } from '@/hooks/useAccountSwitching';
 import { useLanguageFromURL } from '@/hooks/useLanguageFromURL';
 import { useOAuthCallback } from '@/hooks/useOAuthCallback';
+import { markDerivLinked, maybeAutoLogin } from '@/utils/kapa-autologin';
 import { ROUTER_BASENAME } from '@/utils/base-path';
 import { StoreProvider } from '@/hooks/useStore';
 import { OAuthTokenExchangeService } from '@/services/oauth-token-exchange.service';
@@ -85,6 +86,7 @@ function App() {
             OAuthTokenExchangeService.exchangeCodeForToken(params.code)
                 .then(response => {
                     if (response.access_token) {
+                        markDerivLinked(); // next visits reconnect to Deriv automatically
                         cleanupURL();
                     } else if (response.error) {
                         console.error('❌ Token exchange failed:', response.error);
@@ -100,6 +102,9 @@ function App() {
                 });
         } else if (!isProcessing && error) {
             console.error('OAuth callback error:', error);
+        } else if (!isProcessing && !params.code) {
+            // Linked before but no session in this tab: reconnect to the Deriv account open in the browser
+            maybeAutoLogin();
         }
     }, [isProcessing, isValid, params.code, error, cleanupURL]);
 
