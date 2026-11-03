@@ -37,7 +37,7 @@ const savePass = (pass: string | null) => {
     }
 };
 
-const call = async (path: string, init: RequestInit = {}, timeoutMs = path === '/scan' ? 30000 : 15000) => {
+const callOnce = async (path: string, init: RequestInit = {}, timeoutMs = path === '/scan' ? 30000 : 15000) => {
     const token = accessToken();
     const pass = readPass();
     const where = path.split('?')[0];
@@ -78,6 +78,24 @@ const call = async (path: string, init: RequestInit = {}, timeoutMs = path === '
     return body;
 };
 
+// Requests that are safe to send again. A brief server or network hiccup is then retried quietly
+// instead of showing "Server error". Payments are never retried automatically.
+const RETRYABLE = /^\/(premium\/(status|unlock)|scan|bots\/|plan|session\/start)/;
+const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+const call = async (path: string, init: RequestInit = {}, timeoutMs?: number) => {
+    const retryable = RETRYABLE.test(path);
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await callOnce(path, init, timeoutMs);
+        } catch (e: any) {
+            const transient = !e?.status || e.status >= 500; // no answer, or the server failed
+            if (!retryable || !transient || attempt >= 2) throw e;
+            await wait(attempt ? 1500 : 600);
+        }
+    }
+};
+
 export type TPlan = { price: number; currency: string; days: number; configured: boolean };
 
 export const fetchPlan = (): Promise<TPlan> => call('/plan');
@@ -96,8 +114,15 @@ export const refreshEntitlement = async () => {
             savePass(null); // the code was changed: the new code is needed
             setPremium({ status: 'inactive' });
         }
-    } catch {
-        setPremium({ status: 'unavailable' }); // Premium stays locked; the user can retry
+    } catch (e: any) {
+        if (e?.status === 401 || e?.status === 402 || e?.status === 403) {
+            savePass(null);
+            setPremium({ status: 'inactive' });
+        } else {
+            // The server didn't answer this time. Keep the pass: the server still checks it on every
+            // Premium request, so this never opens anything by itself.
+            setPremium({ status: 'active', plan: 'premium' });
+        }
     }
 };
 

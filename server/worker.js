@@ -53,6 +53,13 @@ const SECURITY_HEADERS = {
 const json = (body, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const fail = (status, error) => json({ error }, status);
+/** An error that already knows the answer to send (status and a message for the visitor). */
+class HttpError extends Error {
+    constructor(status, message) {
+        super(message);
+        this.status = status;
+    }
+}
 
 const corsHeaders = (req, env) => {
     const origin = req.headers.get('origin') || '';
@@ -131,24 +138,46 @@ const rateLimited = (key, limit, windowMs = 60000) => {
 const clientIp = req => req.headers.get('cf-connecting-ip') || req.headers.get('x-nf-client-connection-ip') || 'unknown';
 
 // ---------- Deriv identity (cached briefly, keyed by a hash of the token) ----------
+// Recently checked logins, in this instance's memory (Netlify has no Cloudflare-style shared cache)
+const identities = new Map();
+const IDENTITY_TTL = 120000;
+
 const derivAccounts = async (req, env) => {
     const auth = req.headers.get('authorization') || '';
     if (!/^Bearer [\w.~+/=-]{10,4096}$/.test(auth)) return null;
-    const cacheKey = new Request(`https://kapa-identity.internal/${await sha256(auth)}`);
-    const cache = typeof caches !== 'undefined' ? caches.default : null;
-    const hit = cache && (await cache.match(cacheKey));
-    if (hit) return hit.json();
-    const res = await fetch(`${env.DERIV_API || 'https://api.derivws.com'}/trading/v1/options/accounts`, {
-        headers: { authorization: auth, accept: 'application/json' },
-    });
+    const hash = await sha256(auth);
+    const mem = identities.get(hash);
+    if (mem && mem.exp > Date.now()) return mem.ids;
+    // Cloudflare's shared cache when there is one; any problem with it just means asking Deriv again
+    const cache = typeof caches !== 'undefined' && caches?.default ? caches.default : null;
+    const cacheKey = cache ? new Request(`https://kapa-identity.internal/${hash}`) : null;
+    if (cache) {
+        const hit = await cache.match(cacheKey).catch(() => null);
+        const ids = hit && (await hit.json().catch(() => null));
+        if (Array.isArray(ids) && ids.length) return ids;
+    }
+    let res;
+    try {
+        res = await fetch(`${env.DERIV_API || 'https://api.derivws.com'}/trading/v1/options/accounts`, {
+            headers: { authorization: auth, accept: 'application/json' },
+            signal: AbortSignal.timeout(8000),
+        });
+    } catch {
+        throw new HttpError(503, "Deriv didn't answer. Try again in a moment.");
+    }
+    if (res.status >= 500) throw new HttpError(503, "Deriv didn't answer. Try again in a moment.");
     if (!res.ok) return null;
     const body = await res.json().catch(() => ({}));
     const ids = (Array.isArray(body?.data) ? body.data : [])
         .map(a => String(a.account_id || ''))
         .filter(id => ACCOUNT_ID.test(id));
     if (!ids.length) return null;
+    if (identities.size > 2000) identities.clear();
+    identities.set(hash, { ids, exp: Date.now() + IDENTITY_TTL });
     if (cache)
-        await cache.put(cacheKey, new Response(JSON.stringify(ids), { headers: { 'cache-control': 'max-age=120' } }));
+        await cache
+            .put(cacheKey, new Response(JSON.stringify(ids), { headers: { 'cache-control': 'max-age=120' } }))
+            .catch(() => {});
     return ids;
 };
 
@@ -193,6 +222,7 @@ const readPass = async (env, req) => {
 
 const cinetpayCheck = async (env, transactionId) => {
     const res = await fetch(`${CINETPAY}/payment/check`, {
+        signal: AbortSignal.timeout(10000),
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -529,6 +559,7 @@ const handle = async (req, env) => {
         const tx = { status: 'pending', accounts: ids, amount: price, currency, days, createdAt: Date.now() };
         await env.KAPA_KV.put(`tx:${transactionId}`, JSON.stringify(tx));
         const res = await fetch(`${CINETPAY}/payment`, {
+            signal: AbortSignal.timeout(10000),
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
@@ -629,8 +660,12 @@ export default {
         let res;
         try {
             res = await handle(req, env);
-        } catch {
-            res = fail(500, 'Server error');
+        } catch (e) {
+            if (e instanceof HttpError) res = fail(e.status, e.message);
+            else {
+                console.error('kapa: unexpected error', req.method, new URL(req.url).pathname, e);
+                res = fail(500, `Kapa server error: ${String(e?.message || e).slice(0, 120)}`);
+            }
         }
         const out = new Response(res.body, res);
         Object.entries({ ...SECURITY_HEADERS, ...cors }).forEach(([k, v]) => out.headers.set(k, v));

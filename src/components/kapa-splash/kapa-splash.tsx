@@ -1,25 +1,56 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import './kapa-splash.scss';
 
-const STEPS = ['Initializing Kapa AI', 'Connecting to Deriv…', 'System ready'];
+const hasSession = () => {
+    try {
+        return Boolean(JSON.parse(sessionStorage.getItem('auth_info') || 'null')?.access_token);
+    } catch {
+        return false;
+    }
+};
+const loggingIn = () => {
+    const p = new URLSearchParams(window.location.search);
+    return p.has('code') || p.has('state') || hasSession();
+};
 
-/** Opening screen shown for a moment on every visit, like the reference bot's. Tap to skip. */
+/**
+ * Opening screen. It shows what is really happening and leaves as soon as the app is ready:
+ * the app is drawn, and, when this tab is logging in, the Deriv account is shown.
+ * It never stays more than a few seconds and a tap skips it.
+ */
 const KapaSplash = () => {
-    const [step, setStep] = useState(0);
+    const [step, setStep] = useState<'load' | 'deriv' | 'ready'>('load');
     const [leaving, setLeaving] = useState(false);
     const [gone, setGone] = useState(false);
 
     useEffect(() => {
-        const timers = [
-            setTimeout(() => setStep(1), 900),
-            setTimeout(() => setStep(2), 1800),
-            setTimeout(() => setLeaving(true), 2500),
-            setTimeout(() => setGone(true), 3000),
-        ];
-        return () => timers.forEach(clearTimeout);
+        const start = Date.now();
+        let done = false;
+        const finish = () => {
+            if (done) return;
+            done = true;
+            setStep('ready');
+            setTimeout(() => setLeaving(true), 350);
+            setTimeout(() => setGone(true), 750);
+        };
+        const tick = setInterval(() => {
+            const drawn = Boolean(document.querySelector('.dc-tabs__list--main__tabs'));
+            if (!drawn) return;
+            const login = loggingIn();
+            const connected = !login || Boolean(document.querySelector('.acc-info__wrapper'));
+            if (!connected) setStep('deriv');
+            // Ready, or the Deriv login is slow: the page itself shows its progress from here
+            if ((connected && Date.now() - start > 500) || Date.now() - start > 5000) finish();
+        }, 100);
+        const cap = setTimeout(finish, 8000); // never hold the page longer than this
+        return () => {
+            clearInterval(tick);
+            clearTimeout(cap);
+        };
     }, []);
 
     if (gone) return null;
+    const text = step === 'ready' ? 'System ready' : step === 'deriv' ? 'Connecting to Deriv…' : 'Loading Kapa Trader…';
     return (
         <div
             className={`kapa-splash${leaving ? ' kapa-splash--out' : ''}`}
@@ -42,7 +73,7 @@ const KapaSplash = () => {
                 <div className='kapa-splash__ai'>AI</div>
                 <div className='kapa-splash__sub'>Plan · Execute · Stop on time</div>
                 <div className='kapa-splash__line' />
-                <div className={`kapa-splash__step${step === 2 ? ' kapa-splash__step--ready' : ''}`}>{STEPS[step]}</div>
+                <div className={`kapa-splash__step${step === 'ready' ? ' kapa-splash__step--ready' : ''}`}>{text}</div>
             </div>
         </div>
     );

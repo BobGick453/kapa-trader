@@ -19,6 +19,12 @@
             content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
         />
         <title>Kapa Trader</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
+        />
         <style>
             :root {
                 font-size: 62.5%;
@@ -30,6 +36,19 @@
 
         <div id="modal_root" class="modal-root"></div>
         <div id="popup_root" class="popup-root"></div>
-        <div id="root"></div>
+        <div id="root">
+            <!-- Shown at once while the app loads; the app replaces it -->
+            <div
+                style="position:fixed;inset:0;display:grid;place-items:center;background:#050b1e;color:#c8d1ec;font:500 15px/1.5 'IBM Plex Sans',system-ui,sans-serif;text-align:center;z-index:1"
+            >
+                <div>
+                    <div
+                        style="width:64px;height:64px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:#1d4ed8;border:2px solid #f5c542;color:#fff;font-weight:800;font-size:22px"
+                    >KA</div>
+                    <div style="color:#f5c542;font-weight:700;letter-spacing:0.2em">KAPA TRADER</div>
+                    <div id="kapa-boot-msg" style="margin-top:8px">Loading Kapa Trader…</div>
+                </div>
+            </div>
+        </div>
     </body>
 </html>

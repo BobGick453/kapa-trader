@@ -23,16 +23,27 @@ export const clearDerivLinked = () => safe(() => localStorage.removeItem(LINKED_
 const hasSession = () =>
     safe(() => Boolean(JSON.parse(sessionStorage.getItem('auth_info') || 'null')?.access_token), false);
 
-/** Starts the Deriv login once per tab if this device was linked before and has no session. */
-export const maybeAutoLogin = async () => {
+/**
+ * Starts the Deriv login once per tab if this device was linked before and has no session.
+ * Called before the app is drawn, so the page isn't loaded twice. Resolves true when leaving for Deriv.
+ */
+export const maybeAutoLogin = async (): Promise<boolean> => {
     const params = new URLSearchParams(window.location.search);
-    if (params.has('code') || params.has('error') || params.has('state')) return; // returning from Deriv
-    if (!safe(() => localStorage.getItem(LINKED_KEY) === '1', false) || hasSession()) return;
-    if (safe(() => sessionStorage.getItem(TRIED_KEY), null)) return; // never loop if Deriv didn't log in
+    if (params.has('code') || params.has('error') || params.has('state')) return false; // returning from Deriv
+    if (!safe(() => localStorage.getItem(LINKED_KEY) === '1', false) || hasSession()) return false;
+    if (safe(() => sessionStorage.getItem(TRIED_KEY), null)) return false; // never loop if Deriv didn't log in
     safe(() => sessionStorage.setItem(TRIED_KEY, String(Date.now())), undefined);
-    const { generateOAuthURL } = await import('@/components/shared');
-    const url = await generateOAuthURL();
-    if (url) window.location.replace(url);
+    try {
+        const { generateOAuthURL } = await import('@/components/shared/utils/config/config');
+        const url = await generateOAuthURL();
+        if (!url) return false;
+        const msg = document.getElementById('kapa-boot-msg');
+        if (msg) msg.textContent = 'Connecting to your Deriv account…';
+        window.location.replace(url);
+        return true;
+    } catch {
+        return false;
+    }
 };
 
 /**

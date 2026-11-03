@@ -48,9 +48,18 @@ const readVar = name => {
 };
 
 /** The KV interface worker.js expects, on top of a Netlify Blobs store. */
+const retry = async op => {
+    try {
+        return await op();
+    } catch {
+        await new Promise(r => setTimeout(r, 150)); // one retry: Blobs can fail briefly
+        return op();
+    }
+};
+
 export const kvFromBlobs = store => ({
     async get(key, type) {
-        const raw = await store.get(key, { type: 'text' });
+        const raw = await retry(() => store.get(key, { type: 'text' }));
         if (raw == null) return null;
         let entry;
         try {
@@ -66,24 +75,24 @@ export const kvFromBlobs = store => ({
     },
     async put(key, value, opts = {}) {
         const e = opts.expirationTtl ? Date.now() + opts.expirationTtl * 1000 : 0;
-        await store.set(key, JSON.stringify({ v: String(value), e }));
+        await retry(() => store.set(key, JSON.stringify({ v: String(value), e })));
     },
     async delete(key) {
         await store.delete(key);
     },
     async list({ prefix } = {}) {
-        const { blobs } = await store.list({ prefix });
+        const { blobs } = await retry(() => store.list({ prefix }));
         return { keys: blobs.map(b => ({ name: b.key })), list_complete: true };
     },
 });
 
 let storeFactory = () => getStore({ name: 'kapa', consistency: 'strong' });
-let envPromise = null;
+let keyPromise = null;
 
 /** Test hook: use another store (never called in production). */
 export const __useStore = factory => {
     storeFactory = factory;
-    envPromise = null;
+    keyPromise = null;
 };
 
 const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -109,22 +118,27 @@ const sessionKey = async store => {
     return (await store.get('config:session_key', { type: 'text' })) || fresh; // whichever instance wrote first wins
 };
 
+/**
+ * Netlify gives each request its own short-lived access to Blobs, so the store is opened again for
+ * every request. (Keeping the first one made warm instances fail later with "Server error".)
+ */
 const loadEnv = async () => {
     const store = storeFactory();
     const env = { KAPA_KV: kvFromBlobs(store) };
     for (const n of NAMES) env[n] = readVar(n) || DEFAULTS[n] || '';
-    env.SESSION_KEY = await sessionKey(store);
+    keyPromise ??= sessionKey(store).catch(e => {
+        keyPromise = null;
+        throw e;
+    });
+    env.SESSION_KEY = await keyPromise;
     return env;
 };
 
 export default async req => {
     try {
-        envPromise ??= loadEnv().catch(e => {
-            envPromise = null;
-            throw e;
-        });
-        return await worker.fetch(req, await envPromise);
+        return await worker.fetch(req, await loadEnv());
     } catch (e) {
+        console.error('kapa: request failed', req.method, new URL(req.url).pathname, e);
         // Answer with CORS headers so the website shows the real reason instead of "couldn't reach"
         const origin = req.headers.get('origin') || '';
         const allowed = (readVar('ALLOWED_ORIGINS') || DEFAULTS.ALLOWED_ORIGINS).split(',').map(x => x.trim());

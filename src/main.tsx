@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { AuthWrapper } from './app/AuthWrapper';
 // Removed AnalyticsInitializer import - analytics dependency removed
 // See migrate-docs/ANALYTICS_IMPLEMENTATION_GUIDE.md for re-implementation
-import { clearStaleLogin } from './utils/kapa-autologin';
+import { clearStaleLogin, maybeAutoLogin } from './utils/kapa-autologin';
 import { installDiagnostics } from './utils/kapa-diagnostics';
 import { performVersionCheck } from './utils/version-check';
 import './styles/index.scss';
@@ -30,5 +30,11 @@ if (window.top !== window.self) {
         /* a sandboxed frame can't be escaped; the page simply stays empty */
     }
 } else {
-    ReactDOM.createRoot(document.getElementById('root')!).render(<AuthWrapper />);
+    // A linked device without a session goes to Deriv first, before the app is drawn (it would be drawn
+    // again on the way back); Deriv returns at once when the account is open in this browser.
+    const render = () => ReactDOM.createRoot(document.getElementById('root')!).render(<AuthWrapper />);
+    maybeAutoLogin().then(leaving => {
+        if (!leaving) render();
+        else setTimeout(render, 8000); // still here: the browser didn't leave, so show the app anyway
+    }, render);
 }

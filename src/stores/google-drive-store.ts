@@ -62,10 +62,16 @@ export default class GoogleDriveStore {
         this.setKey();
         this.client = null;
         this.access_token = localStorage.getItem('google_access_token') ?? '';
-        setTimeout(() => {
+        // Google Drive's scripts are only needed to load or save a bot on Drive: fetch them once the
+        // page has settled, so they don't compete with the app and the Deriv connection on a phone.
+        const loadGoogle = () => {
             importExternal('https://accounts.google.com/gsi/client').then(() => this.initialiseClient());
             importExternal('https://apis.google.com/js/api.js').then(() => this.initialise());
-        }, 3000);
+        };
+        setTimeout(() => {
+            if ('requestIdleCallback' in window) window.requestIdleCallback(loadGoogle, { timeout: 10000 });
+            else loadGoogle();
+        }, 12000);
     }
 
     is_google_drive_token_valid = true;

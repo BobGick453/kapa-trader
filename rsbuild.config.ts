@@ -126,6 +126,18 @@ export default defineConfig({
                 : undefined,
     },
     tools: {
+        // Libraries pull in seven Google Fonts stylesheets with CSS @import, which the browser must fetch
+        // one after another before showing text. The page loads only the font it uses (index.html).
+        postcss: (_config, { addPlugins }) => {
+            addPlugins({
+                postcssPlugin: 'kapa-drop-google-font-imports',
+                AtRule: {
+                    import: (rule: { params: string; remove: () => void }) => {
+                        if (/fonts\.googleapis\.com/.test(rule.params)) rule.remove();
+                    },
+                },
+            });
+        },
         rspack: {
             plugins: [],
             resolve: {},
