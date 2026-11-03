@@ -1,0 +1,11 @@
+# Netlify runs only the Kapa Premium server from this repository (GitHub Pages serves the website).
+[build]
+  command = "echo 'Kapa Premium server: nothing to build'"
+  publish = "premium-server/public"
+  functions = "premium-server/netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"

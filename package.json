@@ -1,0 +1,12 @@
+{
+  "name": "kapa-premium-server",
+  "private": true,
+  "description": "Kapa Trader Premium server for Netlify. The website itself is the static build in this branch.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@netlify/blobs": "11.1.4"
+  }
+}
