@@ -63,6 +63,12 @@ const AdminPage = () => {
                 /* still works for this visit */
             }
             setSecret(input);
+            try {
+                localStorage.setItem('kapa_owner', '1'); // shows the Admin tab on this device from now on
+            } catch {
+                /* the tab stays reachable at #admin */
+            }
+            document.body.classList.add('kapa-owner');
             setInput('');
         }
     };

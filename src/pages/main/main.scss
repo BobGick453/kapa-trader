@@ -945,3 +945,8 @@
         letter-spacing: 0.03rem;
     }
 }
+
+// Admin tab: hidden from visitors; shown on the owner's devices (see main.tsx)
+body:not(.kapa-owner) #id-admin {
+    display: none !important;
+}

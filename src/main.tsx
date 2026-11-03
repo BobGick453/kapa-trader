@@ -19,6 +19,15 @@ clearStaleLogin();
 // Records what blocks the Deriv connection, shown in the KAPA AI login card
 installDiagnostics();
 
+// The Admin tab is hidden from visitors. It shows on the owner's devices (after a correct admin
+// secret) or when the page is opened at #admin. The server protects Admin either way.
+try {
+    if (localStorage.getItem('kapa_owner') === '1' || window.location.hash === '#admin')
+        document.body.classList.add('kapa-owner');
+} catch {
+    /* storage unavailable: the tab stays hidden, #admin still works */
+}
+
 // Removed AnalyticsInitializer() call - analytics dependency removed
 
 // Never run inside another website's frame (clickjacking). GitHub Pages can't send a frame-ancestors header,
