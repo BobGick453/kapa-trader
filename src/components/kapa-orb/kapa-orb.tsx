@@ -7,6 +7,7 @@ import { useStore } from '@/hooks/useStore';
 import { MARKETS, PREMIUM_PRESETS, SCAN_MARKETS, STRATEGIES, TPresetKey } from '@/pages/kapa-ai/engine';
 import { refreshEntitlement, scanMarkets, TScanRow } from '@/pages/premium/premium-api';
 import { openPremium, usePremium } from '@/pages/premium/use-premium';
+import KapaClose from '@/components/kapa-close/kapa-close';
 import { useFloating } from './use-floating';
 import './kapa-orb.scss';
 
@@ -137,14 +138,7 @@ const KapaOrb = observer(() => {
                     <div className='kapa-scan__head'>
                         <span className='kapa-scan__logo'>KA</span>
                         <b>KAPA LIVE SCANNER</b>
-                        <button
-                            type='button'
-                            className='kapa-scan__x'
-                            onClick={() => setOpen(false)}
-                            aria-label='Close'
-                        >
-                            ✕
-                        </button>
+                        <KapaClose className='kapa-scan__x' onClick={() => setOpen(false)} label='Close scanner' />
                     </div>
                     <div className='kapa-scan__body'>
                         <section className='kapa-scan__box'>
@@ -270,9 +264,7 @@ const KapaOrb = observer(() => {
                         <div className='kapa-risk__head'>
                             <span aria-hidden>⚠</span>
                             <b>Risk warning</b>
-                            <button type='button' onClick={() => setRisk(false)} aria-label='Close'>
-                                ✕
-                            </button>
+                            <KapaClose className='kapa-close--light' onClick={() => setRisk(false)} />
                         </div>
                         <p>
                             Deriv offers complex derivatives, such as options and contracts for difference

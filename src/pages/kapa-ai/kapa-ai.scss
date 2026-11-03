@@ -816,22 +816,9 @@
     color: var(--k-text, #eef2ff);
     box-shadow: 0 3rem 8rem rgb(0 0 0 / 60%);
 
-    &__x {
-        position: absolute;
-        top: 1.2rem;
-        right: 1.2rem;
-        z-index: 2;
-        width: 3.4rem;
-        height: 3.4rem;
-        border-radius: 50%;
-        border: 1px solid #3a4e86;
-        background: rgb(10 20 50 / 80%);
-        color: #fff;
-        font-size: 1.6rem;
-    }
-
     &__title {
         text-align: center;
+        padding-inline: 4.4rem; // keeps the title clear of the corner × button
         font-size: 2.2rem;
         font-weight: 800;
         letter-spacing: 0.1rem;
@@ -1497,9 +1484,10 @@
 // Session result: the robot celebrates a profit or worries over a loss
 .kapa-result__media {
     position: relative;
+    align-self: stretch;
+    width: calc(100% + 4rem);
     margin: 0 -2rem;
-    aspect-ratio: 480 / 436;
-    max-height: 32rem;
+    height: min(32rem, 42vh); // fills the window's width; the clip is cropped to fit
     overflow: hidden;
     border-radius: 2rem 2rem 0 0;
     background: #071026;
@@ -1527,18 +1515,9 @@
     z-index: 1;
 }
 
-.kapa-modal--loss .kapa-result__media {
-    aspect-ratio: 480 / 436;
-}
-
 .kapa-result__amt {
     animation: kapa-amount 0.6s 0.15s ease-out both;
     font-variant-numeric: tabular-nums;
-}
-
-.kapa-modal--result .kapa-modal__x {
-    z-index: 2;
-    background: rgb(5 11 30 / 60%);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1634,10 +1613,6 @@
 
         b {
             font-size: 1.7rem;
-        }
-
-        .kapa-modal__x {
-            position: static;
         }
     }
 

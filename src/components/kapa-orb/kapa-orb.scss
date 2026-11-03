@@ -124,14 +124,7 @@
     }
 
     &__x {
-        width: 3.6rem;
-        height: 3.6rem;
-        border-radius: 50%;
-        border: 1px solid #3a4e86;
-        background: #0b1631;
-        color: #fff;
-        font-size: 1.6rem;
-        cursor: pointer;
+        margin-inline-start: auto;
     }
 
     &__body {
@@ -420,14 +413,6 @@
             font-size: 1.8rem;
             font-weight: 600;
         }
-
-        button {
-            border: 0;
-            background: none;
-            font-size: 1.8rem;
-            cursor: pointer;
-            color: #1b2238;
-        }
     }
 
     &__close {
@@ -538,12 +523,6 @@
         }
     }
 
-    &__x {
-        flex: none;
-        width: 4rem;
-        height: 4rem;
-        margin-inline-start: auto;
-    }
     button:focus-visible {
         outline-offset: 2px;
     }
@@ -559,15 +538,6 @@
         overflow-y: auto;
     }
 
-    &__head button {
-        width: 4rem;
-        height: 4rem;
-        border-radius: 50%;
-
-        &:hover {
-            background: #eef1f8;
-        }
-    }
 
     &__close {
         min-height: 4.8rem;

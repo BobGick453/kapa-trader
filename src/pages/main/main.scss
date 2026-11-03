@@ -946,7 +946,90 @@
     }
 }
 
-// Admin tab: hidden from visitors; shown on the owner's devices (see main.tsx)
-body:not(.kapa-owner) #id-admin {
-    display: none !important;
+
+// Same circled × as the Kapa windows (components/kapa-close) on every template window:
+// Load/Save strategy, Quick strategy, tutorials video, dialogs, side menu, previews.
+body {
+    :is(
+        .dc-page-overlay__header-close,
+        .dc-dialog__header--close,
+        .dc-modal-header__close,
+        .qs__head__action > span,
+        .draggable-content__header__close,
+        .db-info-panel__close-action,
+        .dc-mobile-dialog__close-btn,
+        .load-strategy__local-preview-close,
+        .deriv-modal__close-icon,
+        .deriv-drawer__header__close-btn
+    ) {
+        flex: none;
+        display: inline-grid;
+        place-items: center;
+        box-sizing: border-box;
+        width: 3.6rem;
+        min-width: 3.6rem;
+        height: 3.6rem;
+        padding: 0;
+        border-radius: 50%;
+        border: 1px solid rgb(148 163 204 / 45%);
+        background: rgb(5 11 30 / 72%);
+        color: #eef2ff;
+        --fill-color1: #eef2ff;
+        cursor: pointer;
+        line-height: 0;
+        transition:
+            background 0.15s,
+            border-color 0.15s;
+
+        svg {
+            display: block;
+            width: 1.6rem;
+            height: 1.6rem;
+        }
+
+        svg path {
+            fill: currentcolor;
+        }
+
+        &:hover {
+            background: rgb(37 99 235 / 35%);
+            border-color: #5b8cff;
+        }
+    }
+
+    // Full-page windows on phones (Load, Save, Quick strategy): readable title, × on the right
+    .dc-page-overlay__header {
+        height: auto;
+        padding: 1rem 1.6rem;
+        background: #0c1734;
+        border-bottom: 1px solid #1d2e5c;
+    }
+
+    .dc-page-overlay__header-wrapper {
+        gap: 1.2rem;
+        min-height: 3.6rem;
+    }
+
+    .dc-page-overlay__header-title {
+        color: #eef2ff;
+        text-align: start;
+    }
+
+    .dc-page-overlay__header-close {
+        position: static;
+        margin-inline-start: auto;
+    }
+
+    // Tutorials video dialog: × in the corner, off the video
+    .dc-dialog__header--close {
+        margin: 0.4rem;
+    }
+
+    .dc-modal-header__close {
+        margin: 1.2rem 1.6rem 1.2rem auto;
+    }
+
+    .deriv-drawer__header__close-btn {
+        margin-inline: 0.8rem 0.4rem;
+    }
 }

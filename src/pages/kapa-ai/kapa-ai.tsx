@@ -44,6 +44,7 @@ import {
     TYPE_LABEL,
     validate,
 } from './engine';
+import KapaClose from '@/components/kapa-close/kapa-close';
 import { CountUp, KapaClip } from './kapa-clip';
 import activatedArt from './media/kapa-activated.jpg';
 import './kapa-ai.scss';
@@ -871,14 +872,7 @@ const KapaAI = observer(() => {
                     <div className='kapa-settings'>
                         <div className='kapa-settings__head'>
                             <b>KAPA AI settings</b>
-                            <button
-                                className='kapa-modal__x'
-                                type='button'
-                                onClick={() => setSettingsOpen(false)}
-                                aria-label='Close'
-                            >
-                                ✕
-                            </button>
+                            <KapaClose onClick={() => setSettingsOpen(false)} label='Close settings' />
                         </div>
                         <div className='kapa-settings__body' ref={settingsBodyRef}>
                             {
@@ -1262,14 +1256,7 @@ const KapaAI = observer(() => {
             {activation && (
                 <div className='kapa-mask' role='dialog' aria-modal>
                     <div className='kapa-modal'>
-                        <button
-                            className='kapa-modal__x'
-                            type='button'
-                            onClick={() => setActivation(null)}
-                            aria-label='Close'
-                        >
-                            ✕
-                        </button>
+                        <KapaClose className='kapa-close--corner' onClick={() => setActivation(null)} />
                         <div className='kapa-modal__title'>KAPA ACTIVATED</div>
                         <div className='kapa-hero kapa-hero--art'>
                             <img src={activatedArt} alt='' />
@@ -1330,14 +1317,7 @@ const KapaAI = observer(() => {
                         <div className='kapa-result__media'>
                             <KapaClip win={result.pl >= 0} />
                         </div>
-                        <button
-                            className='kapa-modal__x'
-                            type='button'
-                            onClick={() => setResult(null)}
-                            aria-label='Close'
-                        >
-                            ✕
-                        </button>
+                        <KapaClose className='kapa-close--corner' onClick={() => setResult(null)} />
                         <div className='kapa-result'>
                             <span className={classNames('kapa-result__tag', { bad: result.kind !== 'tp' })}>
                                 {result.kind === 'tp'

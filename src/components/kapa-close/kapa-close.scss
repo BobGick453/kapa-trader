@@ -1,0 +1,59 @@
+// Circled close button shared by every Kapa window
+.kapa-close {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 3.6rem;
+    height: 3.6rem;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgb(148 163 204 / 45%);
+    background: rgb(5 11 30 / 72%);
+    color: #eef2ff;
+    cursor: pointer;
+    line-height: 0;
+    backdrop-filter: blur(4px);
+    transition:
+        background 0.15s,
+        border-color 0.15s,
+        transform 0.15s;
+
+    svg {
+        display: block;
+    }
+
+    &:hover {
+        background: rgb(37 99 235 / 35%);
+        border-color: #5b8cff;
+    }
+
+    &:active {
+        transform: scale(0.94);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #f5c542;
+        outline-offset: 2px;
+    }
+
+    // In the corner of a window
+    &--corner {
+        position: absolute;
+        top: 1.2rem;
+        right: 1.2rem;
+        z-index: 3;
+    }
+
+    // On a light background (risk warning)
+    &--light {
+        border-color: #d5dbea;
+        background: #f3f5fb;
+        color: #1b2238;
+        backdrop-filter: none;
+
+        &:hover {
+            background: #e6ebf7;
+            border-color: #b9c3dd;
+        }
+    }
+}
