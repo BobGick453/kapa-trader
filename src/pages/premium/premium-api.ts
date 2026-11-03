@@ -1,4 +1,5 @@
 import type { TContractResult, TDecision, TPayoutRatios, TPolicy, TSettings } from '../kapa-ai/engine';
+import { recordDiag } from '@/utils/kapa-diagnostics';
 import { setPremium } from './use-premium';
 
 /**
@@ -36,21 +37,44 @@ const savePass = (pass: string | null) => {
     }
 };
 
-const call = async (path: string, init: RequestInit = {}) => {
+const call = async (path: string, init: RequestInit = {}, timeoutMs = path === '/scan' ? 30000 : 15000) => {
     const token = accessToken();
     const pass = readPass();
-    const res = await fetch(`${PREMIUM_API}${path}`, {
-        ...init,
-        headers: {
-            ...(init.headers || {}),
-            ...(token ? { authorization: `Bearer ${token}` } : {}),
-            ...(pass ? { 'x-kapa-pass': pass } : {}),
-            ...(init.body ? { 'content-type': 'application/json' } : {}),
-        },
-    });
+    const where = path.split('?')[0];
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    let res: Response;
+    try {
+        res = await fetch(`${PREMIUM_API}${path}`, {
+            ...init,
+            signal: ctrl.signal,
+            headers: {
+                ...(init.headers || {}),
+                ...(token ? { authorization: `Bearer ${token}` } : {}),
+                ...(pass ? { 'x-kapa-pass': pass } : {}),
+                ...(init.body ? { 'content-type': 'application/json' } : {}),
+            },
+        });
+    } catch (e: any) {
+        const timedOut = e?.name === 'AbortError';
+        recordDiag(
+            'premium',
+            `Premium server ${where}: ${timedOut ? 'no answer after ' + timeoutMs / 1000 + ' s' : 'unreachable'}`
+        );
+        throw new Error(
+            timedOut
+                ? "The Kapa Premium server didn't answer in time. Check your connection and try again."
+                : "Couldn't reach the Kapa Premium server. Check your connection and try again in a moment."
+        );
+    } finally {
+        clearTimeout(timer);
+    }
     const body = await res.json().catch(() => ({}));
-    if (!res.ok)
+    if (!res.ok) {
+        if (res.status >= 500)
+            recordDiag('premium', `Premium server ${where}: ${res.status} ${body?.error || ''}`.trim());
         throw Object.assign(new Error(body?.error || `Premium server error (${res.status})`), { status: res.status });
+    }
     return body;
 };
 

@@ -239,11 +239,7 @@ const KapaAI = observer(() => {
             setCode('');
             setPremiumMsg('Premium unlocked on this device.');
         } catch (err: any) {
-            setPremiumMsg(
-                err?.status
-                    ? err.message
-                    : "Couldn't reach the Kapa Premium server. Check your connection and try again in a moment."
-            );
+            setPremiumMsg(err?.message || "Couldn't reach the Kapa Premium server. Try again in a moment.");
         } finally {
             setUnlocking(false);
         }
@@ -598,6 +594,21 @@ const KapaAI = observer(() => {
                                 </>
                             )}
                             {premiumMsg && <p className='kapa-premium__msg'>{premiumMsg}</p>}
+                            {!isPremium && diag.some(d => d.kind === 'premium') && (
+                                <details className='kapa-diag'>
+                                    <summary>Premium server details</summary>
+                                    <ul>
+                                        {diag
+                                            .filter(d => d.kind === 'premium')
+                                            .slice(-4)
+                                            .map((d, i) => (
+                                                <li key={`${d.at}-${i}`} className='kapa-diag__login'>
+                                                    <time>{new Date(d.at).toLocaleTimeString()}</time> {d.text}
+                                                </li>
+                                            ))}
+                                    </ul>
+                                </details>
+                            )}
                         </div>
                     }
 

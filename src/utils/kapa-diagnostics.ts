@@ -4,7 +4,7 @@
  * WebSocket errors and closes (without any query string, so no one-time codes are recorded),
  * and the result of the last login attempt. Kept in this tab only (sessionStorage).
  */
-export type TDiag = { at: number; kind: 'csp' | 'ws' | 'login'; text: string };
+export type TDiag = { at: number; kind: 'csp' | 'ws' | 'login' | 'premium'; text: string };
 
 const KEY = 'kapa_diag';
 const MAX = 14;

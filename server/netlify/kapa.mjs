@@ -3,7 +3,9 @@
  *
  * - Storage: Netlify Blobs (store "kapa"), built into every Netlify site, nothing to set up.
  *   Entries written with an expiry (lockouts) are wrapped as { v, e } and expire on read.
- * - SESSION_KEY: taken from the environment if set; otherwise generated once and kept in Blobs.
+ * - SESSION_KEY: taken from the environment if set; otherwise derived from ADMIN_SECRET, so it never
+ *   changes on its own (a changing key would sign everyone out of Premium). Changing ADMIN_SECRET
+ *   therefore asks everyone to enter the Premium code again. Without either, one is kept in Blobs.
  * - Settings: Netlify environment variables, with Kapa's defaults for the rest.
  *
  * On the published branch this file lives at premium-server/netlify/functions/kapa.mjs and imports
@@ -84,9 +86,22 @@ export const __useStore = factory => {
     envPromise = null;
 };
 
+const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+
 const sessionKey = async store => {
     const fromEnv = readVar('SESSION_KEY');
     if (fromEnv.length >= 32) return fromEnv;
+    const admin = readVar('ADMIN_SECRET');
+    if (admin.length >= 20) {
+        const key = await crypto.subtle.importKey(
+            'raw',
+            new TextEncoder().encode(admin),
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+        );
+        return hex(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('kapa-session-key-v1')));
+    }
     const saved = await store.get('config:session_key', { type: 'text' });
     if (saved && saved.length >= 32) return saved;
     const fresh = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -103,11 +118,25 @@ const loadEnv = async () => {
 };
 
 export default async req => {
-    envPromise ??= loadEnv().catch(e => {
-        envPromise = null;
-        throw e;
-    });
-    return worker.fetch(req, await envPromise);
+    try {
+        envPromise ??= loadEnv().catch(e => {
+            envPromise = null;
+            throw e;
+        });
+        return await worker.fetch(req, await envPromise);
+    } catch (e) {
+        // Answer with CORS headers so the website shows the real reason instead of "couldn't reach"
+        const origin = req.headers.get('origin') || '';
+        const allowed = (readVar('ALLOWED_ORIGINS') || DEFAULTS.ALLOWED_ORIGINS).split(',').map(x => x.trim());
+        return new Response(JSON.stringify({ error: `Kapa server error: ${String(e?.message || e).slice(0, 120)}` }), {
+            status: 500,
+            headers: {
+                'content-type': 'application/json',
+                'cache-control': 'no-store',
+                ...(allowed.includes(origin) ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {}),
+            },
+        });
+    }
 };
 
 export const config = { path: '/*' };
