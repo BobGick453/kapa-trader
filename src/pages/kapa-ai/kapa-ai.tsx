@@ -512,9 +512,7 @@ const KapaAI = observer(() => {
                                             <b>Premium bots</b> in the Free Bot library
                                         </li>
                                     </ul>
-                                    {premium.status === 'off' ? (
-                                        <p className='kapa-premium__note'>KAPA AI Premium opens soon.</p>
-                                    ) : (
+                                    {
                                         <>
                                             <form className='kapa-premium__code' onSubmit={unlock}>
                                                 <label htmlFor='kapa-premium-code'>Premium code</label>
@@ -539,40 +537,42 @@ const KapaAI = observer(() => {
                                                     </button>
                                                 </div>
                                             </form>
-                                            <div className='kapa-premium__buy'>
-                                                <b>No code yet?</b>
-                                                <span>
-                                                    Pay for Premium, then Kapa sends you the code.
-                                                    {plan_?.configured
-                                                        ? ` ${plan_.price.toLocaleString()} ${plan_.currency} for ${plan_.days} days, by mobile money (Orange, MTN, Moov, Wave) or bank card.`
-                                                        : ''}
-                                                </span>
-                                                {plan_?.configured && (
-                                                    <button
-                                                        className='kapa-btn kapa-btn--line'
-                                                        type='button'
-                                                        onClick={pay}
-                                                        disabled={!logged_in || paying}
-                                                    >
-                                                        {paying ? 'Opening CinetPay…' : 'Pay with CinetPay'}
-                                                    </button>
-                                                )}
-                                                {plan_?.configured && !logged_in && (
-                                                    <small>Log in with Deriv first to pay.</small>
-                                                )}
-                                                {contact && (
-                                                    <a
-                                                        className='kapa-btn kapa-btn--line'
-                                                        href={contact}
-                                                        target='_blank'
-                                                        rel='noopener noreferrer'
-                                                    >
-                                                        Contact Kapa
-                                                    </a>
-                                                )}
-                                            </div>
+                                            {premium.status !== 'off' && (
+                                                <div className='kapa-premium__buy'>
+                                                    <b>No code yet?</b>
+                                                    <span>
+                                                        Pay for Premium, then Kapa sends you the code.
+                                                        {plan_?.configured
+                                                            ? ` ${plan_.price.toLocaleString()} ${plan_.currency} for ${plan_.days} days, by mobile money (Orange, MTN, Moov, Wave) or bank card.`
+                                                            : ''}
+                                                    </span>
+                                                    {plan_?.configured && (
+                                                        <button
+                                                            className='kapa-btn kapa-btn--line'
+                                                            type='button'
+                                                            onClick={pay}
+                                                            disabled={!logged_in || paying}
+                                                        >
+                                                            {paying ? 'Opening CinetPay…' : 'Pay with CinetPay'}
+                                                        </button>
+                                                    )}
+                                                    {plan_?.configured && !logged_in && (
+                                                        <small>Log in with Deriv first to pay.</small>
+                                                    )}
+                                                    {contact && (
+                                                        <a
+                                                            className='kapa-btn kapa-btn--line'
+                                                            href={contact}
+                                                            target='_blank'
+                                                            rel='noopener noreferrer'
+                                                        >
+                                                            Contact Kapa
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            )}
                                         </>
-                                    )}
+                                    }
                                     <p className='kapa-premium__note'>
                                         The session plan stays free for everyone. Premium adds tools; it does not change
                                         the odds: every Deriv contract still pays less than its true chance.

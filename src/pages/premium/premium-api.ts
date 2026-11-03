@@ -79,6 +79,10 @@ export const refreshEntitlement = async () => {
 
 /** Unlocks Premium on this device with the secret code. Only the server can tell whether the code is right. */
 export const unlockPremium = async (code: string) => {
+    if (!premiumEnabled())
+        throw new Error(
+            "The Kapa Premium server isn't connected to this site yet, so the code can't be checked. Premium opens as soon as it is."
+        );
     const r = await call('/premium/unlock', { method: 'POST', body: JSON.stringify({ code }) });
     savePass(r.pass);
     setPremium({ status: 'active', plan: 'premium' });
