@@ -1,5 +1,7 @@
 # Netlify runs only the Kapa Premium server from this repository (GitHub Pages serves the website).
 [build]
+  # Only redeploy when the server changes: website updates in this branch don't concern Netlify
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- premium-server/ netlify.toml package.json package-lock.json"
   command = "echo 'Kapa Premium server: nothing to build'"
   publish = "premium-server/public"
   functions = "premium-server/netlify/functions"
