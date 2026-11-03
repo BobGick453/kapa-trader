@@ -234,7 +234,11 @@ const KapaAI = observer(() => {
             setCode('');
             setPremiumMsg('Premium unlocked on this device.');
         } catch (err: any) {
-            setPremiumMsg(err?.message ?? "Couldn't reach the Premium server. Try again.");
+            setPremiumMsg(
+                err?.status
+                    ? err.message
+                    : "Couldn't reach the Kapa Premium server. Check your connection and try again in a moment."
+            );
         } finally {
             setUnlocking(false);
         }

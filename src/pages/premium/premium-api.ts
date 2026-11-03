@@ -65,7 +65,7 @@ export const refreshEntitlement = async () => {
     setPremium({ status: 'checking' });
     try {
         const r = await call('/premium/status');
-        if (r.status === 'active' && r.pass) {
+        if (r?.status === 'active' && typeof r.pass === 'string' && /^[\w-]+\.[\w-]+$/.test(r.pass)) {
             savePass(r.pass);
             setPremium({ status: 'active', plan: 'premium' });
         } else {
@@ -84,6 +84,9 @@ export const unlockPremium = async (code: string) => {
             "The Kapa Premium server isn't connected to this site yet, so the code can't be checked. Premium opens as soon as it is."
         );
     const r = await call('/premium/unlock', { method: 'POST', body: JSON.stringify({ code }) });
+    // Only a real Kapa server answer counts: anything else leaves Premium locked
+    if (r?.status !== 'active' || typeof r.pass !== 'string' || !/^[\w-]+\.[\w-]+$/.test(r.pass))
+        throw new Error("The Kapa Premium server isn't answering correctly yet. Try again in a moment.");
     savePass(r.pass);
     setPremium({ status: 'active', plan: 'premium' });
 };
