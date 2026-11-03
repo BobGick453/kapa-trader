@@ -1,0 +1,102 @@
+# Deploys the Kapa Premium server (premium-server/) to Cloudflare Workers.
+# Needs these repository secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   token made from Cloudflare's "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID  the id in your Cloudflare dashboard address
+#   KAPA_ADMIN_SECRET      your Admin password (20+ characters)
+#   KAPA_PREMIUM_CODE      your first Premium code (8+ characters; change it later in Admin)
+# SESSION_KEY is generated once on Cloudflare and never leaves it.
+name: Deploy Kapa Premium server
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'premium-server/kapa-premium-worker.js'
+      - 'premium-server/wrangler.toml'
+      - '.github/workflows/deploy-premium-server.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-premium-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: premium-server
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      KAPA_ADMIN_SECRET: ${{ secrets.KAPA_ADMIN_SECRET }}
+      KAPA_PREMIUM_CODE: ${{ secrets.KAPA_PREMIUM_CODE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check the repository secrets
+        run: |
+          missing=""
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$KAPA_ADMIN_SECRET" ] || missing="$missing KAPA_ADMIN_SECRET"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+          if [ ${#KAPA_ADMIN_SECRET} -lt 20 ]; then
+            echo "::error::KAPA_ADMIN_SECRET must be at least 20 characters"
+            exit 1
+          fi
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4.151.0
+
+      - name: Find or create the KAPA_KV storage
+        run: |
+          wrangler kv namespace list > namespaces.json
+          id=$(node -e "const l=JSON.parse(require('fs').readFileSync('namespaces.json','utf8'));const n=l.find(x=>x.title==='KAPA_KV')||l.find(x=>/KAPA_KV$/.test(x.title));process.stdout.write(n?n.id:'')")
+          if [ -z "$id" ]; then
+            wrangler kv namespace create KAPA_KV > created.txt
+            cat created.txt
+            id=$(grep -oE '[0-9a-f]{32}' created.txt | head -1)
+          fi
+          [ -n "$id" ] || { echo "::error::Could not find or create the KAPA_KV storage"; exit 1; }
+          echo "Using KV namespace $id"
+          sed -i "s/__KAPA_KV_ID__/$id/" wrangler.toml
+
+      - name: Deploy the server
+        run: wrangler deploy | tee deploy.txt
+
+      - name: Set the server secrets
+        run: |
+          if ! wrangler secret list 2>/dev/null | grep -q '"SESSION_KEY"'; then
+            key=$(openssl rand -hex 32)
+            echo "::add-mask::$key"
+            printf '%s' "$key" | wrangler secret put SESSION_KEY
+          else
+            echo "SESSION_KEY already set: kept"
+          fi
+          printf '%s' "$KAPA_ADMIN_SECRET" | wrangler secret put ADMIN_SECRET
+          if [ -n "$KAPA_PREMIUM_CODE" ]; then
+            printf '%s' "$KAPA_PREMIUM_CODE" | wrangler secret put PREMIUM_CODE
+          fi
+
+      - name: Check that the server answers
+        run: |
+          url=$(grep -oE 'https://kapa-premium\.[a-z0-9-]+\.workers\.dev' deploy.txt | head -1)
+          [ -n "$url" ] || { echo "::warning::Deployed, but the workers.dev address wasn't found in the output"; exit 0; }
+          echo "Server address: $url"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "$url/plan"; then echo; echo "✓ The Kapa Premium server is online: $url"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::The server did not answer at $url/plan"
+          exit 1
