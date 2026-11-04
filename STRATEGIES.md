@@ -69,3 +69,9 @@ Avec un objectif +5 et un stop-loss de 50, Pegasus atteint l'objectif dans 90,1 
 - **Pegasus est la meilleure** : la plus grande chance d'atteindre l'objectif et la plus petite perte moyenne. Elle perd 8 fois moins par session que la méthode du bot exemplaire, et ne vide jamais le compte.
 - **Le capital est protégé** : jamais plus de 25 % du solde par session, une limite de perte par jour, et aucun cycle de récupération qui dépasse le stop-loss.
 - **Le laboratoire du bot** (Réglages KAPA AI → « Run the test on real Deriv data ») refait ces mesures sur votre téléphone, à tout moment.
+
+## Premier test sur un compte démo (5 novembre 2026)
+
+Quatre sessions Pegasus, perdues chacune en un seul trade de 25. Deux constats :
+- **Le prix reçu était moins bon que le prix public.** Deriv a payé 46,13 pour 25 misés sur Even (45,45 sur Volatility 50), alors que son prix public était de 48,83 au même moment. Deriv gardait donc 7,7 % à 9,1 % de chaque mise au lieu de 2,35 %. Cause probable : une majoration (« markup ») réglée sur l'application dans developers.deriv.com. Kapa refuse maintenant de trader quand la marge dépasse 5 %, et explique pourquoi.
+- **L'objectif demandait plus que le stop-loss.** Chaque session devenait un seul pari, gagné ou perdu d'un coup (environ 46 % de chances de gagner à ce prix). Kapa affiche maintenant un avertissement sous le take-profit dans ce cas. Avec un objectif petit par rapport au stop-loss (par exemple +5 pour 50), l'objectif est atteint environ 9 fois sur 10.
