@@ -4,7 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
-import { MARKETS, PREMIUM_PRESETS, SCAN_MARKETS, STRATEGIES, TPresetKey } from '@/pages/kapa-ai/engine';
+import { keyLabel, MARKETS, PREMIUM_PRESETS, SCAN_MARKETS, STRATEGIES, TPresetKey } from '@/pages/kapa-ai/engine';
 import { refreshEntitlement, scanMarkets, TScanRow } from '@/pages/premium/premium-api';
 import { openPremium, usePremium } from '@/pages/premium/use-premium';
 import KapaClose from '@/components/kapa-close/kapa-close';
@@ -56,7 +56,7 @@ const KapaOrb = observer(() => {
     const live = state === 'live';
     const currency = (client.is_logged_in && client.currency) || 'USD';
     const description =
-        'Scans active synthetic indices with the selected strategy and ranks them by Deriv’s live payout. The scan runs on the KAPA AI server.';
+        'Compares the synthetic indices on Deriv’s live payouts: the best-paid contract has the smallest Deriv margin. It also tests the last 1,000 ticks of each market for patterns. The scan runs on the KAPA AI server.';
 
     const scan = async () => {
         if (!isPremium) {
@@ -85,7 +85,7 @@ const KapaOrb = observer(() => {
             symbol: r.symbol,
             preset: scanned,
             stake,
-            ratios: { base: r.payout, ...(r.recovery_payout != null ? { rec: r.recovery_payout } : {}) },
+            ratios: r.ratios,
         };
         try {
             sessionStorage.setItem('kapa_pending_market', JSON.stringify(detail)); // picked up when KAPA AI mounts
@@ -203,7 +203,7 @@ const KapaOrb = observer(() => {
                                 <div key={r.symbol} className={classNames('kapa-scan__row', { best: i === 0 })}>
                                     <div className='kapa-scan__row-head'>
                                         <b>{MARKETS[r.symbol]}</b>
-                                        {i === 0 && <span>BEST PRICE</span>}
+                                        {i === 0 && <span>BEST TERMS</span>}
                                     </div>
                                     <div className='kapa-scan__grid'>
                                         <div>
@@ -215,19 +215,19 @@ const KapaOrb = observer(() => {
                                             <b>+{(r.payout * 100).toFixed(1)}%</b>
                                         </div>
                                         <div>
-                                            <small>Avg. per trade</small>
-                                            <b className={r.expected >= 0 ? 'up' : 'down'}>
-                                                {(r.expected * 100).toFixed(1)}%
-                                            </b>
+                                            <small>Deriv margin</small>
+                                            <b className={r.tradable ? undefined : 'down'}>{(r.margin * 100).toFixed(1)}%</b>
                                         </div>
                                     </div>
                                     <p>
-                                        Over {r.barrier}.{' '}
-                                        {r.recovery != null &&
-                                            r.recovery_payout != null &&
-                                            `Recovery Over ${r.recovery} pays +${(r.recovery_payout * 100).toFixed(0)}%. `}
-                                        {r.recent != null &&
-                                            `Last ${r.recent_ticks} ticks: Over ${r.barrier} came up ${(r.recent * 100).toFixed(0)}% of the time.`}
+                                        Best-paid contract: {keyLabel(r.contract)}.
+                                        {!r.tradable && ' Priced worse than usual: KAPA AI won’t trade it now.'}{' '}
+                                        {r.randomness &&
+                                            `Last ${r.randomness.ticks} ticks: ${
+                                                r.randomness.uniform_p >= 0.01 && r.randomness.serial_p >= 0.01
+                                                    ? 'no pattern found'
+                                                    : 'an unusual run, which happens by chance about 1 time in 100'
+                                            } (randomness tests p=${r.randomness.uniform_p.toFixed(2)} and ${r.randomness.serial_p.toFixed(2)}).`}
                                     </p>
                                     <button type='button' onClick={() => sendToKapa(r)}>
                                         Use in KAPA AI
@@ -237,8 +237,9 @@ const KapaOrb = observer(() => {
                             {error && <p className='kapa-scan__error'>{error}</p>}
                         </section>
                         <p className='kapa-scan__note'>
-                            Win chance is the true probability of the contract. Recent frequency describes the latest
-                            ticks only and doesn&apos;t predict the next one. This scanner never places trades.
+                            Win chance is the true probability of the contract. The digits come from Deriv&apos;s random
+                            number generator: past ticks never predict the next one, so KAPA AI compares prices, not
+                            patterns. This scanner never places trades.
                         </p>
                     </div>
                     <div className='kapa-scan__foot'>

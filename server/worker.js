@@ -23,11 +23,17 @@
 
 import {
     applyResult,
+    bestOf,
     cleanRatios,
+    contractOf,
     decide,
     estRatio,
+    expectedOf,
     freshState,
+    GROUPS,
     loadRules,
+    MIN_EXPECTED,
+    randomnessCheck,
     simulate,
     validateSettings,
     winProb,
@@ -343,34 +349,40 @@ const derivBatch = async (env, requests, timeoutMs = 8000) => {
 
 const SCAN_SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100'];
 const PIP = { R_10: 3, R_25: 3, R_50: 4, R_75: 4, R_100: 2 };
-const quote = (sym, barrier, currency) => ({
-    proposal: 1,
-    amount: 10,
-    basis: 'stake',
-    contract_type: 'DIGITOVER',
-    currency,
-    duration: 1,
-    duration_unit: 't',
-    underlying_symbol: sym,
-    barrier: String(barrier),
-});
-const ratioOf = r =>
+const quote = (sym, key, currency) => {
+    const { contract_type, barrier } = contractOf(key);
+    return {
+        proposal: 1,
+        amount: 10,
+        basis: 'stake',
+        contract_type,
+        currency,
+        duration: 1,
+        duration_unit: 't',
+        underlying_symbol: sym,
+        ...(barrier === null ? {} : { barrier: String(barrier) }),
+    };
+};
+const quoteRatio = r =>
     r?.proposal ? (Number(r.proposal.payout) - Number(r.proposal.ask_price)) / Number(r.proposal.ask_price) : null;
 
-/** Ranks markets for a Premium strategy with Deriv's live prices and the last 100 ticks. */
+/**
+ * Compares markets for a Premium strategy on what can really be known: Deriv's live payout for each
+ * contract (the best-paid one has the smallest margin), and a randomness test on the last 1,000 ticks.
+ */
 const scan = async (env, body, rules) => {
     const { presets } = rules;
-    const preset = Object.hasOwn(presets, body?.preset) ? body.preset : 'martingale';
-    const r0 = presets[preset];
+    const preset = Object.hasOwn(presets, body?.preset) ? body.preset : 'pegasus';
+    const keys = GROUPS[presets[preset].group];
     const cur = /^[A-Z]{3}$/.test(body?.currency || '') ? body.currency : 'USD';
     const symbols = Array.isArray(body?.symbols)
         ? body.symbols.filter(sym => SCAN_SYMBOLS.includes(sym)).slice(0, 5)
         : SCAN_SYMBOLS;
+    const per = keys.length + 1;
     const reqs = [];
     symbols.forEach(sym => {
-        reqs.push({ ticks_history: sym, count: 100, end: 'latest', style: 'ticks' });
-        reqs.push(quote(sym, r0.barrier, cur));
-        if (r0.recMode !== 'none') reqs.push(quote(sym, r0.recovery, cur));
+        reqs.push({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' });
+        keys.forEach(k => reqs.push(quote(sym, k, cur)));
     });
     let res;
     try {
@@ -378,28 +390,32 @@ const scan = async (env, body, rules) => {
     } catch {
         return fail(503, 'Deriv market data is unavailable. Try again shortly.');
     }
-    const per = r0.recMode !== 'none' ? 3 : 2;
     const rows = symbols
         .map((sym, i) => {
-            const [hist, base, rec] = res.slice(i * per, i * per + per);
-            const r = ratioOf(base);
-            if (r === null) return null;
+            const [hist, ...quotes] = res.slice(i * per, i * per + per);
+            const ratios = {};
+            keys.forEach((k, j) => {
+                const r = quoteRatio(quotes[j]);
+                if (r !== null && r > 0) ratios[k] = Math.round(r * 10000) / 10000;
+            });
+            if (!Object.keys(ratios).length) return null;
+            const best = bestOf(Object.keys(ratios), ratios);
             const pip = hist?.pip_size ?? PIP[sym] ?? 2;
             const digits = (hist?.history?.prices || []).map(x => {
                 const t = Number(x).toFixed(pip);
                 return +t[t.length - 1];
             });
-            const p = winProb(r0.barrier);
+            const expected = expectedOf(best, ratios);
             return {
                 symbol: sym,
-                barrier: r0.barrier,
-                recovery: r0.recMode !== 'none' ? r0.recovery : null,
-                win_chance: p,
-                payout: r,
-                recovery_payout: per === 3 ? ratioOf(rec) : null,
-                expected: p * (1 + r) - 1,
-                recent: digits.length ? digits.filter(d => d > r0.barrier).length / digits.length : null,
-                recent_ticks: digits.length,
+                contract: best,
+                win_chance: winProb(best),
+                payout: ratios[best],
+                expected,
+                margin: -expected,
+                tradable: expected >= MIN_EXPECTED,
+                ratios,
+                randomness: randomnessCheck(digits),
             };
         })
         .filter(Boolean)

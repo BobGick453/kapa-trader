@@ -226,24 +226,39 @@ export const remotePolicy = (s: TSettings, ratios: TPayoutRatios): TPolicy => {
     };
 };
 
-export type TPlanResult = { hit: number; bust: number; avg: number; bustAvg: number; median: number; sessions: number };
+export type TPlanResult = {
+    hit: number;
+    bust: number;
+    avg: number;
+    bustAvg: number;
+    median: number;
+    sessions: number;
+    staked?: number;
+    contract?: string;
+};
 
 /** Session plan for a Premium strategy, simulated by the server (free for everyone). */
 export const simulatePlan = (s: TSettings, capital: number, ratios: TPayoutRatios): Promise<TPlanResult> =>
     post('/plan/simulate', { ...settingsBody(s), capital, ratios });
 
+export type TRandomness = {
+    ticks: number;
+    uniform_p: number;
+    serial_p: number;
+    even_after_even: number;
+    even_after_odd: number;
+};
 export type TScanRow = {
     symbol: string;
-    barrier: number;
-    recovery: number | null;
+    contract: string; // best-paid contract, e.g. 'DIGITUNDER:5'
     win_chance: number;
-    payout: number;
-    recovery_payout: number | null;
-    expected: number;
-    recent: number | null;
-    recent_ticks: number;
+    payout: number; // profit per 1 staked
+    expected: number; // average result per 1 staked
+    margin: number;
+    tradable: boolean;
+    ratios: Record<string, number>;
+    randomness: TRandomness | null;
 };
-
 /** Live market scan, run by the server over Deriv's public prices. Premium only. */
 export const scanMarkets = (
     preset: string,

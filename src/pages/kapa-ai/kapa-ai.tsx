@@ -18,13 +18,18 @@ import {
     startCheckout,
     TPlan,
     TPlanResult,
+    TRandomness,
     unlockPremium,
 } from '../premium/premium-api';
 import { openPremium, usePremium } from '../premium/use-premium';
 import {
+    addDayResult,
+    contractLabel,
+    dailyRoom,
     DEFAULT_SETTINGS,
-    estRatio,
     fixedPolicy,
+    HALF_KEYS,
+    keyLabel,
     KapaEngine,
     MARKETS,
     overChance,
@@ -41,7 +46,6 @@ import {
     TStopKind,
     TStrategy,
     TTrade,
-    TYPE_LABEL,
     validate,
 } from './engine';
 import KapaClose from '@/components/kapa-close/kapa-close';
@@ -65,13 +69,12 @@ const strategyName = (k: TStrategy) => (k === 'custom' ? 'Custom strategy' : STR
 
 type TScanCard = {
     sym: string;
-    b: number;
-    rec: number | null;
+    key: string; // best-paid contract
     p: number;
-    payout: number;
-    ev: number;
-    recent: number | null;
-    n: number;
+    ratio: number; // profit per 1 staked
+    margin: number; // Deriv's margin: average loss per 1 staked
+    tradable: boolean;
+    rnd: TRandomness | null;
     preset: TPresetKey;
 };
 type TLog = { at: number; text: string; level: 'info' | 'success' | 'warn' | 'error' };
@@ -170,10 +173,14 @@ const KapaAI = observer(() => {
     const [error, setError] = useState('');
 
     const ratios = useRef(new RatioCache()).current;
-    // Live payouts from the last server scan, per strategy and market (used for Premium plans and sessions)
+    // Live payouts from the last server scan, per market (used for plans and sessions)
     const scanRatios = useRef(new Map<string, TPayoutRatios>()).current;
+    /** Every live payout known for a market: Deriv's quotes on this connection, then the last scan. */
+    const liveRatios = (sym: string): TPayoutRatios => ({ ...(scanRatios.get(sym) || {}), ...ratios.knownAll(sym) });
     const balanceRef = useRef(balance);
     balanceRef.current = balance;
+    const clientRef = useRef(client.loginid);
+    clientRef.current = client.loginid;
     const currencyRef = useRef(currency);
     currencyRef.current = currency;
 
@@ -228,7 +235,7 @@ const KapaAI = observer(() => {
             } catch {
                 /* nothing to clear */
             }
-            if (detail.ratios) scanRatios.set(`${k}|${symbol}`, detail.ratios);
+            if (detail.ratios && typeof detail.ratios === 'object') scanRatios.set(symbol, detail.ratios);
             update({ symbol, strategy: k, ...(stake >= 0.35 ? { stake } : {}) });
             setScanMsg(
                 `${MARKETS[symbol]} loaded from the Live Scanner. Review the settings and press Start KAPA AI when ready.`
@@ -317,6 +324,8 @@ const KapaAI = observer(() => {
                     onLog: (text, level) => log(text, level),
                     onStop: (reason, kind, pl) => {
                         setRunning(false);
+                        addDayResult(clientRef.current || 'demo', balanceRef.current, pl); // counts towards today's loss limit
+                        if (kind === 'edge') setError(reason);
                         if (kind === 'tp' || kind === 'sl' || kind === 'streak') setResult({ kind, pl });
                         if (kind === 'error') refreshEntitlement(); // e.g. Premium ended during the session
                         setStatus(prev =>
@@ -339,12 +348,11 @@ const KapaAI = observer(() => {
         let cancelled = false;
         const t = setTimeout(
             async () => {
+                const lr = liveRatios(s.symbol);
+                const priced = Object.keys(lr).length > 0;
                 if (s.strategy === 'fixed') {
-                    const r = ratios.known(s.symbol, 1);
-                    setPlan(simulateFixed(s, balance || 1000, r ?? estRatio(1)));
-                    setPlanNote(
-                        `Simulated 4,000 times with ${r != null ? "Deriv's live payouts" : 'estimated payouts'}`
-                    );
+                    setPlan(simulateFixed(s, balance || 1000, lr));
+                    setPlanNote(`Simulated 4,000 times with ${priced ? "Deriv's live payouts" : 'estimated payouts'}`);
                     return;
                 }
                 if (!premiumEnabled()) {
@@ -355,12 +363,11 @@ const KapaAI = observer(() => {
                     return;
                 }
                 try {
-                    const sr = scanRatios.get(`${s.strategy}|${s.symbol}`);
-                    const res = await simulatePlan(s, balance || 1000, sr || {});
+                    const res = await simulatePlan(s, balance || 1000, lr);
                     if (cancelled) return;
                     setPlan(res);
                     setPlanNote(
-                        `Simulated ${res.sessions.toLocaleString()} times by the Kapa server with ${sr ? "Deriv's live payouts" : 'estimated payouts'}`
+                        `Simulated ${res.sessions.toLocaleString()} times by the Kapa server with ${priced ? "Deriv's live payouts" : 'estimated payouts'}`
                     );
                 } catch (e: any) {
                     if (cancelled) return;
@@ -380,15 +387,16 @@ const KapaAI = observer(() => {
         };
     }, [s, balance, ratioTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Deriv's live payout for the free strategy, so its plan uses real prices
+    // Deriv's live payouts for the 50% contracts on the chosen market: every strategy picks the best-paid
+    // one, and the plans use real prices
     useEffect(() => {
-        if (!logged_in || !api_base.api || s.strategy !== 'fixed') return;
+        if (!logged_in || !api_base.api) return;
         let cancelled = false;
         (async () => {
             // The connection may still be authorizing right after login, so retry a few times
             for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
                 try {
-                    await ratios.get(derivApi, currency, s.symbol, 1);
+                    for (const k of HALF_KEYS) await ratios.get(derivApi, currency, s.symbol, k);
                     if (!cancelled) setRatioTick(n => n + 1);
                     return;
                 } catch {
@@ -399,7 +407,7 @@ const KapaAI = observer(() => {
         return () => {
             cancelled = true;
         };
-    }, [logged_in, currency, s.symbol, s.strategy]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [logged_in, currency, s.symbol]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const login = async () => {
         const url = await generateOAuthURL();
@@ -418,27 +426,21 @@ const KapaAI = observer(() => {
         const preset: TPresetKey = s.strategy !== 'custom' && STRATEGIES[s.strategy].premium ? s.strategy : 'pegasus';
         try {
             const { rows } = await scanMarkets(preset, currency);
-            rows.forEach(r =>
-                scanRatios.set(`${preset}|${r.symbol}`, {
-                    base: r.payout,
-                    ...(r.recovery_payout != null ? { rec: r.recovery_payout } : {}),
-                })
-            );
-            const top = rows.slice(0, 3).map(r => ({
+            rows.forEach(r => scanRatios.set(r.symbol, r.ratios));
+            const top: TScanCard[] = rows.slice(0, 3).map(r => ({
                 sym: r.symbol,
-                b: r.barrier,
-                rec: r.recovery,
+                key: r.contract,
                 p: r.win_chance,
-                payout: s.stake * (1 + r.payout),
-                ev: s.stake * r.expected,
-                recent: r.recent,
-                n: r.recent_ticks,
+                ratio: r.payout,
+                margin: r.margin,
+                tradable: r.tradable,
+                rnd: r.randomness,
                 preset,
             }));
             setCards(top);
             setScanMsg(
                 top.length
-                    ? `${top.length} live markets compared.`
+                    ? `${rows.length} markets compared on Deriv's live payouts. Best terms first.`
                     : 'No prices returned. Check your connection and try again.'
             );
             setRatioTick(n => n + 1);
@@ -457,9 +459,24 @@ const KapaAI = observer(() => {
         setTimeout(() => setActivation(c), 500);
     };
 
+    /** Settings for this session: the stop-loss never goes past what today's loss limit still allows. */
+    const sessionSettings = (): TSettings | string => {
+        const room = dailyRoom(s, client.loginid || 'demo', balance);
+        if (room < 0.35)
+            return `Today's loss limit (${s.dailyLossPct}% of your balance) is reached. KAPA AI pauses until tomorrow to protect your capital.`;
+        if (room >= s.stopLoss) return s;
+        const bold = s.strategy === 'pegasus' || (s.strategy === 'custom' && s.custom.recMode === 'target');
+        if (!bold && room < s.stake)
+            return `Only ${fmt(room)} ${currency} of today's loss limit is left: less than one stake. KAPA AI pauses until tomorrow.`;
+        log(`Stop-loss lowered to ${fmt(room)} ${currency} for this session: what today's loss limit still allows.`, 'warn');
+        return { ...s, stopLoss: room, maxStake: Math.min(s.maxStake, room) };
+    };
+
     const start = () => {
         const err = validate(s, balance);
         if (err) return setError(err);
+        const today = sessionSettings();
+        if (typeof today === 'string') return setError(today);
         if (run_panel.is_running)
             return setError('A Bot Builder strategy is running. Stop it before starting KAPA AI.');
         if (s.strategy !== 'fixed' && !isPremium) {
@@ -472,20 +489,20 @@ const KapaAI = observer(() => {
     };
     const go = () => {
         setConfirmReal(false);
+        const ss = sessionSettings();
+        if (typeof ss === 'string') return setError(ss);
         setPanelOpen(true); // show the live contract, like the reference bot's run panel
         setRunning(true);
         setResult(null);
-        const policy =
-            s.strategy === 'fixed'
-                ? fixedPolicy(s)
-                : remotePolicy(s, scanRatios.get(`${s.strategy}|${s.symbol}`) || {});
+        const lr = liveRatios(ss.symbol);
+        const policy = ss.strategy === 'fixed' ? fixedPolicy(ss, lr) : remotePolicy(ss, lr);
         engine.run(policy, {
-            name: strategyName(s.strategy),
-            delay: s.delay,
-            stake: s.stake,
-            takeProfit: s.takeProfit,
-            stopLoss: s.stopLoss,
-            symbol: s.symbol,
+            name: strategyName(ss.strategy),
+            delay: ss.delay,
+            stake: ss.stake,
+            takeProfit: ss.takeProfit,
+            stopLoss: ss.stopLoss,
+            symbol: ss.symbol,
         });
     };
     const stop = () => {
@@ -504,17 +521,19 @@ const KapaAI = observer(() => {
         return st;
     }, [trades]);
 
-    const recoveryLine = (c?: TScanCard | null) => {
-        if (s.strategy === 'fixed') return 'Recovery: none · fixed stake';
-        if (s.strategy === 'custom') {
-            const { recMode, recovery, martingale } = s.custom;
-            if (recMode === 'recover') return `Recovery: Over ${recovery} · wins back losses in one trade`;
-            if (recMode === 'mult') return `Recovery: Over ${recovery} · stake ×${martingale} after each loss`;
-            return 'Recovery: none · fixed stake';
-        }
-        return c?.rec != null
-            ? `Recovery: Over ${c.rec} after a loss, sized by the KAPA AI server`
-            : 'Recovery: decided by the KAPA AI server after each loss';
+    const recoveryLine = (k: TStrategy = s.strategy) => {
+        if (k === 'fixed') return 'Same stake every trade, no recovery';
+        if (k === 'pegasus')
+            return 'Each stake is what one win needs to reach your take-profit, never more than your stop-loss allows';
+        if (k === 'martingale')
+            return 'Stake ×2.1 after a loss, only for cycles whose every stake fits under your stop-loss';
+        if (k === 'recover')
+            return 'After a loss, the stake one win needs to get the cycle back, only when the whole cycle fits your stop-loss';
+        const { recMode, recovery, martingale } = s.custom;
+        if (recMode === 'target') return 'Bold play: the stake one win needs to reach the take-profit';
+        if (recMode === 'recover') return `Recovery: Over ${recovery} · wins back losses in one trade`;
+        if (recMode === 'mult') return `Recovery: Over ${recovery} · stake ×${martingale} after each loss`;
+        return 'Same stake every trade, no recovery';
     };
     const tpPct = balance ? (s.takeProfit / balance) * 100 : null;
     const progress = { idle: 0, starting: 8, buying: 50, bought: 100, won: 100, lost: 100 }[status.phase];
@@ -543,7 +562,7 @@ const KapaAI = observer(() => {
                             })}
                         >
                             <span>
-                                {MARKETS[live.symbol]} · {TYPE_LABEL[live.type]} {live.barrier}
+                                {MARKETS[live.symbol]} · {contractLabel(live.type, live.barrier)}
                             </span>
                             <span className='kapa-pill'>{live.open ? 'Open' : live.won ? 'Won' : 'Lost'}</span>
                         </div>
@@ -593,7 +612,7 @@ const KapaAI = observer(() => {
                         {trades.slice(0, 200).map(t => (
                             <div key={t.id} className='kapa-tx__row' title={t.longcode}>
                                 <span>
-                                    {TYPE_LABEL[t.type]} {t.barrier}
+                                    {contractLabel(t.type, t.barrier)}
                                     {t.recovery && <em>REC</em>}
                                 </span>
                                 <span className='kapa-tx__spots'>
@@ -729,6 +748,12 @@ const KapaAI = observer(() => {
                             onChange={num('stake')}
                             disabled={running}
                         />
+                        {s.strategy === 'pegasus' && (
+                            <small>
+                                Pegasus sizes each stake itself: what one win needs to reach your take-profit, within
+                                your stop-loss.
+                            </small>
+                        )}
                     </label>
                     <label className='kapa-field'>
                         <span>Take-profit ({currency})</span>
@@ -768,33 +793,35 @@ const KapaAI = observer(() => {
                     </div>
 
                     {cards.map((c, i) => (
-                        <div key={`${c.sym}-${c.b}`} className={classNames('kapa-sig', { 'kapa-sig--best': i === 0 })}>
+                        <div key={`${c.sym}-${c.key}`} className={classNames('kapa-sig', { 'kapa-sig--best': i === 0 })}>
                             <div className='kapa-sig__rank'>
-                                {i === 0 && <span>BEST PRICE</span>}#{i + 1} MARKET
+                                {i === 0 && <span>BEST TERMS</span>}#{i + 1} MARKET
                             </div>
                             <h4>{MARKETS[c.sym]}</h4>
-                            <div className='kapa-sig__pct'>{fmt(c.p * 100, 1)}%</div>
+                            <div className='kapa-sig__pct'>{fmt(c.p * 100, 0)}%</div>
                             <p>
-                                Over {c.b} · {c.sym} · true win chance
-                            </p>
-                            <p className='kapa-sig__rec'>{recoveryLine(c)}</p>
-                            <p>
-                                Payout if won:{' '}
-                                <span className='kapa-up'>
-                                    +{fmt(c.payout - s.stake)} {currency}
-                                </span>{' '}
-                                ({fmt(((c.payout - s.stake) / s.stake) * 100, 1)}%)
+                                {keyLabel(c.key)} · {c.sym} · true win chance
                             </p>
                             <p>
-                                Expected result per trade:{' '}
-                                <span className={c.ev >= 0 ? 'kapa-up' : 'kapa-down'}>
-                                    {signed(c.ev)} {currency}
-                                </span>
+                                Deriv pays <span className='kapa-up'>+{fmt(c.ratio * 100, 1)}%</span> of the stake if
+                                won
                             </p>
-                            {c.recent != null && (
+                            <p>
+                                Deriv&apos;s margin:{' '}
+                                <span className={c.tradable ? undefined : 'kapa-down'}>{fmt(c.margin * 100, 1)}%</span>{' '}
+                                of each stake on average
+                                {c.tradable ? '' : ' · poorer than usual, KAPA AI won’t trade it'}
+                            </p>
+                            <p className='kapa-sig__rec'>{recoveryLine(c.preset)}</p>
+                            {c.rnd && (
                                 <p className='kapa-dim'>
-                                    Last {c.n} ticks: Over {c.b} came up {fmt(c.recent * 100, 1)}% of the time. Past
-                                    ticks don&apos;t predict the next one.
+                                    Last {c.rnd.ticks} ticks:{' '}
+                                    {c.rnd.uniform_p >= 0.01 && c.rnd.serial_p >= 0.01
+                                        ? 'no pattern found'
+                                        : 'unusual run (it happens by chance about 1 time in 100)'}{' '}
+                                    (digits test p={fmt(c.rnd.uniform_p, 2)}, sequence test p={fmt(c.rnd.serial_p, 2)}
+                                    ; even after even {fmt(c.rnd.even_after_even * 100, 0)}%, after odd{' '}
+                                    {fmt(c.rnd.even_after_odd * 100, 0)}%). Past ticks don&apos;t predict the next one.
                                 </p>
                             )}
                             <button className='kapa-use' type='button' onClick={() => pickCard(c)}>
@@ -1116,6 +1143,7 @@ const KapaAI = observer(() => {
                                                     <option value='none'>None</option>
                                                     <option value='mult'>Multiply stake</option>
                                                     <option value='recover'>Win back losses</option>
+                                                    <option value='target'>Bold play to the target</option>
                                                 </select>
                                             </label>
                                             <label className='kapa-field'>
@@ -1179,6 +1207,18 @@ const KapaAI = observer(() => {
                                         />
                                     </label>
                                     <label className='kapa-field'>
+                                        <span>Daily loss limit (% of balance)</span>
+                                        <input
+                                            type='number'
+                                            min={1}
+                                            max={100}
+                                            step={1}
+                                            value={s.dailyLossPct}
+                                            onChange={num('dailyLossPct')}
+                                            disabled={running}
+                                        />
+                                    </label>
+                                    <label className='kapa-field'>
                                         <span>Pause between trades (s)</span>
                                         <input
                                             type='number'
@@ -1231,8 +1271,10 @@ const KapaAI = observer(() => {
                                                 : '.'}{' '}
                                             Averaged over many sessions, that is {signed(plan.avg)} {currency} per
                                             session.
+                                            {plan.contract &&
+                                                ` KAPA AI trades ${keyLabel(plan.contract)}, the contract Deriv pays best here.`}
                                             {plan.avg < 0 &&
-                                                ' Changing the target, stake or stop-loss changes how often you reach the target; the long-run average stays negative.'}
+                                                ' Every Deriv contract pays a little under its true odds, so no strategy makes the long-run average positive: KAPA AI keeps it as close to zero as possible and never lets one session lose more than its stop-loss.'}
                                         </p>
                                     </>
                                 ) : (
@@ -1263,9 +1305,9 @@ const KapaAI = observer(() => {
                             <span className='kapa-hero__scan' aria-hidden />
                         </div>
                         <p className='kapa-modal__text'>
-                            KAPA AI is loaded with {MARKETS[activation.sym]} · Over {activation.b}. Stake {fmt(s.stake)}
-                            , take-profit {fmt(s.takeProfit)}, stop-loss {fmt(s.stopLoss)} {currency}.{' '}
-                            {recoveryLine(activation)}.
+                            KAPA AI is loaded with {MARKETS[activation.sym]} · {keyLabel(activation.key)} (Deriv&apos;s
+                            margin {fmt(activation.margin * 100, 1)}%). Take-profit {fmt(s.takeProfit)}, stop-loss{' '}
+                            {fmt(s.stopLoss)} {currency}. {recoveryLine(activation.preset)}.
                         </p>
                         <button
                             className='kapa-btn kapa-btn--gold'

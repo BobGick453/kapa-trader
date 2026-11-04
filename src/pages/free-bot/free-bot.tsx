@@ -19,9 +19,9 @@ const FILTERS: { key: 'all' | TBotCategory; label: string }[] = [
 ];
 
 const XML_LOADERS = {
-    martingale: () => import('../../xml/martingale.xml'),
-    dalembert: () => import('../../xml/dalembert.xml'),
-    oscars_grind: () => import('../../xml/oscars_grind.xml'),
+    martingale: () => import('../../xml/martingale_max-stake.xml'),
+    dalembert: () => import('../../xml/dalembert_max-stake.xml'),
+    oscars_grind: () => import('../../xml/oscars_grind_max-stake.xml'),
 };
 
 const SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
@@ -40,6 +40,7 @@ const checkData = (d: any): d is TBotData =>
     optNum(d.unit, 0.01, 1000) &&
     isNum(d.profit, 0.01, 1e6) &&
     isNum(d.loss, 0.01, 1e6) &&
+    optNum(d.maxStake, 0.35, 1e6) &&
     isNum(d.duration, 1, 10);
 
 /** Fills a template strategy XML with the bot's settings, as Quick strategy does, and loads it into Bot Builder. */
@@ -70,6 +71,7 @@ const loadBot = async (bot: TLibraryBot, d: TBotData) => {
     setNumber('profit', d.profit);
     setNumber('loss', d.loss);
     if (d.size !== undefined) setNumber('size', d.size);
+    if (d.maxStake !== undefined) setNumber('max_stake', d.maxStake);
     if (d.unit !== undefined)
         ['alembert_unit', 'dalembert_unit', 'oscar_unit'].forEach(k => setNumber(k, d.unit as number));
     if (d.prediction !== undefined) setNumber('last_digit_prediction', d.prediction);
