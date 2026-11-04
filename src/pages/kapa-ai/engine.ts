@@ -28,6 +28,8 @@ export type TSettings = {
     delay: number;
     /** Daily loss limit, in % of the balance at the first session of the day (Deriv account, this device) */
     dailyLossPct: number;
+    /** The most of each stake Deriv may keep on this connection before KAPA AI refuses to trade (%) */
+    maxMargin: number;
     custom: TCustomRules;
 };
 
@@ -108,6 +110,7 @@ export const DEFAULT_SETTINGS: TSettings = {
     maxRuns: 0,
     delay: 1,
     dailyLossPct: 30,
+    maxMargin: 12,
     custom: { barrier: 4, recovery: 4, recMode: 'none', martingale: 2.1 },
 };
 
@@ -152,6 +155,7 @@ export const sanitizeSettings = (raw: any): TSettings => {
     s.custom = { ...DEFAULT_SETTINGS.custom, ...(raw?.custom || {}) };
     if (s.maxLosses !== null && !(Number.isInteger(s.maxLosses) && s.maxLosses >= 1)) s.maxLosses = null;
     if (!(s.dailyLossPct >= 1 && s.dailyLossPct <= 100)) s.dailyLossPct = DEFAULT_SETTINGS.dailyLossPct;
+    if (!(s.maxMargin >= 1 && s.maxMargin <= 50)) s.maxMargin = DEFAULT_SETTINGS.maxMargin;
     if (!['none', 'mult', 'recover', 'target'].includes(s.custom.recMode)) s.custom.recMode = 'none';
     return s;
 };
@@ -371,10 +375,10 @@ export const fixedPolicy = (s: TSettings, initial: TPayoutRatios): TPolicy => {
         if (amount < 0.35)
             return { stop: 'sl', reason: 'Not enough room left above the stop-loss for the minimum stake' };
         const key = bestOf(HALF_KEYS, ratios);
-        if (ratios[key] != null && expectedOf(key, ratios) < MIN_EXPECTED)
+        if (ratios[key] != null && expectedOf(key, ratios) < -(s.maxMargin || 12) / 100)
             return {
                 stop: 'edge',
-                reason: `Deriv pays only +${(ratios[key] * 100).toFixed(1)}% on ${keyLabel(key)} on your connection: Deriv keeps ${(-expectedOf(key, ratios) * 100).toFixed(1)}% of each stake, against 2.35% at Deriv's public price. KAPA AI doesn't trade on such terms. Run the Strategy lab to see the prices, and check that the app has no markup on developers.deriv.com.`,
+                reason: `Deriv pays only +${(ratios[key] * 100).toFixed(1)}% on ${keyLabel(key)} on your connection: Deriv keeps ${(-expectedOf(key, ratios) * 100).toFixed(1)}% of each stake, against 2.35% at Deriv's public price. This is above the limit set in KAPA AI's advanced settings (maximum Deriv margin), so KAPA AI didn't trade. Raise that limit to trade anyway, or check the app's markup on developers.deriv.com.`,
             };
         const { type, barrier } = parseKey(key);
         return {

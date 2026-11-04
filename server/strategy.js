@@ -160,13 +160,15 @@ export const validateSettings = (body, presets = DEFAULT_PRESETS) => {
     const stopLoss = num(body.stopLoss, 0.35, 1e7);
     const maxLosses = int(body.maxLosses ?? (Object.hasOwn(presets, preset) ? presets[preset].maxLosses : 6), 1, 20);
     const maxRuns = int(body.maxRuns ?? 0, 0, 10000);
+    // The most of each stake the user accepts Deriv keeping on their connection (default 12%)
+    const maxMargin = num(body.maxMargin ?? 12, 1, 50);
     if (!symbol) return { error: 'Unknown market.' };
     if (stake === null || takeProfit === null || stopLoss === null) return { error: 'Stake, take-profit and stop-loss are required.' };
     if (maxLosses === null || maxRuns === null) return { error: 'Invalid loss or trade limits.' };
     // A stake can never exceed the stop-loss: the server caps it even if the page asks for more
     const maxStake = Math.min(num(body.maxStake, 0.35, 1e7) ?? stopLoss, stopLoss);
     if (rules.mode !== 'target' && stake > maxStake) return { error: 'The stake must not exceed the stop-loss or the maximum stake.' };
-    return { settings: { ...rules, preset, symbol, stake, takeProfit, stopLoss, maxStake, maxLosses, maxRuns } };
+    return { settings: { ...rules, preset, symbol, stake, takeProfit, stopLoss, maxStake, maxLosses, maxRuns, minExpected: -(maxMargin ?? 12) / 100 } };
 };
 
 export const freshState = () => ({ pl: 0, streak: 0, lost: 0, runs: 0 });
@@ -206,10 +208,10 @@ export const decide = (s, st, ratios) => {
     const room = round2(s.stopLoss + st.pl); // what this session may still lose
     const recovering = st.streak > 0 && s.mode !== 'none' && s.mode !== 'target';
     const key = bestOf(recovering ? s.rec : s.base, ratios);
-    if (s.filter && ratios[key] != null && expectedOf(key, ratios) < MIN_EXPECTED)
+    if (s.filter && ratios[key] != null && expectedOf(key, ratios) < (s.minExpected ?? MIN_EXPECTED))
         return {
             stop: 'edge',
-            reason: `Deriv pays only +${(ratioOf(key, ratios) * 100).toFixed(1)}% on this contract on your connection: Deriv keeps ${(-expectedOf(key, ratios) * 100).toFixed(1)}% of each stake, against 2.35% at Deriv's public price. KAPA AI doesn't trade on such terms. Run the Strategy lab to see the prices, and check that the app has no markup on developers.deriv.com.`,
+            reason: `Deriv pays only +${(ratioOf(key, ratios) * 100).toFixed(1)}% on this contract on your connection: Deriv keeps ${(-expectedOf(key, ratios) * 100).toFixed(1)}% of each stake, against 2.35% at Deriv's public price. This is above the limit set in KAPA AI's advanced settings (maximum Deriv margin), so KAPA AI didn't trade. Raise that limit to trade anyway, or check the app's markup on developers.deriv.com.`,
         };
     const r = ratioOf(key, ratios);
     let amount;

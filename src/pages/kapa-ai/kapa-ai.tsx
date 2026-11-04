@@ -545,6 +545,7 @@ const KapaAI = observer(() => {
     const halfKey = bestOf(HALF_KEYS, halfRatios);
     const halfRatio = halfRatios[halfKey] ?? estRatioOf(halfKey);
     const boldNeed = s.takeProfit / halfRatio;
+    const halfMargin = 1 - chanceOf(halfKey) * (1 + halfRatio);
     const bestHalfChance = chanceOf(halfKey);
     const progress = { idle: 0, starting: 8, buying: 50, bought: 100, won: 100, lost: 100 }[status.phase];
 
@@ -1225,6 +1226,18 @@ const KapaAI = observer(() => {
                                         />
                                     </label>
                                     <label className='kapa-field'>
+                                        <span>Maximum Deriv margin (%)</span>
+                                        <input
+                                            type='number'
+                                            min={1}
+                                            max={50}
+                                            step={0.5}
+                                            value={s.maxMargin}
+                                            onChange={num('maxMargin')}
+                                            disabled={running}
+                                        />
+                                    </label>
+                                    <label className='kapa-field'>
                                         <span>Daily loss limit (% of balance)</span>
                                         <input
                                             type='number'
@@ -1250,6 +1263,15 @@ const KapaAI = observer(() => {
                                 </div>
                             )}
 
+                            {halfRatios[halfKey] != null && (
+                                <p className={halfMargin > 0.03 ? 'kapa-warnbox' : 'kapa-dim'}>
+                                    On your connection Deriv pays +{fmt(halfRatio * 100, 1)}% on {keyLabel(halfKey)}: it keeps{' '}
+                                    {fmt(halfMargin * 100, 1)}% of each stake
+                                    {halfMargin > 0.03
+                                        ? ` (Deriv's public price keeps 2.35%). Every strategy loses faster at this price; an app markup set on developers.deriv.com is the usual cause.`
+                                        : ", Deriv's normal price."}
+                                </p>
+                            )}
                             <div className='kapa-plan'>
                                 <div className='kapa-plan__head'>
                                     <span>Session plan</span>

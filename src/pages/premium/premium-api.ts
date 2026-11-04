@@ -199,6 +199,7 @@ const settingsBody = (s: TSettings) => ({
     maxStake: s.maxStake,
     ...(s.maxLosses !== null ? { maxLosses: s.maxLosses } : s.strategy === 'custom' ? { maxLosses: 4 } : {}),
     maxRuns: s.maxRuns || 0,
+    maxMargin: s.maxMargin,
 });
 
 /** A Premium strategy running on the server: each settled contract goes up, the next trade comes back. */
