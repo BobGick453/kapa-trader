@@ -113,7 +113,7 @@ Collez un texte JSON de ce format (chaque partie est facultative) :
 }
 ```
 
-`mode` : `target` (mise audacieuse : la mise qu'un seul gain demande pour atteindre l'objectif), `double` (mise multipliée par `martingale` après une perte), `recover` (la mise qui récupère tout le cycle en un gain) ou `none` (mise fixe) ; `group` : `half` (contrats à 50 % : Even, Odd, Over 4, Under 5), `high` (80 % : Over 1, Under 8) ou `low` (40 % : Over 5, Under 4). Le serveur choisit toujours, dans le groupe, le contrat que Deriv paie le mieux, refuse de trader si sa marge dépasse 10 %, et ne commence un cycle de récupération que si toutes ses mises tiennent sous le stop-loss. `martingale` : de 1 à 5 ; `maxLosses` : de 1 à 20. Si le texte est invalide, les stratégies Premium s'arrêtent (aucun trade), mais les paiements et l'Admin continuent de fonctionner.
+`mode` : `target` (mise audacieuse : la mise qu'un seul gain demande pour atteindre l'objectif), `double` (mise multipliée par `martingale` après une perte), `recover` (la mise qui récupère tout le cycle en un gain) ou `none` (mise fixe) ; `group` : `half` (contrats à 50 % : Even, Odd, Over 4, Under 5), `high` (80 % : Over 1, Under 8) ou `low` (40 % : Over 5, Under 4). Le serveur choisit toujours, dans le groupe, le contrat que Deriv paie le mieux, refuse de trader si sa marge dépasse 5 %, et ne commence un cycle de récupération que si toutes ses mises tiennent sous le stop-loss. `martingale` : de 1 à 5 ; `maxLosses` : de 1 à 20. Si le texte est invalide, les stratégies Premium s'arrêtent (aucun trade), mais les paiements et l'Admin continuent de fonctionner.
 
 ## Changer une clé
 

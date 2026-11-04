@@ -24,7 +24,10 @@ import {
 import { openPremium, usePremium } from '../premium/use-premium';
 import {
     addDayResult,
+    bestOf,
+    chanceOf,
     contractLabel,
+    estRatioOf,
     dailyRoom,
     DEFAULT_SETTINGS,
     fixedPolicy,
@@ -537,6 +540,12 @@ const KapaAI = observer(() => {
         return 'Same stake every trade, no recovery';
     };
     const tpPct = balance ? (s.takeProfit / balance) * 100 : null;
+    // Pegasus: the stake one win needs to reach the take-profit, with the best live 50% payout
+    const halfRatios = liveRatios(s.symbol);
+    const halfKey = bestOf(HALF_KEYS, halfRatios);
+    const halfRatio = halfRatios[halfKey] ?? estRatioOf(halfKey);
+    const boldNeed = s.takeProfit / halfRatio;
+    const bestHalfChance = chanceOf(halfKey);
     const progress = { idle: 0, starting: 8, buying: 50, bought: 100, won: 100, lost: 100 }[status.phase];
 
     const panelSection = (
@@ -770,6 +779,14 @@ const KapaAI = observer(() => {
                         {tpPct != null && (
                             <small>
                                 = {fmt(tpPct, tpPct < 10 ? 1 : 0)}% of your balance ({fmt(balance)} {currency})
+                            </small>
+                        )}
+                        {s.strategy === 'pegasus' && boldNeed > Math.min(s.stopLoss, s.maxStake) && (
+                            <small className='kapa-warn'>
+                                One win needs a stake of {fmt(boldNeed)} to reach this take-profit, more than your
+                                stop-loss allows: each session will be a single trade of {fmt(Math.min(s.stopLoss, s.maxStake))},
+                                won or lost at once (about {Math.round(bestHalfChance * 100)}% chance). Lower the take-profit
+                                (for example to {fmt(Math.max(1, Math.floor(s.stopLoss / 5)), 0)}) to reach it far more often.
                             </small>
                         )}
                     </label>

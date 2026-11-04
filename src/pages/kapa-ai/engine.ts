@@ -92,6 +92,8 @@ export const bestOf = (keys: string[], ratios: TPayoutRatios) =>
 
 /** The free strategy: the same stake every time, on the best-paid 50% contract. */
 const FIXED = { maxLosses: 5 };
+/** Below this average result per 1 staked (a margin above 5%), KAPA AI doesn't trade (same rule as the server). */
+export const MIN_EXPECTED = -0.05;
 /** A session may risk at most this share of the balance, so one bad session can't empty the account. */
 export const MAX_SESSION_RISK = 0.25;
 
@@ -368,7 +370,13 @@ export const fixedPolicy = (s: TSettings, initial: TPayoutRatios): TPolicy => {
         const amount = floor2(Math.min(s.stake, s.stopLoss + st.pl));
         if (amount < 0.35)
             return { stop: 'sl', reason: 'Not enough room left above the stop-loss for the minimum stake' };
-        const { type, barrier } = parseKey(bestOf(HALF_KEYS, ratios));
+        const key = bestOf(HALF_KEYS, ratios);
+        if (ratios[key] != null && expectedOf(key, ratios) < MIN_EXPECTED)
+            return {
+                stop: 'edge',
+                reason: `Deriv pays only +${(ratios[key] * 100).toFixed(1)}% on ${keyLabel(key)} on your connection: Deriv keeps ${(-expectedOf(key, ratios) * 100).toFixed(1)}% of each stake, against 2.35% at Deriv's public price. KAPA AI doesn't trade on such terms. Run the Strategy lab to see the prices, and check that the app has no markup on developers.deriv.com.`,
+            };
+        const { type, barrier } = parseKey(key);
         return {
             trade: { contract_type: type, barrier, amount, symbol: s.symbol, duration: 1, recovery: false },
         };

@@ -46,10 +46,11 @@ export const DEFAULT_PRESETS = {
 };
 
 /**
- * Below this expected result per 1 staked (a margin above 10%), KAPA AI doesn't trade: Deriv's terms are
- * much worse than usual for these contracts. The scanner shows the live margin of every market.
+ * Below this expected result per 1 staked (a margin above 5%), KAPA AI doesn't trade. Deriv's public
+ * price on 50% contracts keeps 2.35%; a connection that pays much less (for example because of an app
+ * markup) makes every strategy lose several times faster, so KAPA AI stops and says why.
  */
-export const MIN_EXPECTED = -0.1;
+export const MIN_EXPECTED = -0.05;
 
 /** Settings of the Premium bots in the Free Bot library; only members receive them. */
 export const DEFAULT_BOTS = {
@@ -208,7 +209,7 @@ export const decide = (s, st, ratios) => {
     if (s.filter && ratios[key] != null && expectedOf(key, ratios) < MIN_EXPECTED)
         return {
             stop: 'edge',
-            reason: `Deriv's payout on this market is poorer than usual right now (margin ${(-expectedOf(key, ratios) * 100).toFixed(1)}%). KAPA AI doesn't trade on poor terms: try another market or later.`,
+            reason: `Deriv pays only +${(ratioOf(key, ratios) * 100).toFixed(1)}% on this contract on your connection: Deriv keeps ${(-expectedOf(key, ratios) * 100).toFixed(1)}% of each stake, against 2.35% at Deriv's public price. KAPA AI doesn't trade on such terms. Run the Strategy lab to see the prices, and check that the app has no markup on developers.deriv.com.`,
         };
     const r = ratioOf(key, ratios);
     let amount;

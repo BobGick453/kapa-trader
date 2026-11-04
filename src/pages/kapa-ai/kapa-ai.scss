@@ -1802,3 +1802,14 @@
         }
     }
 }
+
+.kapa-field small.kapa-warn {
+    display: block;
+    margin-top: 0.6rem;
+    padding: 0.8rem 1rem;
+    border-radius: 0.8rem;
+    border: 1px solid rgb(245 197 66 / 45%);
+    background: rgb(245 197 66 / 10%);
+    color: #f8d77a;
+    line-height: 1.4;
+}
