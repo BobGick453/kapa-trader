@@ -9,12 +9,16 @@
  *   likely and independent of the ones before. No pattern of past ticks says what comes next, so
  *   KAPA AI never "waits for a signal" in the digits. Its tests on live ticks (the scanner) show it.
  * - Every Deriv contract pays a little less than its true odds: on average each trade loses a small
- *   share of the stake (Deriv's margin). No staking system changes that average. What a strategy can
+ *   share of the stake (Deriv's margin: 1.4% on Over 1, 2.35% on Even/Odd, 10.7% on Matches, measured on
+ *   Deriv's real prices). No staking system changes that average. What a strategy can
  *   change is how often a session reaches its take-profit before its stop-loss, how much is staked
  *   on the way (the average loss is the margin times the total staked) and how deep a bad run can go.
  * So KAPA AI, before each trade:
- * 1. picks, among contracts with the same chance, the one Deriv pays best right now (the smallest
- *    margin, from live prices), and refuses to trade when even that one is priced worse than usual;
+ * 1. trades 50% contracts (Even, Odd, Over 4, Under 5). A high-chance contract has a smaller margin per
+ *    trade, but each win is small, so reaching a target takes far more stake and costs more in total:
+ *    what counts is the margin divided by the payout, lowest on 50% contracts (tested on 300,000 real
+ *    ticks with Deriv's real prices). Among those it picks the one Deriv pays best right now, and refuses
+ *    to trade when even that one is priced much worse than usual;
  * 2. starts a recovery cycle only when every stake of the whole cycle fits under the stop-loss and
  *    the maximum stake, so a losing run ends at a known loss instead of a stake it can't afford;
  * 3. for Pegasus, stakes what one win needs to reach the take-profit ("bold play"). Dubins and
@@ -106,8 +110,16 @@ const winProb = key => {
     if (t === 'DIGITOVER') return (9 - b) / 10;
     return b / 10; // DIGITUNDER
 };
-/** Profit per 1 staked when Deriv hasn't quoted yet: a cautious guess (7% under fair odds). */
-const estRatio = key => 0.93 / winProb(key) - 1;
+/**
+ * Deriv's margin by chance of winning, measured on its real prices (stake 10, 1 tick, the same on every
+ * Volatility index, November 2026). Used only until Deriv's live quote for the contract is known.
+ */
+const MEASURED_MARGIN = { 0.9: 0.0136, 0.8: 0.0144, 0.7: 0.0172, 0.6: 0.0196, 0.5: 0.0235, 0.4: 0.0292, 0.3: 0.0385, 0.2: 0.0566, 0.1: 0.1071 };
+/** Profit per 1 staked when Deriv hasn't quoted yet, from the measured margins. */
+const estRatio = key => {
+    const p = winProb(key);
+    return (1 - (MEASURED_MARGIN[Math.round(p * 10) / 10] ?? 0.03)) / p - 1;
+};
 const ratioOf = (key, ratios) => ratios[key] ?? estRatio(key);
 /** Average result of 1 staked: chance × (1 + profit) − 1. Always below 0 on Deriv. */
 const expectedOf = (key, ratios) => winProb(key) * (1 + ratioOf(key, ratios)) - 1;
