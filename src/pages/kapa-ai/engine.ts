@@ -35,12 +35,16 @@ export const STRATEGIES: Record<TPresetKey, { label: string; premium: boolean }>
     pegasus: { label: 'Pegasus · bold play, best chance to reach the take-profit', premium: true },
     martingale: { label: 'Steady · ×2.1 recovery cycles that fit the stop-loss', premium: true },
     recover: { label: 'Exact recovery · one win gets the cycle back', premium: true },
-    fixed: { label: 'Even/Odd · fixed stake, lowest Deriv margin', premium: false },
+    fixed: { label: 'Even/Odd · fixed stake, no recovery', premium: false },
 };
 export const PREMIUM_PRESETS = (Object.keys(STRATEGIES) as TPresetKey[]).filter(k => STRATEGIES[k].premium);
 
 // ---------- Contracts, keyed 'DIGITEVEN' or 'DIGITOVER:4' ----------
-/** 50% contracts: Deriv's margin is smallest on these, so KAPA AI's strategies trade the best-paid one. */
+/**
+ * 50% contracts. Deriv's margin per trade is smaller on high-chance contracts (1.4% on Over 1 against
+ * 2.35% here), but their wins are small, so a target costs far more stake to reach: per unit of possible
+ * profit, 50% contracts are the cheapest. KAPA AI's strategies trade the best-paid of these.
+ */
 export const HALF_KEYS = ['DIGITEVEN', 'DIGITODD', 'DIGITOVER:4', 'DIGITUNDER:5'];
 export const contractKey = (type: TContractType, barrier: number | null | undefined) =>
     barrier === null || barrier === undefined || !needsBarrier(type) ? type : `${type}:${barrier}`;
@@ -63,8 +67,23 @@ export const keyLabel = (key: string) => {
     const { type, barrier } = parseKey(key);
     return contractLabel(type, barrier);
 };
-/** Profit per 1 staked before Deriv has quoted: a cautious guess (7% under fair odds). */
-export const estRatioOf = (key: string) => 0.93 / chanceOf(key) - 1;
+/** Deriv's margin by chance of winning, measured on its real prices (stake 10, 1 tick, November 2026). */
+const MEASURED_MARGIN: Record<string, number> = {
+    '0.9': 0.0136,
+    '0.8': 0.0144,
+    '0.7': 0.0172,
+    '0.6': 0.0196,
+    '0.5': 0.0235,
+    '0.4': 0.0292,
+    '0.3': 0.0385,
+    '0.2': 0.0566,
+    '0.1': 0.1071,
+};
+/** Profit per 1 staked before Deriv has quoted, from the measured margins. */
+export const estRatioOf = (key: string) => {
+    const p = chanceOf(key);
+    return (1 - (MEASURED_MARGIN[String(Math.round(p * 10) / 10)] ?? 0.03)) / p - 1;
+};
 /** Average result of 1 staked. Always below 0: Deriv pays a little less than the true odds. */
 export const expectedOf = (key: string, ratios: TPayoutRatios) =>
     chanceOf(key) * (1 + (ratios[key] ?? estRatioOf(key))) - 1;
@@ -117,8 +136,8 @@ export const needsBarrier = (t: TContractType) => ['DIGITOVER', 'DIGITUNDER', 'D
 
 /** True chance of winning Over b: the last digit of a synthetic index is uniformly random. */
 export const overChance = (b: number) => (9 - b) / 10;
-/** Profit per 1 staked before Deriv has quoted: Deriv pays roughly 7% under fair odds. */
-export const estRatio = (b: number) => 0.93 / overChance(b) - 1;
+/** Profit per 1 staked on Over b before Deriv has quoted, from the measured margins. */
+export const estRatio = (b: number) => estRatioOf(`DIGITOVER:${b}`);
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 const floor2 = (n: number) => Math.floor(n * 100) / 100;

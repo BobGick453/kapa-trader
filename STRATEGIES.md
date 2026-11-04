@@ -1,39 +1,71 @@
-# Les stratégies de Kapa Trader
+# Les stratégies de Kapa Trader, vérifiées sur les vraies données de Deriv
 
-## Ce qui est prouvé, et ce qui ne l'est pas
+Mesures du 4 novembre 2026, faites sur les serveurs de Deriv (`api.derivws.com`) :
+- **300 000 vrais ticks** : 30 000 sur chacun des 10 indices Volatility (R_10 à R_100, 1HZ10V à 1HZ100V) ;
+- **30 000 ticks plus anciens** de 1HZ50V pour un contrôle ;
+- **les vrais prix** de 32 contrats chiffres sur chacun des 10 marchés.
 
-- **Les chiffres sont aléatoires.** Les indices Volatility de Deriv sont produits par un générateur de nombres aléatoires. Chaque dernier chiffre a une chance sur dix et ne dépend pas des précédents. Aucune suite de ticks ne dit ce qui vient ensuite. Kapa ne « guette » donc pas de signal : le scanner teste les 1 000 derniers ticks de chaque marché pour le montrer (test du chi carré sur les chiffres, test de suite pair/impair).
-- **Deriv paie un peu moins que les vraies chances.** Chaque contrat a donc un résultat moyen légèrement négatif : c'est la marge de Deriv. Aucune méthode de mise (martingale, D'Alembert, Oscar's Grind…) ne change cette moyenne : c'est le théorème de la ruine du joueur. Une stratégie peut seulement changer trois choses :
-  - la chance d'atteindre l'objectif avant le stop-loss ;
-  - la somme misée en route : la perte moyenne vaut la marge multipliée par cette somme ;
-  - la profondeur d'une mauvaise série.
-- **Ce qu'aucun bot honnête ne peut promettre :** gagner à coup sûr, ou être rentable à long terme sur ces contrats.
+## 1. Les vrais prix de Deriv
 
-## Les règles de Kapa
+La marge est ce que Deriv garde en moyenne sur chaque mise. Elle est la même sur les 10 marchés. Mise de 10, 1 tick :
 
-1. **Le contrat le moins cher.** Avant chaque trade, Kapa compare les prix réels de Deriv parmi des contrats qui ont la même chance (Even, Odd, Over 4, Under 5 : 50 %), et prend le mieux payé. Les contrats à 50 % ont la plus petite marge : environ 2,5 % de la mise si Deriv paie Even environ 1,95 fois la mise, contre environ 7 % pour Over 1. Ces chiffres sont des estimations : le scanner affiche la marge réelle de chaque marché.
-2. **Pas de trade sur de mauvais prix.** Si même le meilleur contrat a une marge de plus de 10 %, Kapa ne trade pas.
-3. **Jamais de cycle impossible à finir.** Un cycle de récupération ne commence que si toutes ses mises tiennent ensemble sous le stop-loss et sous la mise maximale. Une mauvaise série s'arrête donc à une perte prévue, jamais sur une mise que le compte ne peut pas suivre.
-4. **Pegasus : la mise audacieuse.** Chaque mise est ce qu'un seul gain demande pour atteindre l'objectif. Dubins et Savage ont prouvé que, quand chaque pari paie moins que ses chances, cette façon de miser donne la plus grande chance d'atteindre un objectif avant de perdre un budget. Elle mise aussi le moins en tout, donc perd le moins en moyenne.
-5. **Le capital est protégé.**
-   - Une session ne peut pas risquer plus de 25 % du solde.
-   - Une limite de perte par jour (30 % du solde par défaut, réglable) arrête Kapa jusqu'au lendemain.
-   - Une mise ne dépasse jamais le solde ni le stop-loss.
+| Contrat | Chance | Deriv paie | Marge |
+|---|---|---|---|
+| Differs, Over 0, Under 9 | 90 % | 10,96 | 1,36 % |
+| Over 1, Under 8 | 80 % | 12,32 | 1,44 % |
+| Over 2, Under 7 | 70 % | 14,04 | 1,72 % |
+| Over 3, Under 6 | 60 % | 16,34 | 1,96 % |
+| Even, Odd, Over 4, Under 5 | 50 % | 19,53 | 2,35 % |
+| Over 5, Under 4 | 40 % | 24,27 | 2,92 % |
+| Over 6, Under 3 | 30 % | 32,05 | 3,85 % |
+| Over 7, Under 2 | 20 % | 47,17 | 5,66 % |
+| Over 8, Under 1, Matches | 10 % | 89,29 | 10,71 % |
 
-## Résultats simulés
+Une mise de 1 coûte un peu plus cher, à cause de l'arrondi au centime (2,50 % sur Even, 1,60 % sur Over 1).
 
-20 000 sessions par ligne, mise de départ 1, objectif +10, stop-loss 50, avec les paiements habituels de Deriv :
+## 2. Les chiffres sont-ils prévisibles ? Non
 
-| Stratégie | Atteint l'objectif | Résultat moyen par session |
-|---|---|---|
-| Pegasus (mise audacieuse, Even/Odd) | 82 % | −0,69 |
-| Steady (×2,1, cycles sous le stop-loss) | 73 % | −0,84 |
-| Exact recovery | 71 % | −0,98 |
-| Ancienne approche : Over 1, mise fixe | 0 % | −49,91 |
-| Over 2, martingale ×2,2 | 14 % | −39,63 |
+- **Fréquence de chaque chiffre, paires de chiffres successifs, parité, séries :** 30 tests sur les 10 marchés. Le plus petit p vaut 0,003 (parité sur 1HZ50V).
+- **Contrôle de ce résultat :** sur 30 000 autres ticks de 1HZ50V, l'effet disparaît (50,3 % de parité répétée, p = 0,27). C'était le hasard : sur 30 tests, un résultat de ce genre est attendu.
+- **Le « signal » le plus vendu :** « Even après plusieurs Odd », mesuré sur jusqu'à 150 000 occurrences :
 
-Pegasus atteint presque le plafond théorique : avec un objectif de 10 et un stop-loss de 50, aucune stratégie ne peut dépasser environ 83 %, car 50 / (50 + 10) = 0,83.
+  | Après | Fois | Pair ensuite |
+  |---|---|---|
+  | 1 Odd | 149 661 | 50,06 % |
+  | 3 Odd | 37 483 | 49,72 % |
+  | 5 Odd | 9 483 | 49,75 % |
+  | 8 Odd | 1 157 | 52,6 % (intervalle 49,6 %–55,5 %) |
 
-## Le bot exemplaire
+  Pour gagner sur Even avec le prix de Deriv, il faudrait dépasser 51,2 % de façon stable. Aucun signal n'y arrive.
 
-Sur les captures du bot exemplaire, Pegasus mise tout le solde (392 USD sur un solde de 392,18) pour gagner 10 USD, avec un stop-loss de 5 000. Une seule perte, environ une fois sur cinq sur Over 1, vide le compte. Kapa ne fait jamais cela.
+## 3. Quel contrat choisir ?
+
+La marge par trade est plus petite sur Over 1 (1,44 %) que sur Even (2,35 %). Mais un gain sur Over 1 ne rapporte que 23 % de la mise, contre 95 % sur Even. Pour atteindre le même objectif, il faut donc miser beaucoup plus, et la perte totale est plus grande.
+
+Le bon critère est la marge divisée par le gain : c'est le coût d'une unité de profit possible.
+- Even : 0,0235 / 0,953 = 2,5 %
+- Over 1 : 0,0144 / 0,232 = 6,2 %
+- Over 0 : 14 %
+
+Kapa trade donc les contrats à 50 %, et prend celui que Deriv paie le mieux à l'instant.
+
+## 4. Les stratégies rejouées sur les 300 000 vrais ticks
+
+Moteur réel de Kapa, prix réels de Deriv, sessions enchaînées. Objectif +10, stop-loss 50. Pour le bot exemplaire : tout le solde de 392 sur Over 1.
+
+| Stratégie | Atteint l'objectif | Moyenne par session | Pire session |
+|---|---|---|---|
+| **Pegasus (mise audacieuse)** | **82,3 %** | **−0,64** | −50 |
+| Steady (×2,1, cycles qui tiennent) | 72,2 % | −1,19 | −36 |
+| Exact recovery | 70,5 % | −1,20 | −34 |
+| Gratuite (mise fixe Even) | 18,9 % | −1,14 | −33 |
+| Bot exemplaire (tout le solde sur Over 1) | 80,1 % | −5,17 | **−392 (compte vidé)** |
+
+Avec un objectif +5 et un stop-loss de 50, Pegasus atteint l'objectif dans 90,1 % des sessions, pour −0,42 par session.
+
+## Ce que cela veut dire
+
+- **Aucune stratégie n'est gagnante à long terme** sur ces contrats : les chiffres sont aléatoires et Deriv garde une marge. Les vraies données le confirment.
+- **Pegasus est la meilleure** : la plus grande chance d'atteindre l'objectif et la plus petite perte moyenne. Elle perd 8 fois moins par session que la méthode du bot exemplaire, et ne vide jamais le compte.
+- **Le capital est protégé** : jamais plus de 25 % du solde par session, une limite de perte par jour, et aucun cycle de récupération qui dépasse le stop-loss.
+- **Le laboratoire du bot** (Réglages KAPA AI → « Run the test on real Deriv data ») refait ces mesures sur votre téléphone, à tout moment.

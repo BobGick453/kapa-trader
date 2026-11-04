@@ -31,8 +31,9 @@ export type TLibraryBot = {
     data?: TBotData; // absent for Premium bots
 };
 
-// Every bot trades a 50% contract (Even, Odd or Under 5): Deriv's margin is smallest on those (about
-// 2.5% of the stake against about 7% on Over 1). Each has a loss limit and a stake ceiling, so a losing
+// Every bot trades a 50% contract (Even, Odd or Under 5). Deriv keeps 2.35% of each stake on those and
+// 1.4% on Over 1 (its real prices), but Over 1 wins only 23% of the stake, so a target costs far more
+// stake to reach: tested on 300,000 real ticks, 50% contracts lose the least. Each has a loss limit and a stake ceiling, so a losing
 // run ends at a known loss: Bot Builder checks the limit after each trade, so a session can lose at most
 // the limit plus one stake. Chances below come from 20,000 simulated sessions with Deriv's usual payout.
 export const LIBRARY_BOTS: TLibraryBot[] = [
