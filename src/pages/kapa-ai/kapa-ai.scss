@@ -1715,3 +1715,90 @@
         transition: none;
     }
 }
+
+// Strategy lab (real Deriv data)
+.kapa-lab {
+    margin-top: 1.6rem;
+    padding: 1.4rem;
+    border-radius: var(--k-radius, 1.2rem);
+    border: 1px solid #2a3f78;
+    background: rgb(10 20 50 / 60%);
+
+    > .kapa-btn {
+        width: 100%;
+        margin: 0.6rem 0;
+    }
+
+    h5 {
+        margin: 1.6rem 0 0.6rem;
+        font-size: 1.4rem;
+        color: #f5c542;
+    }
+
+    &__digits {
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 0.4rem;
+        height: 9rem;
+        align-items: end;
+        text-align: center;
+
+        > div {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            height: 100%;
+        }
+
+        i {
+            display: block;
+            border-radius: 0.4rem 0.4rem 0 0;
+            background: linear-gradient(180deg, #5b8cff, #2563eb);
+            min-height: 0.2rem;
+        }
+
+        b {
+            font-size: 1.2rem;
+        }
+
+        small {
+            font-size: 0.95rem;
+            color: #9fb0d8;
+        }
+    }
+
+    &__table {
+        display: grid;
+        gap: 0.2rem;
+        font-size: 1.2rem;
+    }
+
+    &__row {
+        display: grid;
+        grid-template-columns: minmax(0, 2.2fr) repeat(3, minmax(0, 1fr));
+        gap: 0.6rem;
+        align-items: center;
+        padding: 0.6rem 0.4rem;
+        border-bottom: 1px solid #1d2e5c;
+
+        span:not(:first-child) {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        small {
+            display: block;
+            color: #9fb0d8;
+            font-size: 1rem;
+        }
+
+        &--head {
+            color: #9fb0d8;
+            font-size: 1.1rem;
+        }
+
+        &--best {
+            background: rgb(245 197 66 / 10%);
+        }
+    }
+}

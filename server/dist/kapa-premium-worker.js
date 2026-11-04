@@ -365,6 +365,81 @@ const randomnessCheck = digits => {
     };
 };
 
+// ---------- Backtest on real Deriv ticks ----------
+/** Did a 1-tick contract win, given the last digit of the exit tick? */
+const wins = (key, d) => {
+    const { contract_type: t, barrier: b } = contractOf(key);
+    if (t === 'DIGITEVEN') return d % 2 === 0;
+    if (t === 'DIGITODD') return d % 2 === 1;
+    if (t === 'DIGITOVER') return d > b;
+    return d < b; // DIGITUNDER
+};
+
+/**
+ * Replays real last digits, in order, through a strategy's own rules (decide / applyResult), one
+ * session after another with the same take-profit and stop-loss, and with Deriv's real payouts.
+ * Each tick settles one 1-tick contract, so consecutive trades use consecutive ticks.
+ */
+const backtest = (s, digits, ratios) => {
+    let st = freshState();
+    let staked = 0;
+    let trades = 0;
+    let net = 0;
+    let worst = 0;
+    const done = { tp: 0, loss: 0, edge: 0 };
+    let sessions = 0;
+    for (let i = 0; i < digits.length; i++) {
+        const d = decide(s, st, ratios);
+        if (!d.trade) {
+            sessions++;
+            net = round2(net + st.pl);
+            worst = Math.min(worst, st.pl);
+            if (d.stop === 'tp') done.tp++;
+            else if (d.stop === 'edge') {
+                done.edge++;
+                break; // poor prices: the strategy refuses to trade at all
+            } else done.loss++;
+            st = freshState();
+            i--; // the next session starts on this same tick
+            continue;
+        }
+        const { contract_type, barrier, amount } = d.trade;
+        const key = barrier === null ? contract_type : `${contract_type}:${barrier}`;
+        const won = wins(key, digits[i]);
+        staked += amount;
+        trades++;
+        st = applyResult(s, st, { buy_price: amount, profit: won ? round2(amount * ratioOf(key, ratios)) : -amount });
+    }
+    return {
+        sessions,
+        tp: done.tp,
+        loss: done.loss,
+        refused: done.edge > 0,
+        net: round2(net), // finished sessions only
+        open: round2(st.pl), // the session still running when the ticks ran out
+        worst: round2(worst),
+        trades,
+        staked: round2(staked),
+    };
+};
+
+/** The strategies compared in the lab, as the server runs them (the reference bot's all-in method included). */
+const labStrategies = (presets, { stake, takeProfit, stopLoss, capital }) => {
+    const base = { symbol: 'R_100', takeProfit, maxRuns: 0 };
+    const preset = (k) => {
+        const p = presets[k];
+        return { ...base, mode: p.mode, base: GROUPS[p.group], rec: GROUPS[p.group], martingale: p.martingale, filter: true, stake, stopLoss, maxStake: stopLoss, maxLosses: p.maxLosses };
+    };
+    return {
+        pegasus: preset('pegasus'),
+        martingale: preset('martingale'),
+        recover: preset('recover'),
+        fixed: { ...base, mode: 'none', base: GROUPS.half, rec: GROUPS.half, martingale: 1, filter: false, stake, stopLoss, maxStake: stopLoss, maxLosses: 5 },
+        // The reference bot: the whole balance on Over 1 every trade, until the target or the balance is gone
+        reference: { ...base, mode: 'none', base: ['DIGITOVER:1'], rec: ['DIGITOVER:1'], martingale: 1, filter: false, stake: capital, stopLoss: capital, maxStake: capital, maxLosses: 20 },
+    };
+};
+
 
 /**
  * Kapa Premium server (Cloudflare Worker + KV).
@@ -870,6 +945,29 @@ const handle = async (req, env) => {
         const s = v.settings;
         const capital = Number.isFinite(body.capital) && body.capital > 0 ? Math.min(body.capital, 1e8) : 1000;
         return json(simulate(s, capital, cleanRatios(body.ratios)));
+    }
+
+    // Strategy lab: replays real Deriv ticks, fetched by the visitor's own browser, through every
+    // strategy with Deriv's real payouts. Free for everyone: it shows what each strategy really does.
+    if (req.method === 'POST' && path === '/lab/backtest') {
+        if (rateLimited(`lab:${ip}`, 6)) return fail(429, 'Too many tests. Wait a minute.');
+        const body = await readJson(req);
+        const digits = typeof body?.digits === 'string' && /^[0-9]{100,6000}$/.test(body.digits) ? [...body.digits].map(Number) : null;
+        if (!digits) return fail(400, 'Send between 100 and 6,000 real last digits.');
+        const n = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null);
+        const stake = n(body.stake, 0.35, 50000);
+        const takeProfit = n(body.takeProfit, 0.01, 1e7);
+        const stopLoss = n(body.stopLoss, 0.35, 1e7);
+        const capital = n(body.capital, 1, 1e8) ?? 1000;
+        if (stake === null || takeProfit === null || stopLoss === null)
+            return fail(400, 'Stake, take-profit and stop-loss are required.');
+        const ratios = cleanRatios(body.ratios);
+        const results = Object.fromEntries(
+            Object.entries(labStrategies(rules().presets, { stake: Math.min(stake, stopLoss), takeProfit, stopLoss, capital })).map(
+                ([k, st]) => [k, backtest(st, digits, ratios)]
+            )
+        );
+        return json({ ticks: digits.length, results });
     }
 
     // ----- Premium code: unlock and check (no Deriv login needed) -----

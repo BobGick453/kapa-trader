@@ -362,3 +362,78 @@ export const randomnessCheck = digits => {
         even_after_odd: Math.round(after[1] * 1000) / 1000,
     };
 };
+
+// ---------- Backtest on real Deriv ticks ----------
+/** Did a 1-tick contract win, given the last digit of the exit tick? */
+export const wins = (key, d) => {
+    const { contract_type: t, barrier: b } = contractOf(key);
+    if (t === 'DIGITEVEN') return d % 2 === 0;
+    if (t === 'DIGITODD') return d % 2 === 1;
+    if (t === 'DIGITOVER') return d > b;
+    return d < b; // DIGITUNDER
+};
+
+/**
+ * Replays real last digits, in order, through a strategy's own rules (decide / applyResult), one
+ * session after another with the same take-profit and stop-loss, and with Deriv's real payouts.
+ * Each tick settles one 1-tick contract, so consecutive trades use consecutive ticks.
+ */
+export const backtest = (s, digits, ratios) => {
+    let st = freshState();
+    let staked = 0;
+    let trades = 0;
+    let net = 0;
+    let worst = 0;
+    const done = { tp: 0, loss: 0, edge: 0 };
+    let sessions = 0;
+    for (let i = 0; i < digits.length; i++) {
+        const d = decide(s, st, ratios);
+        if (!d.trade) {
+            sessions++;
+            net = round2(net + st.pl);
+            worst = Math.min(worst, st.pl);
+            if (d.stop === 'tp') done.tp++;
+            else if (d.stop === 'edge') {
+                done.edge++;
+                break; // poor prices: the strategy refuses to trade at all
+            } else done.loss++;
+            st = freshState();
+            i--; // the next session starts on this same tick
+            continue;
+        }
+        const { contract_type, barrier, amount } = d.trade;
+        const key = barrier === null ? contract_type : `${contract_type}:${barrier}`;
+        const won = wins(key, digits[i]);
+        staked += amount;
+        trades++;
+        st = applyResult(s, st, { buy_price: amount, profit: won ? round2(amount * ratioOf(key, ratios)) : -amount });
+    }
+    return {
+        sessions,
+        tp: done.tp,
+        loss: done.loss,
+        refused: done.edge > 0,
+        net: round2(net), // finished sessions only
+        open: round2(st.pl), // the session still running when the ticks ran out
+        worst: round2(worst),
+        trades,
+        staked: round2(staked),
+    };
+};
+
+/** The strategies compared in the lab, as the server runs them (the reference bot's all-in method included). */
+export const labStrategies = (presets, { stake, takeProfit, stopLoss, capital }) => {
+    const base = { symbol: 'R_100', takeProfit, maxRuns: 0 };
+    const preset = (k) => {
+        const p = presets[k];
+        return { ...base, mode: p.mode, base: GROUPS[p.group], rec: GROUPS[p.group], martingale: p.martingale, filter: true, stake, stopLoss, maxStake: stopLoss, maxLosses: p.maxLosses };
+    };
+    return {
+        pegasus: preset('pegasus'),
+        martingale: preset('martingale'),
+        recover: preset('recover'),
+        fixed: { ...base, mode: 'none', base: GROUPS.half, rec: GROUPS.half, martingale: 1, filter: false, stake, stopLoss, maxStake: stopLoss, maxLosses: 5 },
+        // The reference bot: the whole balance on Over 1 every trade, until the target or the balance is gone
+        reference: { ...base, mode: 'none', base: ['DIGITOVER:1'], rec: ['DIGITOVER:1'], martingale: 1, filter: false, stake: capital, stopLoss: capital, maxStake: capital, maxLosses: 20 },
+    };
+};

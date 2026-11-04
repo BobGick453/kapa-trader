@@ -49,6 +49,7 @@ import {
     validate,
 } from './engine';
 import KapaClose from '@/components/kapa-close/kapa-close';
+import LabPanel from './lab-panel';
 import { CountUp, KapaClip } from './kapa-clip';
 import activatedArt from './media/kapa-activated.jpg';
 import './kapa-ai.scss';
@@ -1281,6 +1282,13 @@ const KapaAI = observer(() => {
                                     <p className='kapa-plan__text'>{planNote || 'Computing the plan…'}</p>
                                 )}
                             </div>
+                            <LabPanel
+                                api={derivApi}
+                                s={s}
+                                balance={balance}
+                                currency={currency}
+                                logged_in={logged_in}
+                            />
                         </div>
                         <div className='kapa-settings__foot'>
                             <button

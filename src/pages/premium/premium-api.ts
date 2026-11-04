@@ -259,6 +259,27 @@ export type TScanRow = {
     ratios: Record<string, number>;
     randomness: TRandomness | null;
 };
+export type TBacktest = {
+    sessions: number;
+    tp: number;
+    loss: number;
+    refused: boolean;
+    net: number;
+    open: number;
+    worst: number;
+    trades: number;
+    staked: number;
+};
+/** Replays real Deriv ticks through every strategy on the Kapa server, with Deriv's real payouts (free). */
+export const labBacktest = (body: {
+    digits: string;
+    ratios: Record<string, number>;
+    stake: number;
+    takeProfit: number;
+    stopLoss: number;
+    capital: number;
+}): Promise<{ ticks: number; results: Record<string, TBacktest> }> => call('/lab/backtest', { method: 'POST', body: JSON.stringify(body) }, 30000);
+
 /** Live market scan, run by the server over Deriv's public prices. Premium only. */
 export const scanMarkets = (
     preset: string,

@@ -23,6 +23,7 @@
 
 import {
     applyResult,
+    backtest,
     bestOf,
     cleanRatios,
     contractOf,
@@ -31,6 +32,7 @@ import {
     expectedOf,
     freshState,
     GROUPS,
+    labStrategies,
     loadRules,
     MIN_EXPECTED,
     randomnessCheck,
@@ -519,6 +521,29 @@ const handle = async (req, env) => {
         const s = v.settings;
         const capital = Number.isFinite(body.capital) && body.capital > 0 ? Math.min(body.capital, 1e8) : 1000;
         return json(simulate(s, capital, cleanRatios(body.ratios)));
+    }
+
+    // Strategy lab: replays real Deriv ticks, fetched by the visitor's own browser, through every
+    // strategy with Deriv's real payouts. Free for everyone: it shows what each strategy really does.
+    if (req.method === 'POST' && path === '/lab/backtest') {
+        if (rateLimited(`lab:${ip}`, 6)) return fail(429, 'Too many tests. Wait a minute.');
+        const body = await readJson(req);
+        const digits = typeof body?.digits === 'string' && /^[0-9]{100,6000}$/.test(body.digits) ? [...body.digits].map(Number) : null;
+        if (!digits) return fail(400, 'Send between 100 and 6,000 real last digits.');
+        const n = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null);
+        const stake = n(body.stake, 0.35, 50000);
+        const takeProfit = n(body.takeProfit, 0.01, 1e7);
+        const stopLoss = n(body.stopLoss, 0.35, 1e7);
+        const capital = n(body.capital, 1, 1e8) ?? 1000;
+        if (stake === null || takeProfit === null || stopLoss === null)
+            return fail(400, 'Stake, take-profit and stop-loss are required.');
+        const ratios = cleanRatios(body.ratios);
+        const results = Object.fromEntries(
+            Object.entries(labStrategies(rules().presets, { stake: Math.min(stake, stopLoss), takeProfit, stopLoss, capital })).map(
+                ([k, st]) => [k, backtest(st, digits, ratios)]
+            )
+        );
+        return json({ ticks: digits.length, results });
     }
 
     // ----- Premium code: unlock and check (no Deriv login needed) -----
