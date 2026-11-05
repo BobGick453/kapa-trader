@@ -52,3 +52,7 @@ cline_instructions.md
 .chatgpt-instructions.md
 .claude-instructions.md
 .ai-rules.md
+qa/browser/x/
+qa/browser/worker.mjs
+qa/server/worker.mjs
+qa/real/classic.mjs
