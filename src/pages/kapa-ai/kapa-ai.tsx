@@ -53,6 +53,7 @@ import {
 } from './engine';
 import KapaClose from '@/components/kapa-close/kapa-close';
 import LabPanel from './lab-panel';
+import { BOTS, classicPolicy, isClassic, simulateClassic } from './classic';
 import { CountUp, KapaClip } from './kapa-clip';
 import activatedArt from './media/kapa-activated.jpg';
 import './kapa-ai.scss';
@@ -87,6 +88,17 @@ type TLog = { at: number; text: string; level: 'info' | 'success' | 'warn' | 'er
 const derivApi: TApi = {
     send: req => (api_base.api as any).send(req),
     onMessage: () => (api_base.api as any).onMessage(),
+};
+
+/** The market's last 30 last digits, from Deriv (for the classic bots' entry rules). */
+const lastDigits = async (symbol: string): Promise<number[]> => {
+    const h = await derivApi.send({ ticks_history: symbol, count: 30, end: 'latest', style: 'ticks' });
+    if (h?.error) throw new Error(h.error.message);
+    const pip = Number.isInteger(h?.pip_size) ? h.pip_size : 2;
+    return (h?.history?.prices || []).map((x: number) => {
+        const t = Number(x).toFixed(pip);
+        return Number(t[t.length - 1]);
+    });
 };
 
 /** True on wide screens, where Summary / Transactions / Journal sit beside the card instead of in a drawer. */
@@ -203,8 +215,9 @@ const KapaAI = observer(() => {
     const setCustom = (patch: Partial<TSettings['custom']>) =>
         update({ strategy: 'custom', custom: { ...s.custom, ...patch } });
 
+    const needsPremium = (k: TStrategy) => k === 'custom' || STRATEGIES[k].premium;
     const chooseStrategy = (k: TStrategy) => {
-        if (k !== 'fixed' && !isPremium) return openPremium();
+        if (needsPremium(k) && !isPremium) return openPremium();
         update({ strategy: k, ...(k !== 'fixed' ? { maxStake: Math.max(s.stopLoss, s.stake) } : {}) });
     };
 
@@ -240,9 +253,17 @@ const KapaAI = observer(() => {
                 /* nothing to clear */
             }
             if (detail.ratios && typeof detail.ratios === 'object') scanRatios.set(symbol, detail.ratios);
-            update({ symbol, strategy: k, ...(stake >= 0.35 ? { stake } : {}) });
+            const classic = isClassic(k);
+            update({
+                symbol,
+                strategy: k,
+                ...(stake >= 0.35 ? { stake } : {}),
+                ...(classic ? { takeProfit: 5, stopLoss: 50, maxStake: 50 } : {}),
+            });
             setScanMsg(
-                `${MARKETS[symbol]} loaded from the Live Scanner. Review the settings and press Start KAPA AI when ready.`
+                classic
+                    ? `${STRATEGIES[k as TPresetKey].label} loaded from Free Bot (take-profit 5, stop-loss 50). Review the settings and press Start KAPA AI when ready.`
+                    : `${MARKETS[symbol]} loaded from the Live Scanner. Review the settings and press Start KAPA AI when ready.`
             );
         };
         const use = (e: Event) => apply((e as CustomEvent).detail);
@@ -259,9 +280,9 @@ const KapaAI = observer(() => {
         window.addEventListener('kapa:open-premium', show);
         return () => window.removeEventListener('kapa:open-premium', show);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    // Without Premium only the fixed-stake strategy is available
+    // Without Premium only the free strategies are available
     useEffect(() => {
-        if (!isPremium && premium.status !== 'unknown' && premium.status !== 'checking' && s.strategy !== 'fixed')
+        if (!isPremium && premium.status !== 'unknown' && premium.status !== 'checking' && needsPremium(s.strategy))
             update({ strategy: 'fixed' });
     }, [isPremium, premium.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -354,6 +375,11 @@ const KapaAI = observer(() => {
             async () => {
                 const lr = liveRatios(s.symbol);
                 const priced = Object.keys(lr).length > 0;
+                if (isClassic(s.strategy)) {
+                    setPlan(simulateClassic(s.strategy, s, lr));
+                    setPlanNote(`Simulated 2,000 times with ${priced ? "Deriv's live payouts" : 'estimated payouts'}`);
+                    return;
+                }
                 if (s.strategy === 'fixed') {
                     setPlan(simulateFixed(s, balance || 1000, lr));
                     setPlanNote(`Simulated 4,000 times with ${priced ? "Deriv's live payouts" : 'estimated payouts'}`);
@@ -483,7 +509,7 @@ const KapaAI = observer(() => {
         if (typeof today === 'string') return setError(today);
         if (run_panel.is_running)
             return setError('A Bot Builder strategy is running. Stop it before starting KAPA AI.');
-        if (s.strategy !== 'fixed' && !isPremium) {
+        if (needsPremium(s.strategy) && !isPremium) {
             openPremium();
             return setError('This strategy is part of KAPA AI Premium.');
         }
@@ -499,7 +525,12 @@ const KapaAI = observer(() => {
         setRunning(true);
         setResult(null);
         const lr = liveRatios(ss.symbol);
-        const policy = ss.strategy === 'fixed' ? fixedPolicy(ss, lr) : remotePolicy(ss, lr);
+        const policy =
+            ss.strategy === 'fixed'
+                ? fixedPolicy(ss, lr)
+                : isClassic(ss.strategy)
+                  ? classicPolicy(ss.strategy, ss, lr, () => lastDigits(ss.symbol))
+                  : remotePolicy(ss, lr);
         engine.run(policy, {
             name: strategyName(ss.strategy),
             delay: ss.delay,
@@ -527,6 +558,7 @@ const KapaAI = observer(() => {
 
     const recoveryLine = (k: TStrategy = s.strategy) => {
         if (k === 'fixed') return 'Same stake every trade, no recovery';
+        if (isClassic(k)) return BOTS[k].about;
         if (k === 'pegasus')
             return 'Each stake is what one win needs to reach your take-profit, never more than your stop-loss allows';
         if (k === 'martingale')

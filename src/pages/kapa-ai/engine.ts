@@ -10,7 +10,7 @@
 
 export type TContractType = 'DIGITOVER' | 'DIGITUNDER' | 'DIGITEVEN' | 'DIGITODD' | 'DIGITMATCH' | 'DIGITDIFF';
 export type TRecoveryMode = 'none' | 'mult' | 'recover' | 'target';
-export type TPresetKey = 'pegasus' | 'martingale' | 'recover' | 'fixed';
+export type TPresetKey = 'pegasus' | 'martingale' | 'recover' | 'fixed' | 'switcher' | 'printer' | 'goldoe' | 'profitmaker';
 export type TStrategy = TPresetKey | 'custom';
 
 /** Rules the user writes for the "Custom" strategy (Premium). The server checks and runs them. */
@@ -38,6 +38,11 @@ export const STRATEGIES: Record<TPresetKey, { label: string; premium: boolean }>
     martingale: { label: 'Steady · ×2.1 recovery cycles that fit the stop-loss', premium: true },
     recover: { label: 'Exact recovery · one win gets the cycle back', premium: true },
     fixed: { label: 'Even/Odd · fixed stake, no recovery', premium: false },
+    // The reference bot's Free Bot strategies, rebuilt and made safer (classic.ts)
+    switcher: { label: 'Digit Switcher · follows the last digit, exact recovery', premium: false },
+    printer: { label: 'Dollar Printer · Over 1, recovery Over 5', premium: false },
+    goldoe: { label: 'Gold Odd/Even · runs of 5, ×2.1 recovery', premium: false },
+    profitmaker: { label: 'Profit Maker · Over 2, recovery on 50%', premium: false },
 };
 export const PREMIUM_PRESETS = (Object.keys(STRATEGIES) as TPresetKey[]).filter(k => STRATEGIES[k].premium);
 

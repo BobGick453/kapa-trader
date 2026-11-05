@@ -75,3 +75,34 @@ Avec un objectif +5 et un stop-loss de 50, Pegasus atteint l'objectif dans 90,1 
 Quatre sessions Pegasus, perdues chacune en un seul trade de 25. Deux constats :
 - **Le prix reçu était moins bon que le prix public.** Deriv a payé 46,13 pour 25 misés sur Even (45,45 sur Volatility 50), alors que son prix public était de 48,83 au même moment. Deriv gardait donc 7,7 % à 9,1 % de chaque mise au lieu de 2,35 %. Cause probable : une majoration (« markup ») réglée sur l'application dans developers.deriv.com. Kapa refuse maintenant de trader quand la marge dépasse 5 %, et explique pourquoi.
 - **L'objectif demandait plus que le stop-loss.** Chaque session devenait un seul pari, gagné ou perdu d'un coup (environ 46 % de chances de gagner à ce prix). Kapa affiche maintenant un avertissement sous le take-profit dans ce cas. Avec un objectif petit par rapport au stop-loss (par exemple +5 pour 50), l'objectif est atteint environ 9 fois sur 10.
+
+## Les Free Bots du bot exemplaire (5 novembre 2026)
+
+Reconstruits à partir des vidéos de leurs blocs. L'intérieur de leurs fonctions repliées n'y était pas visible : ces parties sont reconstituées au plus près.
+- **Digit Switcher** : achète la parité du dernier chiffre. Mise 1, martingale après 2 pertes, objectif 10, stop-loss 1 000.
+- **Dollar Printer** : Over 0 quand les chiffres au-dessus de 0 ont fait au moins 90 % des 15 derniers ticks, puis Over 5 après une perte. Objectif 10.
+- **Gold Premium Odd/Even** : Even quand au moins 4 des 5 derniers chiffres sont pairs et que le dernier est pair (Odd de même), martingale. Stop-loss 1 000.
+- **Profit Maker** : Over 2, puis Over 4 après une perte, mise ×2,2. Objectif 5, stop-loss 1 000.
+
+Sur les 300 000 vrais ticks, avec les vrais prix de Deriv :
+
+| Bot exemplaire (réglages d'origine) | Atteint l'objectif | Moyenne par session | Pire session |
+|---|---|---|---|
+| Digit Switcher | 98,5 % | −3,16 | −1 000 |
+| Dollar Printer | 98,6 % | −3,72 | −1 000 |
+| Gold Premium | 98,7 % | −2,02 | −1 000 |
+| Profit Maker | 99,1 % | −1,50 | −1 000 |
+
+À objectif et stop-loss égaux, Pegasus fait mieux : 98,8 % et −1,92 par session pour +10 / 1 000, et 99,4 % et −1,02 pour +5 / 1 000. Les règles d'entrée (suivre le dernier chiffre, attendre une série) gagnent à la chance normale du contrat : elles n'aident pas.
+
+**Versions Kapa** (Free Bot → « Run in KAPA AI »), avec un objectif +5 et un stop-loss de 50 :
+
+| Bot Kapa | Atteint l'objectif | Moyenne par session | Pire session |
+|---|---|---|---|
+| Digit Switcher | 82,5 % | −0,77 | −34 |
+| Dollar Printer (Over 1 au lieu d'Over 0) | 87,1 % | −1,07 | −50 |
+| Gold Odd/Even | 83,8 % | −0,86 | −36 |
+| Profit Maker (récupération sur le 50 % le mieux payé) | 86,8 % | −0,92 | −50 |
+| *Pegasus, pour comparaison* | *90,1 %* | *−0,42* | *−50* |
+
+Tous les cycles de récupération tiennent sous le stop-loss, et la mise après une perte est celle qui récupère tout le cycle en un gain.

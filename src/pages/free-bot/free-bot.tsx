@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { DBOT_TABS } from '@/constants/bot-contents';
+import { BOTS, TClassicKey } from '../kapa-ai/classic';
 import { load } from '@/external/bot-skeleton';
 import { save_types } from '@/external/bot-skeleton/constants/save-type';
 import { useStore } from '@/hooks/useStore';
@@ -89,6 +90,25 @@ const loadBot = async (bot: TLibraryBot, d: TBotData) => {
 
 type TFreeBotProps = { handleTabChange: (tab: number) => void };
 
+// Tested with KAPA AI's engine on 300,000 real ticks, Deriv's real prices, take-profit 5, stop-loss 50
+const CLASSIC_CARDS: { key: TClassicKey; name: string; tested: string }[] = [
+    { key: 'switcher', name: 'Digit Switcher', tested: 'Target reached in 82.5% of sessions · average −0.77 per session · worst −34' },
+    { key: 'printer', name: 'Dollar Printer', tested: 'Target reached in 87.1% of sessions · average −1.07 per session · worst −50' },
+    { key: 'goldoe', name: 'Gold Premium Odd/Even', tested: 'Target reached in 83.8% of sessions · average −0.86 per session · worst −36' },
+    { key: 'profitmaker', name: 'Profit Maker', tested: 'Target reached in 86.8% of sessions · average −0.92 per session · worst −50' },
+];
+
+/** Loads a classic bot into KAPA AI (the page reads it on opening) and switches to the KAPA AI tab. */
+const runInKapa = (key: TClassicKey) => {
+    const detail = { symbol: 'R_100', preset: key, stake: 1 };
+    try {
+        sessionStorage.setItem('kapa_pending_market', JSON.stringify(detail));
+    } catch {
+        /* the event below still works when KAPA AI is already open */
+    }
+    window.dispatchEvent(new CustomEvent('kapa:use-market', { detail }));
+};
+
 const FreeBot = observer(({ handleTabChange }: TFreeBotProps) => {
     const { run_panel } = useStore();
     const premium = usePremium();
@@ -142,6 +162,29 @@ const FreeBot = observer(({ handleTabChange }: TFreeBotProps) => {
                 ))}
             </div>
             {error && <div className='free-bot__error'>{error}</div>}
+            <h3 className='free-bot__section'>Classic bots, rebuilt · run in KAPA AI</h3>
+            <p className='free-bot__intro'>
+                Digit Switcher, Dollar Printer, Gold Odd/Even and Profit Maker, rebuilt with KAPA AI&apos;s protections:
+                every recovery cycle fits your stop-loss, and the stake after a loss is the one that wins the cycle back.
+                The originals risk 1,000 to win 10. Results below: 300,000 real Deriv ticks, Deriv&apos;s real prices,
+                take-profit 5 and stop-loss 50.
+            </p>
+            <div className='free-bot__list'>
+                {CLASSIC_CARDS.map(c => (
+                    <article key={c.key} className='free-bot__card'>
+                        <div className='free-bot__title'>
+                            <h3>{c.name}</h3>
+                            <span className='free-bot__badge free-bot__badge--ai'>KAPA AI</span>
+                        </div>
+                        <p>{BOTS[c.key].about}</p>
+                        <small>{c.tested}</small>
+                        <button type='button' className='free-bot__load' onClick={() => runInKapa(c.key)}>
+                            Run in KAPA AI
+                        </button>
+                    </article>
+                ))}
+            </div>
+            <h3 className='free-bot__section'>Bot Builder bots</h3>
             <div className='free-bot__list'>
                 {shown.map(bot => {
                     const locked = bot.premium && premium.status !== 'active';
