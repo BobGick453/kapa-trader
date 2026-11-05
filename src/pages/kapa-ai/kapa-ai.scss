@@ -1824,3 +1824,87 @@
     font-size: 1.3rem;
     line-height: 1.45;
 }
+
+// Premium card shown first without Premium (reference-bot layout)
+.kapa-lock {
+    margin: 22vh auto 4rem;
+    max-width: 88rem;
+    padding: 3.6rem 3.2rem 3rem;
+    border-radius: 2.4rem;
+    border: 1px solid #1d2e5c;
+    background: radial-gradient(120% 120% at 50% 0%, #10224d 0%, #0a1430 60%, #08102a 100%);
+    box-shadow: 0 2rem 6rem rgb(0 0 0 / 45%);
+    text-align: center;
+    color: #eef2ff;
+
+    &__eyebrow {
+        color: #f5c542;
+        font-size: 1.2rem;
+        font-weight: 700;
+        letter-spacing: 0.2rem;
+    }
+    &__title {
+        margin: 1.4rem 0 1rem;
+        font-size: clamp(3.4rem, 7vw, 5.6rem);
+        font-weight: 400;
+        letter-spacing: 0.1rem;
+    }
+    &__sub {
+        margin: 0 auto 2.4rem;
+        color: #c8d1ec;
+        font-size: 1.5rem;
+    }
+    &__grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1.4rem;
+        margin-bottom: 2.4rem;
+
+        > div {
+            padding: 1.6rem 1.4rem;
+            border-radius: 1.4rem;
+            border: 1px solid #22355f;
+            background: rgb(6 13 34 / 70%);
+        }
+        b {
+            display: block;
+            margin-bottom: 0.8rem;
+            color: #f5c542;
+            font-size: 1.25rem;
+        }
+        span {
+            color: #c8d1ec;
+            font-size: 1.2rem;
+            line-height: 1.5;
+        }
+    }
+    &__cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34rem;
+        min-height: 5rem;
+        padding: 0 3rem;
+        border: 0;
+        border-radius: 1.2rem;
+        background: linear-gradient(90deg, #f3cf5f, #d9a52c);
+        color: #1b1405;
+        font: inherit;
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: 0.05rem;
+        cursor: pointer;
+        box-shadow: 0 1rem 2.4rem rgb(217 165 44 / 25%);
+    }
+    &__free {
+        display: block;
+        margin: 1.6rem auto 0;
+        border: 0;
+        background: none;
+        color: #93a3cc;
+        font: inherit;
+        font-size: 1.3rem;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+}

@@ -71,7 +71,7 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                             </div>
                             {!has_dashboard_strategies && (
                                 <Text
-                                    className='title'
+                                    className='title kapa-intro-title'
                                     as='h2'
                                     color='prominent'
                                     size={isDesktop ? 'sm' : 's'}

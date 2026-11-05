@@ -616,3 +616,87 @@
         }
     }
 }
+
+// Reference-bot layout: four tiles per row (the fifth below), neon icon in a rounded square,
+// a short accent bar on the tile's top edge, OPEN → pill
+.tab__dashboard__table__tiles:has(.kapa-tile) {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2rem;
+    overflow: visible;
+    padding: 0.4rem 1.2rem 2rem;
+    justify-content: stretch;
+}
+.kapa-tile {
+    width: auto !important;
+    min-width: 0;
+    gap: 0.6rem;
+    padding: 2.4rem 1.2rem 1.8rem !important;
+    border-radius: 1.6rem;
+    border: 1px solid #1c2b52;
+    background: linear-gradient(180deg, #0d1a3a, #091330);
+    box-shadow: 0 1rem 2.4rem rgb(0 0 0 / 30%);
+    transition:
+        transform 0.15s ease,
+        border-color 0.15s ease;
+
+    &:hover {
+        transform: translateY(-2px);
+        border-color: color-mix(in srgb, var(--kapa-accent) 45%, #1c2b52);
+    }
+    &::before {
+        top: 0.7rem;
+        width: 3.4rem;
+        height: 0.35rem;
+        box-shadow: 0 0 1rem var(--kapa-accent);
+    }
+    .tab__dashboard__table__images {
+        width: 6.6rem !important;
+        height: 6.6rem !important;
+        margin-bottom: 0.6rem;
+        display: grid !important;
+        place-items: center;
+        border-radius: 1.6rem !important;
+        background: #08112a !important;
+        border: 1px solid #1f2f5c !important;
+        color: var(--kapa-accent);
+        cursor: pointer;
+    }
+    &__svg {
+        filter: drop-shadow(0 0 0.6rem var(--kapa-accent));
+    }
+    .dc-text {
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+    }
+    &__sub {
+        font-size: 1.15rem;
+        color: #9aa9cf;
+    }
+    &__open {
+        margin-top: 1rem;
+        min-height: 3.4rem;
+        padding: 0 2.2rem;
+        font-size: 1.2rem;
+        background: #060e24;
+        border-color: #253a72;
+    }
+}
+.kapa-tile .dc-text {
+    white-space: nowrap;
+}
+.kapa-tile__sub {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+.kapa-tile__sub {
+    font-size: 1.05rem;
+    text-overflow: clip;
+}
+.kapa-tile__sub {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.3;
+}

@@ -154,6 +154,7 @@ const AppHeader = observer(() => {
                             )}
                             <Button
                                 primary
+                                className='kapa-transfer'
                                 disabled={client?.is_logging_out || !authData?.currency}
                                 onClick={handleTransfer}
                             >

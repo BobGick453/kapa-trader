@@ -9,18 +9,62 @@ import MobileFullPageModal from '@/components/shared_ui/mobile-full-page-modal';
 import Text from '@/components/shared_ui/text';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
-import {
-    DerivLightBotBuilderIcon,
-    DerivLightGoogleDriveIcon,
-    DerivLightLocalDeviceIcon,
-    DerivLightMyComputerIcon,
-    DerivLightQuickStrategyIcon,
-} from '@deriv/quill-icons/Illustration';
 import { Localize, localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 /* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
 /* [/AI] */
 import DashboardBotList from './bot-list/dashboard-bot-list';
+
+/** Neon outline icons for the dashboard tiles (in the tile's accent colour). */
+const TileIcon = ({ kind }: { kind: 'computer' | 'drive' | 'builder' | 'quick' | 'speed' }) => {
+    const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+    return (
+        <svg className='kapa-tile__svg' viewBox='0 0 32 32' width='34' height='34' aria-hidden>
+            {kind === 'computer' && (
+                <>
+                    <rect x='4' y='6' width='24' height='16' rx='2' {...p} />
+                    <path d='M12 27h8M16 22v5M16 17v-7M13 13l3-3 3 3' {...p} />
+                </>
+            )}
+            {kind === 'drive' && (
+                <>
+                    <path d='M9 23h14a5 5 0 0 0 .6-9.96A7 7 0 0 0 10.2 12 5.5 5.5 0 0 0 9 23z' {...p} />
+                    <path d='M16 14v6M13 17h6' {...p} />
+                </>
+            )}
+            {kind === 'builder' && (
+                <>
+                    <circle cx='16' cy='16' r='4' {...p} />
+                    <circle cx='16' cy='16' r='1.2' {...p} />
+                    <rect x='4' y='4' width='5' height='5' rx='1' {...p} />
+                    <rect x='23' y='4' width='5' height='5' rx='1' {...p} />
+                    <rect x='4' y='23' width='5' height='5' rx='1' {...p} />
+                    <rect x='23' y='23' width='5' height='5' rx='1' {...p} />
+                    <path d='M9 9l4 4M23 9l-4 4M9 23l4-4M23 23l-4-4' {...p} />
+                </>
+            )}
+            {kind === 'quick' && (
+                <>
+                    <path d='M5 27h22' {...p} />
+                    <rect x='6' y='19' width='3.5' height='6' rx='0.8' {...p} />
+                    <rect x='11.5' y='15' width='3.5' height='10' rx='0.8' {...p} />
+                    <rect x='17' y='11' width='3.5' height='14' rx='0.8' {...p} />
+                    <rect x='22.5' y='6' width='3.5' height='19' rx='0.8' {...p} />
+                    <path d='M7 14l6-5 4 3 8-7' {...p} />
+                </>
+            )}
+            {kind === 'speed' && (
+                <>
+                    <rect x='6' y='10' width='20' height='15' rx='4' {...p} />
+                    <circle cx='12' cy='17' r='2' {...p} />
+                    <circle cx='20' cy='17' r='2' {...p} />
+                    <path d='M13 22h6M16 10V6M16 6h0M3 16v4M29 16v4' {...p} />
+                    <circle cx='16' cy='5' r='1.2' {...p} />
+                </>
+            )}
+        </svg>
+    );
+};
 
 type TCardProps = {
     has_dashboard_strategies: boolean;
@@ -60,75 +104,49 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
     const actions: TCardArray[] = [
         {
             id: 'my-computer',
-            icon: is_mobile ? (
-                <DerivLightLocalDeviceIcon height='48px' width='48px' />
-            ) : (
-                <DerivLightMyComputerIcon height='48px' width='48px' />
-            ),
+            icon: <TileIcon kind='computer' />,
             content: <Localize i18n_default_text='My computer' />,
             subtitle: <Localize i18n_default_text='Import from your device' />,
             accent: '#3b82f6',
-            callback: () => {
-                openFileLoader();
-                /* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
-                /* [/AI] */
-            },
+            callback: openFileLoader,
         },
         {
             id: 'google-drive',
-            icon: <DerivLightGoogleDriveIcon height='48px' width='48px' />,
+            icon: <TileIcon kind='drive' />,
             content: <Localize i18n_default_text='Google Drive' />,
             subtitle: <Localize i18n_default_text='Load from Google Drive' />,
             accent: '#22c57a',
-            callback: () => {
-                openGoogleDriveDialog();
-                /* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
-                /* [/AI] */
-            },
+            callback: openGoogleDriveDialog,
         },
         {
             id: 'bot-builder',
-            icon: <DerivLightBotBuilderIcon height='48px' width='48px' />,
+            icon: <TileIcon kind='builder' />,
             content: <Localize i18n_default_text='Bot Builder' />,
             subtitle: <Localize i18n_default_text='Build blocks visually' />,
             accent: '#8b5cf6',
-            callback: () => {
-                setActiveTab(DBOT_TABS.BOT_BUILDER);
-                /* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
-                /* [/AI] */
-            },
+            callback: () => setActiveTab(DBOT_TABS.BOT_BUILDER),
         },
         {
             id: 'quick-strategy',
-            icon: <DerivLightQuickStrategyIcon height='48px' width='48px' />,
+            icon: <TileIcon kind='quick' />,
             content: <Localize i18n_default_text='Quick strategy' />,
             subtitle: <Localize i18n_default_text='Start with a template' />,
             accent: '#f59e0b',
             callback: () => {
                 setActiveTab(DBOT_TABS.BOT_BUILDER);
                 setFormVisibility(true);
-                /* [AI] - Analytics event tracking removed - see migrate-docs/MONITORING_PACKAGES.md for re-implementation guide */
-                /* [/AI] */
             },
         },
         {
-            // Kapa: placeholder card, like the reference bot's; not wired to anything yet
+            // KAPA AI's own trade engine: one contract per tick, with Kapa's stop-loss and daily limits
             id: 'speed-bot',
-            icon: (
-                <span className='kapa-speedbot-icon' aria-hidden>
-                    🤖
-                </span>
-            ),
+            icon: <TileIcon kind='speed' />,
             content: <Localize i18n_default_text='Speed Bot' />,
-            subtitle: <Localize i18n_default_text='Coming soon' />,
+            subtitle: <Localize i18n_default_text='High-speed trading engine' />,
             accent: '#ec4899',
-            disabled: true,
-            callback: () => {},
+            callback: () => setActiveTab(DBOT_TABS.KAPA_AI),
         },
     ];
-    // Kapa: same order as the reference bot's dashboard carousel
-    const ORDER = ['my-computer', 'google-drive', 'quick-strategy', 'speed-bot', 'bot-builder'];
-    actions.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
 
     return React.useMemo(
         () => (

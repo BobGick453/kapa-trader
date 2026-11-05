@@ -254,6 +254,14 @@ const KapaAI = observer(() => {
             }
             if (detail.ratios && typeof detail.ratios === 'object') scanRatios.set(symbol, detail.ratios);
             const classic = isClassic(k);
+            if (classic) {
+                setFreeMode(true);
+                try {
+                    sessionStorage.setItem('kapa_free_mode', '1');
+                } catch {
+                    /* this visit only */
+                }
+            }
             update({
                 symbol,
                 strategy: k,
@@ -735,9 +743,70 @@ const KapaAI = observer(() => {
         </section>
     );
 
+    // Without Premium the page opens on the Premium card, like the reference bot; the free strategies
+    // stay one tap away
+    const [freeMode, setFreeMode] = useState(() => {
+        try {
+            return sessionStorage.getItem('kapa_free_mode') === '1';
+        } catch {
+            return false;
+        }
+    });
+    const useFree = () => {
+        setFreeMode(true);
+        try {
+            sessionStorage.setItem('kapa_free_mode', '1');
+        } catch {
+            /* this visit only */
+        }
+    };
+    const showLock =
+        logged_in &&
+        premiumEnabled() &&
+        !isPremium &&
+        premium.status === 'inactive' &&
+        !freeMode &&
+        !running &&
+        s.strategy === 'fixed';
+    const lockCard = (
+        <section className='kapa-lock'>
+            <div className='kapa-lock__eyebrow'>PREMIUM LOCKED</div>
+            <h2 className='kapa-lock__title'>KAPA PREMIUM</h2>
+            <p className='kapa-lock__sub'>Premium strategies and tools are checked by the Kapa server on every request.</p>
+            <div className='kapa-lock__grid'>
+                <div>
+                    <b>Server-run strategies</b>
+                    <span>
+                        Pegasus, Steady and Exact recovery run on the Kapa server and size every stake from Deriv&apos;s
+                        live prices.
+                    </span>
+                </div>
+                <div>
+                    <b>Tested on real data</b>
+                    <span>Every strategy replayed on Deriv&apos;s real ticks and prices, with the results shown.</span>
+                </div>
+                <div>
+                    <b>Capital protection</b>
+                    <span>Recovery cycles that fit your stop-loss, a session cap and a daily loss limit.</span>
+                </div>
+            </div>
+            <button className='kapa-lock__cta' type='button' onClick={() => openSettings(true)}>
+                {plan_?.configured
+                    ? `UNLOCK KAPA PREMIUM · ${plan_.price.toLocaleString()} ${plan_.currency}`
+                    : 'UNLOCK KAPA PREMIUM'}
+            </button>
+            <button className='kapa-lock__free' type='button' onClick={useFree}>
+                Use the free strategies
+            </button>
+        </section>
+    );
+
     return (
         <div className='kapa-ai'>
             <div className='kapa-ai__scroll'>
+                {showLock ? (
+                    lockCard
+                ) : (
                 <section className='kapa-card kapa-card--main'>
                     <button
                         className='kapa-gear'
@@ -881,6 +950,7 @@ const KapaAI = observer(() => {
                         </div>
                     ))}
                 </section>
+                )}
 
                 {wide && panelSection}
             </div>
