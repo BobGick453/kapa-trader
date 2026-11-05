@@ -106,3 +106,31 @@ Sur les 300 000 vrais ticks, avec les vrais prix de Deriv :
 | *Pegasus, pour comparaison* | *90,1 %* | *−0,42* | *−50* |
 
 Tous les cycles de récupération tiennent sous le stop-loss, et la mise après une perte est celle qui récupère tout le cycle en un gain.
+
+## Les vrais fichiers des bots exemplaires (5 novembre 2026)
+
+Avec l'accès au site, les 4 bots ont été lus en entier, fonctions repliées comprises. Ce qu'ils font réellement :
+- **Digit Switcher** (1HZ100V) : Under 5 après un chiffre pair. Après 2 pertes de suite, il alterne Over 5 et Under 5 selon le nombre de pertes et la parité du dernier chiffre, et augmente la mise de ×2,1 jusqu'à 12 niveaux. Objectif 10, stop-loss 1 000.
+- **Dollar Printer** (1HZ100V) : Over 0 quand au moins 90 % des 15 derniers chiffres sont non nuls, puis Over 5 après une perte, avec une mise de 1,25 × la perte. Objectif 10, **aucun stop-loss**.
+- **Gold Premium Odd/Even** (R_100) : la parité d'au moins 4 des 5 derniers chiffres, si le dernier va dans le même sens. Mise ×2,2 jusqu'à 10 niveaux, **objectif 1 000**, stop-loss 1 000.
+- **Profit Maker** (R_100) : Over 2, puis Over 4 après une perte, mise ×2,2 sans limite de niveaux. Objectif 5, stop-loss 1 000.
+
+Rejoués à l'identique sur les 300 000 vrais ticks, au prix public de Deriv :
+
+| Bot exemplaire | Atteint l'objectif | Moyenne par session | Pire session |
+|---|---|---|---|
+| Digit Switcher | 99,0 % | −1,41 | −1 517 (dépasse son stop-loss) |
+| Dollar Printer | 99,0 % | −15,87 | **compte de 10 000 vidé 40 fois** |
+| Gold Premium | 55,3 % | −224,50 | −2 189 |
+| Profit Maker | 99,1 % | −1,50 | −1 005 |
+
+Versions Kapa (objectif +5, stop-loss 50, mêmes ticks, prix public) :
+
+| Bot Kapa | Atteint l'objectif | Moyenne | Pire session |
+|---|---|---|---|
+| Digit Switcher | 71,8 % | −0,57 | −19 |
+| Dollar Printer | 87,2 % | −1,08 | −50 |
+| Gold Odd/Even | 83,8 % | −0,86 | −36 |
+| Profit Maker | 86,8 % | −0,92 | −50 |
+
+Une mise qui dépasserait la marge restante sous le stop-loss n'est jamais placée : la session s'arrête avant.
