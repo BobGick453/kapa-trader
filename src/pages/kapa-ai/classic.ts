@@ -23,7 +23,7 @@ export const isClassic = (k: string): k is TClassicKey => (CLASSIC_KEYS as strin
 type TBot = {
     /** Contract to buy now, from the last digits (most recent last), or null to wait for the next tick */
     base: (d: number[]) => string | null;
-    rec: (d: number[]) => string | null;
+    rec: (d: number[], streak: number) => string | null;
     sizing: 'recover' | 'double';
     mult: number;
     maxLosses: number;
@@ -33,7 +33,26 @@ type TBot = {
 };
 
 const HALF = ['DIGITEVEN', 'DIGITODD', 'DIGITOVER:4', 'DIGITUNDER:5'];
-const parity = (d: number[]) => (d.length ? (d[d.length - 1] % 2 === 0 ? 'DIGITEVEN' : 'DIGITODD') : null);
+/**
+ * Digit Switcher's own rule: Under 5 after an even digit; after 2 or more losses in a row it alternates,
+ * by the number of losses and the last digit's parity, between Over 5 (losses 2–5) and Under 5 (6–9).
+ */
+const switcherRule = (d: number[], losses: number) => {
+    if (!d.length) return null;
+    const even = d[d.length - 1] % 2 === 0;
+    const table: [number, boolean, string][] = [
+        [8, false, 'DIGITUNDER:5'],
+        [7, true, 'DIGITUNDER:5'],
+        [6, false, 'DIGITUNDER:5'],
+        [5, true, 'DIGITUNDER:5'],
+        [4, false, 'DIGITOVER:5'],
+        [3, true, 'DIGITOVER:5'],
+        [2, false, 'DIGITOVER:5'],
+        [1, true, 'DIGITOVER:5'],
+    ];
+    for (const [n, par, key] of table) if (losses > n && even === par) return key;
+    return even ? 'DIGITUNDER:5' : null;
+};
 const runOf5 = (d: number[]) => {
     if (d.length < 5) return null;
     const last5 = d.slice(-5);
@@ -46,21 +65,21 @@ const runOf5 = (d: number[]) => {
 
 export const BOTS: Record<TClassicKey, TBot & { label: string; about: string }> = {
     switcher: {
-        label: 'Digit Switcher · follows the last digit, exact recovery',
-        about: 'Buys Even after an even digit and Odd after an odd one. After a loss, the stake that wins the cycle back; up to 8 losses in a row when they fit the stop-loss.',
-        base: parity,
-        rec: parity,
+        label: 'Digit Switcher · Under 5 / Over 5 switch, exact recovery',
+        about: 'Under 5 after an even digit; after 2 losses in a row it switches between Over 5 and Under 5 by the loss count and the last digit, like the original. After a loss, the stake that wins the cycle back; up to 9 losses in a row when they fit the stop-loss.',
+        base: d => switcherRule(d, 0),
+        rec: (d, streak) => switcherRule(d, streak),
         sizing: 'recover',
         mult: 1,
-        maxLosses: 8,
-        planBase: 'DIGITEVEN',
-        planRec: 'DIGITEVEN',
+        maxLosses: 9,
+        planBase: 'DIGITUNDER:5',
+        planRec: 'DIGITUNDER:5', // the lower payout of the two: plans the larger stakes
     },
     printer: {
         label: 'Dollar Printer · Over 1, recovery Over 5',
-        about: 'Over 1 when at least 12 of the last 15 digits were above 1; after a loss, Over 5 with the stake that wins the cycle back. Up to 8 losses in a row when they fit the stop-loss.',
+        about: 'Over 1 when at least 12 of the last 15 digits were above 1 (the original uses Over 0, which costs twice as much per unit of profit); after a loss, Over 5 when at least 6 of the last 15 were above 5, with the stake that wins the cycle back. Up to 8 losses in a row when they fit the stop-loss; the original has no stop-loss.',
         base: d => (d.length >= 15 && d.slice(-15).filter(x => x > 1).length >= 12 ? 'DIGITOVER:1' : null),
-        rec: () => 'DIGITOVER:5',
+        rec: d => (d.length >= 15 && d.slice(-15).filter(x => x > 5).length >= 6 ? 'DIGITOVER:5' : null),
         sizing: 'recover',
         mult: 1,
         maxLosses: 8,
@@ -156,11 +175,17 @@ export const classicDecide = (
             reason: `${st.streak} losses in a row: the recovery cycle that fits your stop-loss is used up. Session ended at a planned loss.`,
         };
     const recovering = st.streak > 0;
-    const key = recovering ? recRule(digits) : bot.base(digits);
+    const key = recovering ? recRule(digits, st.streak) : bot.base(digits);
     if (!key) return { wait: true };
-    const baseKey = k === 'switcher' || k === 'goldoe' ? key : bot.planBase;
+    const baseKey = k === 'goldoe' ? key : bot.planBase;
     const amount = ceil2(stepStake(bot, s, recovering ? st.streak : 0, st.lost, baseKey, key, r));
     if (amount < 0.35) return { stop: 'sl', reason: 'Not enough room left above the stop-loss for the minimum stake.' };
+    // Never a stake the stop-loss or the maximum stake can't cover, whatever the plan said
+    if (amount > room + 0.005 || amount > s.maxStake + 0.005)
+        return {
+            stop: 'streak',
+            reason: `${st.streak} losses in a row: the next stake (${amount.toFixed(2)}) would go past your stop-loss. Session ended at a planned loss.`,
+        };
     const [type, b] = key.split(':');
     return {
         trade: {
