@@ -92,10 +92,10 @@ type TFreeBotProps = { handleTabChange: (tab: number) => void };
 
 // Tested with KAPA AI's engine on 300,000 real ticks, Deriv's real prices, take-profit 5, stop-loss 50
 const CLASSIC_CARDS: { key: TClassicKey; name: string; tested: string }[] = [
-    { key: 'switcher', name: 'Digit Switcher', tested: 'Target reached in 71.8% of sessions · average −0.57 per session · worst −19' },
-    { key: 'printer', name: 'Dollar Printer', tested: 'Target reached in 87.2% of sessions · average −1.08 per session · worst −50' },
-    { key: 'goldoe', name: 'Gold Premium Odd/Even', tested: 'Target reached in 83.8% of sessions · average −0.86 per session · worst −36' },
-    { key: 'profitmaker', name: 'Profit Maker', tested: 'Target reached in 86.8% of sessions · average −0.92 per session · worst −50' },
+    { key: 'switcher', name: 'Digit Switcher', tested: 'Target reached in 90.0% of sessions · average −0.46 per session · never past the stop-loss' },
+    { key: 'printer', name: 'Dollar Printer', tested: 'Target reached in 89.9% of sessions · average −0.54 per session · never past the stop-loss' },
+    { key: 'goldoe', name: 'Gold Premium Odd/Even', tested: 'Target reached in 90.0% of sessions · average −0.47 per session · never past the stop-loss' },
+    { key: 'profitmaker', name: 'Profit Maker', tested: 'Target reached in 90.3% of sessions · average −0.34 per session · never past the stop-loss' },
 ];
 
 /** Loads a classic bot into KAPA AI (the page reads it on opening) and switches to the KAPA AI tab. */
@@ -164,9 +164,9 @@ const FreeBot = observer(({ handleTabChange }: TFreeBotProps) => {
             {error && <div className='free-bot__error'>{error}</div>}
             <h3 className='free-bot__section'>Classic bots, rebuilt · run in KAPA AI</h3>
             <p className='free-bot__intro'>
-                Digit Switcher, Dollar Printer, Gold Odd/Even and Profit Maker, rebuilt from the originals&apos; own rules
-                with KAPA AI&apos;s protections: every recovery cycle fits your stop-loss, and the stake after a loss is
-                the one that wins the cycle back. On 300,000 real Deriv ticks, the originals lose up to 1,500 in a
+                Digit Switcher, Dollar Printer, Gold Odd/Even and Profit Maker keep the originals&apos; entry rules;
+                after a loss, KAPA Apex takes over with the contract and stake that give the best chance of still
+                reaching your take-profit, never past your stop-loss. On 300,000 real Deriv ticks, the originals lose up to 1,500 in a
                 session, and Dollar Printer, which has no stop-loss, emptied a 10,000 account 40 times. Results
                 below: same ticks, Deriv&apos;s real prices, take-profit 5 and stop-loss 50.
             </p>

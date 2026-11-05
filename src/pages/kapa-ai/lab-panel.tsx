@@ -9,6 +9,7 @@ const signed = (n: number) => `${n >= 0 ? '+' : ''}${fmt(n)}`;
 const time = (t: number) => (t ? new Date(t * 1000).toLocaleString() : '');
 
 const NAMES: Record<string, string> = {
+    apex: 'KAPA Apex (computed best)',
     pegasus: 'Pegasus (bold play)',
     martingale: 'Steady (×2.1, cycles that fit)',
     recover: 'Exact recovery',

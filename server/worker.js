@@ -375,7 +375,8 @@ const quoteRatio = r =>
 const scan = async (env, body, rules) => {
     const { presets } = rules;
     const preset = Object.hasOwn(presets, body?.preset) ? body.preset : 'pegasus';
-    const keys = GROUPS[presets[preset].group];
+    const g = presets[preset].group;
+    const keys = GROUPS[g === 'all' ? 'half' : g]; // Apex is compared on the 50% contracts here: fewer requests
     const cur = /^[A-Z]{3}$/.test(body?.currency || '') ? body.currency : 'USD';
     const symbols = Array.isArray(body?.symbols)
         ? body.symbols.filter(sym => SCAN_SYMBOLS.includes(sym)).slice(0, 5)

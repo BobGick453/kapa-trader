@@ -24,6 +24,7 @@ import {
 import { openPremium, usePremium } from '../premium/use-premium';
 import {
     addDayResult,
+    APEX_KEYS,
     bestOf,
     chanceOf,
     contractLabel,
@@ -192,7 +193,10 @@ const KapaAI = observer(() => {
     // Live payouts from the last server scan, per market (used for plans and sessions)
     const scanRatios = useRef(new Map<string, TPayoutRatios>()).current;
     /** Every live payout known for a market: Deriv's quotes on this connection, then the last scan. */
-    const liveRatios = (sym: string): TPayoutRatios => ({ ...(scanRatios.get(sym) || {}), ...ratios.knownAll(sym) });
+    const liveRatios = (sym: string): TPayoutRatios => ({
+        ...(scanRatios.get(sym) || {}),
+        ...ratios.knownAll(sym, [...HALF_KEYS, ...APEX_KEYS]),
+    });
     const balanceRef = useRef(balance);
     balanceRef.current = balance;
     const clientRef = useRef(client.loginid);
@@ -434,7 +438,8 @@ const KapaAI = observer(() => {
             // The connection may still be authorizing right after login, so retry a few times
             for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
                 try {
-                    for (const k of HALF_KEYS) await ratios.get(derivApi, currency, s.symbol, k);
+                    const keys = s.strategy === 'apex' ? [...new Set([...HALF_KEYS, ...APEX_KEYS])] : HALF_KEYS;
+                    for (const k of keys) await ratios.get(derivApi, currency, s.symbol, k);
                     if (!cancelled) setRatioTick(n => n + 1);
                     return;
                 } catch {
@@ -445,7 +450,7 @@ const KapaAI = observer(() => {
         return () => {
             cancelled = true;
         };
-    }, [logged_in, currency, s.symbol]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [logged_in, currency, s.symbol, s.strategy === 'apex']); // eslint-disable-line react-hooks/exhaustive-deps
 
     const login = async () => {
         const url = await generateOAuthURL();
@@ -503,7 +508,7 @@ const KapaAI = observer(() => {
         if (room < 0.35)
             return `Today's loss limit (${s.dailyLossPct}% of your balance) is reached. KAPA AI pauses until tomorrow to protect your capital.`;
         if (room >= s.stopLoss) return s;
-        const bold = s.strategy === 'pegasus' || (s.strategy === 'custom' && s.custom.recMode === 'target');
+        const bold = s.strategy === 'pegasus' || s.strategy === 'apex' || (s.strategy === 'custom' && s.custom.recMode === 'target');
         if (!bold && room < s.stake)
             return `Only ${fmt(room)} ${currency} of today's loss limit is left: less than one stake. KAPA AI pauses until tomorrow.`;
         log(`Stop-loss lowered to ${fmt(room)} ${currency} for this session: what today's loss limit still allows.`, 'warn');
@@ -567,6 +572,8 @@ const KapaAI = observer(() => {
     const recoveryLine = (k: TStrategy = s.strategy) => {
         if (k === 'fixed') return 'Same stake every trade, no recovery';
         if (isClassic(k)) return BOTS[k].about;
+        if (k === 'apex')
+            return "At every trade, the contract and stake with the highest chance of reaching your take-profit, computed from Deriv's live prices";
         if (k === 'pegasus')
             return 'Each stake is what one win needs to reach your take-profit, never more than your stop-loss allows';
         if (k === 'martingale')
@@ -775,10 +782,10 @@ const KapaAI = observer(() => {
             <p className='kapa-lock__sub'>Premium strategies and tools are checked by the Kapa server on every request.</p>
             <div className='kapa-lock__grid'>
                 <div>
-                    <b>Server-run strategies</b>
+                    <b>KAPA Apex</b>
                     <span>
-                        Pegasus, Steady and Exact recovery run on the Kapa server and size every stake from Deriv&apos;s
-                        live prices.
+                        At every trade, the contract and stake with the highest possible chance of reaching your
+                        target, computed on the Kapa server from Deriv&apos;s live prices.
                     </span>
                 </div>
                 <div>
@@ -860,10 +867,10 @@ const KapaAI = observer(() => {
                             onChange={num('stake')}
                             disabled={running}
                         />
-                        {s.strategy === 'pegasus' && (
+                        {(s.strategy === 'pegasus' || s.strategy === 'apex') && (
                             <small>
-                                Pegasus sizes each stake itself: what one win needs to reach your take-profit, within
-                                your stop-loss.
+                                {s.strategy === 'apex' ? 'KAPA Apex' : 'Pegasus'} sizes each stake itself: what one win
+                                needs to reach your take-profit, within your stop-loss.
                             </small>
                         )}
                     </label>
@@ -883,7 +890,7 @@ const KapaAI = observer(() => {
                                 = {fmt(tpPct, tpPct < 10 ? 1 : 0)}% of your balance ({fmt(balance)} {currency})
                             </small>
                         )}
-                        {s.strategy === 'pegasus' && boldNeed > Math.min(s.stopLoss, s.maxStake) && (
+                        {(s.strategy === 'pegasus' || s.strategy === 'apex') && boldNeed > Math.min(s.stopLoss, s.maxStake) && (
                             <small className='kapa-warn'>
                                 One win needs a stake of {fmt(boldNeed)} to reach this take-profit, more than your
                                 stop-loss allows: each session will be a single trade of {fmt(Math.min(s.stopLoss, s.maxStake))},

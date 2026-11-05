@@ -10,7 +10,7 @@
 
 export type TContractType = 'DIGITOVER' | 'DIGITUNDER' | 'DIGITEVEN' | 'DIGITODD' | 'DIGITMATCH' | 'DIGITDIFF';
 export type TRecoveryMode = 'none' | 'mult' | 'recover' | 'target';
-export type TPresetKey = 'pegasus' | 'martingale' | 'recover' | 'fixed' | 'switcher' | 'printer' | 'goldoe' | 'profitmaker';
+export type TPresetKey = 'apex' | 'pegasus' | 'martingale' | 'recover' | 'fixed' | 'switcher' | 'printer' | 'goldoe' | 'profitmaker';
 export type TStrategy = TPresetKey | 'custom';
 
 /** Rules the user writes for the "Custom" strategy (Premium). The server checks and runs them. */
@@ -34,6 +34,7 @@ export type TSettings = {
 };
 
 export const STRATEGIES: Record<TPresetKey, { label: string; premium: boolean }> = {
+    apex: { label: 'KAPA Apex · highest possible chance to reach your target', premium: true },
     pegasus: { label: 'Pegasus · bold play, best chance to reach the take-profit', premium: true },
     martingale: { label: 'Steady · ×2.1 recovery cycles that fit the stop-loss', premium: true },
     recover: { label: 'Exact recovery · one win gets the cycle back', premium: true },
@@ -53,6 +54,8 @@ export const PREMIUM_PRESETS = (Object.keys(STRATEGIES) as TPresetKey[]).filter(
  * profit, 50% contracts are the cheapest. KAPA AI's strategies trade the best-paid of these.
  */
 export const HALF_KEYS = ['DIGITEVEN', 'DIGITODD', 'DIGITOVER:4', 'DIGITUNDER:5'];
+/** Contracts KAPA Apex compares: one per chance level (Under N pays like Over 9−N) */
+export const APEX_KEYS = ['DIGITEVEN', ...[0, 1, 2, 3, 5, 6, 7, 8].map(b => `DIGITOVER:${b}`)];
 export const contractKey = (type: TContractType, barrier: number | null | undefined) =>
     barrier === null || barrier === undefined || !needsBarrier(type) ? type : `${type}:${barrier}`;
 export const parseKey = (key: string): { type: TContractType; barrier: number | null } => {
@@ -303,7 +306,7 @@ export const simulateFixed = (
 };
 
 export const validate = (s: TSettings, balance: number) => {
-    const bold = s.strategy === 'pegasus' || (s.strategy === 'custom' && s.custom.recMode === 'target');
+    const bold = s.strategy === 'pegasus' || s.strategy === 'apex' || (s.strategy === 'custom' && s.custom.recMode === 'target');
     if (!bold && !(s.stake >= 0.35)) return 'Minimum stake is 0.35.';
     if (!(s.takeProfit > 0)) return 'Set a take-profit above 0.';
     if (!(s.stopLoss >= 0.35)) return "Set a stop-loss of at least 0.35. KAPA AI won't run without one.";

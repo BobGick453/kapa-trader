@@ -700,3 +700,20 @@
     overflow: visible;
     line-height: 1.3;
 }
+
+// Phones: the tiles become a swipeable row, like the reference bot on a phone
+@media (max-width: 699px) {
+    .tab__dashboard__table__tiles:has(.kapa-tile) {
+        display: flex !important;
+        grid-template-columns: none;
+        gap: 1.2rem;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        padding: 0.4rem 1.2rem 1.6rem;
+    }
+    .kapa-tile {
+        flex: 0 0 15.6rem;
+        width: 15.6rem !important;
+        scroll-snap-align: start;
+    }
+}
