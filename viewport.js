@@ -1,1 +1,0 @@
-try{900>Math.min(screen.width,screen.height)&&document.querySelector("meta[name=viewport]").setAttribute("content","width=900, viewport-fit=cover")}catch(e){}

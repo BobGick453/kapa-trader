@@ -36,9 +36,19 @@ const GROUPS = {
     half: ['DIGITEVEN', 'DIGITODD', 'DIGITOVER:4', 'DIGITUNDER:5'], // 50%
     high: ['DIGITOVER:1', 'DIGITUNDER:8'], // 80%
     low: ['DIGITOVER:5', 'DIGITUNDER:4'], // 40%
+    // KAPA Apex: every chance level, compared at each trade (one group per chance level)
+    all: [
+        'DIGITOVER:0', 'DIGITUNDER:9', 'DIGITOVER:1', 'DIGITUNDER:8', 'DIGITOVER:2', 'DIGITUNDER:7',
+        'DIGITOVER:3', 'DIGITUNDER:6', 'DIGITEVEN', 'DIGITODD', 'DIGITOVER:4', 'DIGITUNDER:5',
+        'DIGITOVER:5', 'DIGITUNDER:4', 'DIGITOVER:6', 'DIGITUNDER:3', 'DIGITOVER:7', 'DIGITUNDER:2',
+        'DIGITOVER:8', 'DIGITUNDER:1',
+    ],
 };
 
 const DEFAULT_PRESETS = {
+    // KAPA Apex: at every trade, the contract and stake with the highest chance of reaching the take-profit
+    // before the stop-loss, computed exactly from Deriv's live prices (see apexChoice)
+    apex: { mode: 'target', group: 'all', martingale: 1, maxLosses: 30 },
     // Bold play towards the take-profit on the best-priced 50% contract
     pegasus: { mode: 'target', group: 'half', martingale: 1, maxLosses: 20 },
     // Stake ×2.1 after a loss (one win then covers the cycle), only for cycles that fit the stop-loss
@@ -60,7 +70,7 @@ const DEFAULT_BOTS = {
     'odd-oscars': { xml: 'oscars_grind', symbol: 'R_25', tradetype: 'evenodd', type: 'DIGITODD', stake: 1, unit: 1, profit: 5, loss: 15, maxStake: 4, duration: 1 },
 };
 
-const PRESET_KEYS = ['pegasus', 'martingale', 'recover'];
+const PRESET_KEYS = ['apex', 'pegasus', 'martingale', 'recover'];
 const BOT_KEYS = ['under7-dalembert', 'odd-oscars'];
 const MODES = ['target', 'double', 'recover', 'none'];
 
@@ -153,7 +163,7 @@ const validateSettings = (body, presets = DEFAULT_PRESETS) => {
         rules = { mode, base: [`DIGITOVER:${barrier}`], rec: [`DIGITOVER:${recovery}`], martingale, filter: false };
     } else if (Object.hasOwn(presets, preset)) {
         const p = presets[preset];
-        rules = { mode: p.mode, base: GROUPS[p.group], rec: GROUPS[p.group], martingale: p.martingale, filter: true };
+        rules = { mode: p.mode, base: GROUPS[p.group], rec: GROUPS[p.group], martingale: p.martingale, filter: true, apex: p.group === 'all' };
     } else return { error: 'Unknown strategy.' };
 
     const symbol = SYMBOLS.includes(body.symbol) ? body.symbol : null;
@@ -174,6 +184,93 @@ const validateSettings = (body, presets = DEFAULT_PRESETS) => {
 };
 
 const freshState = () => ({ pl: 0, streak: 0, lost: 0, runs: 0 });
+
+// ---------- KAPA Apex ----------
+// The session is a walk of the "fortune" f = (stop-loss + profit) / (stop-loss + take-profit) from its start
+// to 0 (stop-loss) or 1 (take-profit). For every f, value iteration computes the highest possible chance of
+// reaching 1, when each trade may be any of the contracts below, staked boldly (the stake one win needs to
+// reach the target, or all that is left). At each trade Apex takes the contract that keeps that chance highest.
+const APEX_N = 200;
+const apexCache = new Map();
+const apexCandidates = ratios => {
+    // one contract per chance level: the best-paid of the Over/Under (or Even/Odd) pair
+    const byChance = new Map();
+    for (const k of GROUPS.all) {
+        const p = winProb(k);
+        const cur = byChance.get(p);
+        if (!cur || expectedOf(k, ratios) > expectedOf(cur, ratios) + 1e-12) byChance.set(p, k);
+    }
+    return [...byChance.values()];
+};
+const apexValue = ratios => {
+    const cands = apexCandidates(ratios);
+    const sig = cands.map(k => `${k}=${ratioOf(k, ratios).toFixed(4)}`).join('|');
+    const hit = apexCache.get(sig);
+    if (hit) return { V: hit, cands };
+    const V = Array.from({ length: APEX_N + 1 }, (_, i) => i / APEX_N);
+    const at = x => {
+        if (x <= 0) return 0;
+        if (x >= 1) return 1;
+        const i = Math.floor(x * APEX_N);
+        const t = x * APEX_N - i;
+        return V[i] * (1 - t) + V[i + 1] * t;
+    };
+    for (let it = 0; it < 400; it++) {
+        let delta = 0;
+        for (let i = 1; i < APEX_N; i++) {
+            const f = i / APEX_N;
+            let best = 0;
+            for (const k of cands) {
+                const p = winProb(k);
+                const r = ratioOf(k, ratios);
+                const st = Math.min(f, (1 - f) / r);
+                const v = p * at(f + st * r) + (1 - p) * at(f - st);
+                if (v > best) best = v;
+            }
+            delta = Math.max(delta, Math.abs(best - V[i]));
+            V[i] = best;
+        }
+        if (delta < 1e-9) break;
+    }
+    if (apexCache.size > 200) apexCache.clear();
+    apexCache.set(sig, V);
+    return { V, cands };
+};
+/** The contract Apex trades now: the one that keeps the chance of reaching the take-profit highest. */
+const apexChoice = (s, st, ratios) => {
+    const { V, cands } = apexValue(ratios);
+    const span = s.stopLoss + s.takeProfit;
+    const f = (s.stopLoss + st.pl) / span;
+    const at = x => {
+        if (x <= 0) return 0;
+        if (x >= 1) return 1;
+        const i = Math.floor(x * APEX_N);
+        const t = x * APEX_N - i;
+        return V[i] * (1 - t) + V[i + 1] * t;
+    };
+    let best = cands[0];
+    let bestV = -1;
+    for (const k of cands) {
+        const p = winProb(k);
+        const r = ratioOf(k, ratios);
+        const stake = Math.min(f, (1 - f) / r, s.maxStake / span);
+        const v = p * at(f + stake * r) + (1 - p) * at(f - stake);
+        // on a tie, the contract that loses least on average
+        if (v > bestV + 1e-9 || (Math.abs(v - bestV) <= 1e-9 && expectedOf(k, ratios) > expectedOf(best, ratios))) {
+            best = k;
+            bestV = v;
+        }
+    }
+    return best;
+};
+/** Highest chance of reaching the take-profit before the stop-loss, from the start of a session. */
+const apexChance = (s, ratios) => {
+    const { V } = apexValue(ratios);
+    const f = s.stopLoss / (s.stopLoss + s.takeProfit);
+    const i = Math.floor(f * APEX_N);
+    const t = f * APEX_N - i;
+    return V[i] * (1 - t) + V[Math.min(APEX_N, i + 1)] * t;
+};
 
 /** Stake of step i (0 = the first trade) of a recovery cycle, given what the cycle has lost so far. */
 const stepStake = (s, i, lost, ratios) => {
@@ -209,7 +306,7 @@ const decide = (s, st, ratios) => {
     if (s.maxRuns && st.runs >= s.maxRuns) return { stop: 'runs', reason: `Finished ${st.runs} trades` };
     const room = round2(s.stopLoss + st.pl); // what this session may still lose
     const recovering = st.streak > 0 && s.mode !== 'none' && s.mode !== 'target';
-    const key = bestOf(recovering ? s.rec : s.base, ratios);
+    const key = s.apex ? apexChoice(s, st, ratios) : bestOf(recovering ? s.rec : s.base, ratios);
     if (s.filter && ratios[key] != null && expectedOf(key, ratios) < (s.minExpected ?? MIN_EXPECTED))
         return {
             stop: 'edge',
@@ -446,6 +543,7 @@ const labStrategies = (presets, { stake, takeProfit, stopLoss, capital }) => {
         return { ...base, mode: p.mode, base: GROUPS[p.group], rec: GROUPS[p.group], martingale: p.martingale, filter: true, stake, stopLoss, maxStake: stopLoss, maxLosses: p.maxLosses };
     };
     return {
+        apex: { ...preset('apex'), apex: true },
         pegasus: preset('pegasus'),
         martingale: preset('martingale'),
         recover: preset('recover'),
@@ -814,7 +912,8 @@ const quoteRatio = r =>
 const scan = async (env, body, rules) => {
     const { presets } = rules;
     const preset = Object.hasOwn(presets, body?.preset) ? body.preset : 'pegasus';
-    const keys = GROUPS[presets[preset].group];
+    const g = presets[preset].group;
+    const keys = GROUPS[g === 'all' ? 'half' : g]; // Apex is compared on the 50% contracts here: fewer requests
     const cur = /^[A-Z]{3}$/.test(body?.currency || '') ? body.currency : 'USD';
     const symbols = Array.isArray(body?.symbols)
         ? body.symbols.filter(sym => SCAN_SYMBOLS.includes(sym)).slice(0, 5)

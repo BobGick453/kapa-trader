@@ -134,3 +134,18 @@ Versions Kapa (objectif +5, stop-loss 50, mêmes ticks, prix public) :
 | Profit Maker | 86,8 % | −0,92 | −50 |
 
 Une mise qui dépasserait la marge restante sous le stop-loss n'est jamais placée : la session s'arrête avant.
+
+## KAPA Apex, la stratégie Premium (5 novembre 2026)
+
+À chaque trade, Apex calcule par programmation dynamique, sur les prix réels de Deriv, la chance d'atteindre l'objectif avant le stop-loss pour chaque niveau de chance de contrat (de 10 % à 90 %). Il prend ensuite le contrat qui donne la chance la plus haute, avec la mise qu'un seul gain demande pour atteindre l'objectif (mise audacieuse). C'est le maximum calculable sur ces contrats.
+
+Sur les 300 000 vrais ticks :
+
+| Objectif / stop-loss | Prix | Apex : objectif · moyenne | Pegasus : objectif · moyenne |
+|---|---|---|---|
+| +5 / 50 | public | 90,3 % · −0,34 | 90,1 % · −0,42 |
+| +10 / 50 | public | 82,3 % · −0,63 | 82,3 % · −0,64 |
+| +10 / 100 | public | 90,3 % · −0,68 | 90,1 % · −0,83 |
+| +10 / 50 | votre connexion | 79,7 % · −2,19 | 79,2 % · −2,48 |
+
+**Bots classiques :** ils gardent la règle d'entrée de l'original. Après une perte, Apex prend la main jusqu'à l'objectif ou au stop-loss. Avec un objectif +5 et un stop-loss de 50, au prix public, ils atteignent l'objectif dans 89,9 à 90,3 % des sessions, au lieu de 72 à 87 % avec leur propre récupération. Leur perte moyenne passe à −0,34 à −0,54 par session, soit environ deux fois moins.
