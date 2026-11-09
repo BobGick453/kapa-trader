@@ -1,26 +1,36 @@
-import brandConfig from '@/../brand.config.json';
 import React from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
+import brandConfig from '@/../brand.config.json';
+import { generateOAuthURL } from '@/components/shared';
 import Text from '@/components/shared_ui/text';
+import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
+import { KAPA_NO_SESSION_AT_LOAD } from '@/stores/dashboard-store';
 import { localize } from '@deriv-com/translations';
 import { useDevice } from '@deriv-com/ui';
 import OnboardTourHandler from '../tutorials/dbot-tours/onboarding-tour';
-import Announcements from './announcements';
 import Cards from './cards';
-import InfoPanel from './info-panel';
 
 type TMobileIconGuide = {
     handleTabChange: (active_number: number) => void;
 };
 
-const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
+// handleTabChange stays in the props for callers; the template's Announcements panel that used it is not shown in Kapa
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const DashboardComponent = observer((_props: TMobileIconGuide) => {
     const { load_modal, dashboard, client } = useStore();
     const { dashboard_strategies } = load_modal;
     const { active_tab, active_tour } = dashboard;
     const has_dashboard_strategies = !!dashboard_strategies?.length;
-    const { isDesktop, isTablet } = useDevice();
+    const { isDesktop } = useDevice();
+    const { isAuthorizing } = useApiBase();
+    // Visitors see a short "Not logged in" card; Kapa leaves out the template's guide panel and Announcements
+    const show_login_notice = !client.is_logged_in && (KAPA_NO_SESSION_AT_LOAD || !isAuthorizing);
+    const login = async () => {
+        const url = await generateOAuthURL();
+        if (url) window.location.replace(url);
+    };
 
     return (
         <React.Fragment>
@@ -30,9 +40,6 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                 })}
             >
                 <div className='tab__dashboard__content'>
-                    {client.is_logged_in && (
-                        <Announcements is_mobile={!isDesktop} is_tablet={isTablet} handleTabChange={handleTabChange} />
-                    )}
                     <div className='quick-panel'>
                         <div
                             className={classNames('tab__dashboard__header', {
@@ -94,11 +101,22 @@ const DashboardComponent = observer(({ handleTabChange }: TMobileIconGuide) => {
                             </Text>
                         </div>
                         <Cards has_dashboard_strategies={has_dashboard_strategies} is_mobile={!isDesktop} />
+                        {show_login_notice && (
+                            <div className='kapa-notice kapa-login' role='status'>
+                                <p>
+                                    <b>{localize('Not logged in.')}</b>{' '}
+                                    {localize('Log in to start trading and access all features.')}
+                                </p>
+                                <button type='button' className='kapa-btn kapa-notice__btn' onClick={login}>
+                                    {localize('Log in')}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
-            <InfoPanel />
-            {active_tab === 0 && <OnboardTourHandler is_mobile={!isDesktop} />}
+            {/* the tour is for logged-in users (visitors see the login card instead) */}
+            {active_tab === 0 && client.is_logged_in && <OnboardTourHandler is_mobile={!isDesktop} />}
         </React.Fragment>
     );
 });

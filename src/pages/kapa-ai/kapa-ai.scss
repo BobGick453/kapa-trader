@@ -1923,3 +1923,110 @@
         }
     }
 }
+
+// Premium locked: the card alone, centred, with no Start bar and no Summary (the page gives it the full height)
+.kapa-ai__scroll--lock {
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-content: center;
+    min-height: 100%;
+
+    .kapa-lock {
+        width: 100%;
+        max-width: 112rem;
+        margin: 0 auto;
+        padding: 4.4rem 4.8rem 3.6rem;
+        border-radius: var(--kapa-radius-card, 2.2rem);
+        border: 1px solid rgb(121 150 208 / 18%);
+        background: rgb(13 27 50 / 88%);
+        box-shadow: 0 18px 50px rgb(0 0 0 / 24%);
+        animation: kapa-rise 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .kapa-lock__title {
+        margin: 1rem 0 0.8rem;
+    }
+
+    .kapa-lock__grid {
+        margin-bottom: 2.4rem;
+    }
+}
+
+.kapa-lock__login {
+    margin: 1.4rem 0 0;
+    color: var(--kapa-text-2, #a8b6c9);
+    font-size: 1.3rem;
+
+    button {
+        border: 0;
+        padding: 0;
+        background: none;
+        color: var(--kapa-link, #bfdbfe);
+        font: inherit;
+        font-weight: 700;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+}
+
+// Phones: compact enough that the unlock button is on the first screen
+@media (max-width: 699px) {
+    .kapa-ai__scroll--lock {
+        padding: 1.2rem;
+
+        .kapa-lock {
+            padding: 2.2rem 1.6rem 1.8rem;
+        }
+
+        .kapa-lock__eyebrow {
+            font-size: 1rem;
+            letter-spacing: 0.14rem;
+        }
+
+        .kapa-lock__title {
+            font-size: 3rem;
+            margin: 0.8rem 0 0.6rem;
+        }
+
+        .kapa-lock__sub {
+            font-size: 1.35rem;
+            margin-bottom: 1.4rem;
+        }
+
+        .kapa-lock__grid {
+            gap: 0.8rem;
+            margin-bottom: 1.6rem;
+
+            > div {
+                padding: 1.1rem 1.4rem;
+            }
+
+            b {
+                margin-bottom: 0.3rem;
+                font-size: 1.1rem;
+                font-weight: 700;
+            }
+
+            span {
+                font-size: 1.1rem;
+                line-height: 1.4;
+                color: var(--kapa-text-2, #a8b6c9);
+            }
+        }
+
+        // the unlock button keeps clear of the orb and the risk button at the sides
+        .kapa-lock__cta {
+            width: auto;
+            max-width: calc(100vw - 2 * var(--kapa-fab-gutter));
+            min-width: min(26rem, calc(100vw - 2 * var(--kapa-fab-gutter)));
+            margin-inline: auto;
+            display: flex;
+            padding: 0.6rem 1.6rem;
+            line-height: 1.25;
+            text-align: center;
+        }
+
+        .kapa-lock__free {
+            margin-top: 1rem;
+        }
+    }
+}

@@ -1,84 +1,4 @@
-// Floating AI orb, risk-warning button, KAPA Live Scanner sheet and Risk warning dialog
-.kapa-fab-orb {
-    position: fixed;
-    z-index: 60;
-    right: calc(1.6rem + env(safe-area-inset-right, 0px));
-    bottom: calc(14rem + env(safe-area-inset-bottom, 0px));
-    width: 6.2rem;
-    height: 6.2rem;
-    border-radius: 50%;
-    border: 0;
-    display: grid;
-    place-items: center;
-    color: #fff;
-    font:
-        800 2.2rem/1 system-ui,
-        sans-serif;
-    cursor: pointer;
-    background: radial-gradient(circle at 35% 30%, #6aa2ff 0%, #2b62e8 45%, #163a9e 100%);
-    box-shadow:
-        0 0 0 3px rgb(245 197 66 / 75%),
-        0 0 0 6px rgb(37 99 235 / 25%),
-        0 0 2.6rem rgb(59 130 246 / 80%);
-
-    &:after {
-        content: '';
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        width: 1rem;
-        height: 1rem;
-        border-radius: 50%;
-        border: 2px solid #fff;
-        background: #9aa5c0;
-    }
-
-    &--live:after {
-        background: #2ee58a;
-    }
-
-    &--reconnecting:after,
-    &--connecting:after {
-        background: #f5c542;
-    }
-
-    &__badge {
-        position: absolute;
-        right: -1.4rem;
-        bottom: -0.2rem;
-        font-size: 0.9rem;
-        font-weight: 800;
-        letter-spacing: 0.05rem;
-        padding: 0.2rem 0.6rem;
-        border-radius: 0.6rem;
-        background: #f5c542;
-        color: #2a1d00;
-        white-space: nowrap;
-    }
-
-    &--offline &__badge {
-        background: #9aa5c0;
-        color: #1b2238;
-    }
-}
-
-.kapa-fab-risk {
-    position: fixed;
-    z-index: 60;
-    left: calc(1.4rem + env(safe-area-inset-left, 0px));
-    bottom: calc(14rem + env(safe-area-inset-bottom, 0px));
-    width: 4.6rem;
-    height: 4.6rem;
-    border-radius: 50%;
-    border: 0;
-    display: grid;
-    place-items: center;
-    background: #fff4dc;
-    color: #e09b00;
-    box-shadow: 0 6px 18px rgb(0 0 0 / 40%);
-    cursor: pointer;
-}
-
+// KAPA Live Scanner sheet and Risk warning dialog (the floating buttons are at the end of this file)
 .kapa-scan {
     position: fixed;
     inset: 0;
@@ -429,57 +349,6 @@
     }
 }
 
-// Both floating buttons: above every page and panel, below dialogs; draggable (position set inline)
-.kapa-fab-orb,
-.kapa-fab-risk {
-    z-index: 900;
-    touch-action: none; // lets a finger drag the button instead of scrolling the page
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    transition:
-        top 0.25s ease,
-        left 0.25s ease,
-        right 0.25s ease,
-        transform 0.15s ease;
-
-    &:hover {
-        transform: scale(1.05);
-    }
-
-    &:focus-visible {
-        outline: 2px solid #f5c542;
-        outline-offset: 3px;
-    }
-}
-
-.kapa-fab--dragging {
-    cursor: grabbing;
-    transform: scale(1.08);
-    opacity: 0.92;
-}
-
-.kapa-fab-orb {
-    @media (width <= 599px) {
-        width: 5.6rem;
-        height: 5.6rem;
-        font-size: 2rem;
-    }
-}
-
-// Desktop: the warning button is a small icon in the footer's left corner
-.kapa-fab-risk {
-    @media (width >= 1280px) {
-        width: 3.2rem;
-        height: 3.2rem;
-        box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
-
-        svg {
-            width: 1.8rem;
-            height: 1.8rem;
-        }
-    }
-}
-
 // Sizing finish for the scanner and the risk dialog: same control height and radius as KAPA AI
 .kapa-scan {
     @media (width >= 768px) {
@@ -543,5 +412,257 @@
         min-height: 4.8rem;
         padding: 0 1.4rem;
         text-align: center;
+    }
+}
+
+
+// ============================================================================
+// Floating AI orb (bottom right) and risk-warning button (bottom left), level with each other above the
+// footer on desktop and above the Run bars on phones. Dragging gives them an inline position instead.
+// ============================================================================
+$ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+.kapa-fab-orb,
+.kapa-fab-risk {
+    position: fixed;
+    z-index: 900;
+    touch-action: none; // lets a finger drag the button instead of scrolling the page
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+    transition:
+        top 0.25s $ease,
+        left 0.25s $ease,
+        right 0.25s $ease,
+        bottom 0.25s $ease,
+        transform 0.22s $ease;
+
+    &:hover {
+        transform: translateY(-1px) scale(1.04);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #f0c85e;
+        outline-offset: 3px;
+    }
+}
+
+.kapa-fab--dragging {
+    cursor: grabbing;
+    transform: scale(1.08);
+    opacity: 0.92;
+}
+
+.kapa-fab-orb {
+    --orb: 6rem;
+
+    right: calc(1.6rem + env(safe-area-inset-right, 0px));
+    bottom: calc(15rem + env(safe-area-inset-bottom, 0px));
+    width: var(--orb);
+    height: var(--orb);
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgb(250 204 21 / 68%);
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-family: var(--brand-font-primary);
+    background:
+        radial-gradient(circle at 32% 24%, rgb(255 255 255 / 46%) 0 7%, transparent 24%),
+        linear-gradient(145deg, #60a5fa, #2563eb 40%, #1d4ed8 70%, #172554);
+    box-shadow:
+        0 0 0 7px rgb(59 130 246 / 13%),
+        0 0 28px rgb(37 99 235 / 58%),
+        0 10px 24px rgb(30 64 175 / 28%),
+        inset 0 1px 0 rgb(255 255 255 / 52%),
+        inset 0 -5px 10px rgb(30 58 138 / 24%);
+
+    @media (width <= 599px) {
+        --orb: 5.2rem;
+
+        right: calc(1.2rem + env(safe-area-inset-right, 0px));
+    }
+
+    // Desktop: just above the footer, and left of the Summary drawer when it is open
+    @media (width >= 1280px) {
+        bottom: 5.2rem;
+
+        .main--drawer-open ~ & {
+            right: calc(36.6rem + 1.6rem);
+        }
+    }
+
+    &__label {
+        position: relative;
+        z-index: 1;
+        font-size: 2.2rem;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: 0.02rem;
+        text-shadow: 0 1px 2px rgb(23 37 84 / 45%);
+
+        @media (width <= 599px) {
+            font-size: 2rem;
+        }
+    }
+
+    // halo: a soft blue-to-gold glow that breathes
+    &__halo {
+        position: absolute;
+        inset: -1.2rem;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgb(59 130 246 / 34%) 0 45%, rgb(240 200 94 / 14%) 62%, transparent 72%);
+        pointer-events: none;
+        animation: kapa-orb-halo 2.8s ease-in-out infinite;
+
+        @media (width <= 599px) {
+            animation-duration: 4.5s;
+        }
+    }
+
+    // a thin gold and blue arc orbiting the sphere
+    &__arc {
+        position: absolute;
+        inset: -0.5rem;
+        border-radius: 50%;
+        pointer-events: none;
+        background: conic-gradient(from 0deg, transparent 0 62%, rgb(240 200 94 / 85%) 74%, rgb(96 165 250 / 70%) 86%, transparent 92%);
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+        animation: kapa-orb-spin 7s linear infinite;
+
+        @media (width <= 599px) {
+            animation-duration: 14s;
+        }
+    }
+
+    &__dot {
+        position: absolute;
+        z-index: 1;
+        top: 0.3rem;
+        right: 0.3rem;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #9aa5c0;
+    }
+
+    &--live &__dot {
+        background: #2ee58a;
+    }
+
+    &--reconnecting &__dot,
+    &--connecting &__dot {
+        background: #f5c542;
+    }
+
+    &__badge {
+        position: absolute;
+        z-index: 2;
+        right: -1.2rem;
+        bottom: -0.3rem;
+        display: grid;
+        place-items: center;
+        min-width: 3.2rem;
+        height: 1.6rem;
+        padding: 0 0.6rem;
+        border-radius: 999px;
+        background: linear-gradient(145deg, #fef9c3, #facc15);
+        color: #713f12;
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.06rem;
+        line-height: 1;
+        white-space: nowrap;
+        box-shadow: 0 4px 10px rgb(113 63 18 / 24%);
+    }
+
+    &--live &__badge {
+        animation: kapa-orb-badge 3.2s ease-in-out infinite;
+    }
+
+    &--offline &__badge {
+        background: #cbd2e1;
+        color: #1b2238;
+    }
+}
+
+.kapa-fab-risk {
+    --risk: 3.6rem;
+
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+    // vertically level with the orb
+    bottom: calc(15rem + (5.2rem - var(--risk)) / 2 + env(safe-area-inset-bottom, 0px));
+    width: var(--risk);
+    height: var(--risk);
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #fff4dc;
+    color: #e08a00;
+    box-shadow: 0 8px 24px rgb(15 23 42 / 16%), 0 2px 6px rgb(0 0 0 / 22%);
+
+    @media (width >= 600px) and (width <= 1279px) {
+        bottom: calc(15rem + (6rem - var(--risk)) / 2 + env(safe-area-inset-bottom, 0px));
+    }
+
+    @media (width >= 1280px) {
+        --risk: 3.8rem;
+
+        left: 1.6rem;
+        bottom: calc(5.2rem + (6rem - var(--risk)) / 2);
+    }
+
+    svg {
+        width: 1.8rem;
+        height: 1.8rem;
+    }
+}
+
+@keyframes kapa-orb-halo {
+    0%,
+    100% {
+        opacity: 0.55;
+        transform: scale(0.94);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.04);
+    }
+}
+
+@keyframes kapa-orb-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes kapa-orb-badge {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.06);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kapa-fab-orb__halo,
+    .kapa-fab-orb__arc,
+    .kapa-fab-orb__badge {
+        animation: none !important;
+    }
+}
+
+// While the phone Run sheet is open, the floating buttons step aside (they would cover its figures)
+body:has(.run-panel__container--mobile) {
+    .kapa-fab-orb,
+    .kapa-fab-risk {
+        opacity: 0;
+        pointer-events: none;
     }
 }

@@ -1,4 +1,5 @@
 @use 'components/shared/styles/mixins' as *;
+@use 'components/shared/styles/kapa-tokens' as k;
 
 .bot-dashboard {
     --translate-panel-rtl: -367px;
@@ -715,5 +716,227 @@
         flex: 0 0 15.6rem;
         width: 15.6rem !important;
         scroll-snap-align: start;
+    }
+}
+
+// ============================================================================
+// Kapa tokens on the Dashboard (surfaces, inset icon tiles, OPEN pills), plus two fixes:
+// the tile text column (it inherited a 9.1rem width from the template) and the desktop column next to
+// the Summary drawer.
+// ============================================================================
+.tab__dashboard .tab__dashboard__header,
+.theme--dark .tab__dashboard .tab__dashboard__header,
+.theme--light .tab__dashboard .tab__dashboard__header {
+    @include k.surface;
+
+    color: var(--kapa-text-1);
+    animation: kapa-rise 0.48s k.$ease both;
+
+    .subtitle {
+        color: var(--kapa-text-2) !important;
+    }
+}
+
+.kapa-social a {
+    @include k.surface(50%);
+
+    width: 4.2rem;
+    height: 4.2rem;
+    transition: transform 0.22s k.$ease;
+
+    &:not([href]) {
+        opacity: 1;
+    }
+
+    &:hover {
+        transform: translateY(-1px);
+    }
+}
+
+.kapa-tile {
+    @include k.surface;
+
+    padding: 2.2rem 1.4rem 1.6rem !important;
+    animation: kapa-rise 0.48s k.$ease both;
+    transition:
+        transform 0.3s k.$ease,
+        border-color 0.3s k.$ease,
+        box-shadow 0.3s k.$ease;
+
+    @for $i from 1 through 5 {
+        &:nth-child(#{$i}) {
+            animation-delay: #{0.06s + ($i - 1) * 0.1s};
+        }
+    }
+
+    &:hover {
+        transform: translateY(-2px);
+        border-color: var(--kapa-line-strong);
+        box-shadow: var(--kapa-shadow-deep);
+    }
+
+    // the title and subtitle span the tile (the template gave every span a 9.1rem width)
+    > span,
+    > .dc-text {
+        width: auto !important;
+        max-width: 100%;
+    }
+
+    .dc-text {
+        color: var(--kapa-text-1) !important;
+    }
+
+    .tab__dashboard__table__images {
+        @include k.inset(2rem);
+
+        border: 0 !important;
+        background: var(--kapa-inset-bg) !important;
+        border-radius: 2rem !important;
+        width: 6.4rem !important;
+        height: 6.4rem !important;
+    }
+
+    &__sub {
+        color: var(--kapa-text-2);
+        font-size: 1.15rem;
+    }
+
+    &__open {
+        @include k.surface(999px);
+
+        min-height: 3.4rem;
+        padding: 0 2rem;
+        color: var(--kapa-link);
+        font-size: 1.1rem;
+        font-weight: 750;
+        letter-spacing: 0.04rem;
+        transition:
+            transform 0.16s k.$ease,
+            box-shadow 0.16s k.$ease,
+            color 0.16s k.$ease,
+            background 0.16s k.$ease;
+
+        &:hover:not(:disabled) {
+            background: var(--kapa-primary);
+            border-color: transparent;
+            color: #fff;
+            transform: translateY(-1px);
+            box-shadow: var(--kapa-lift);
+        }
+
+        &:disabled {
+            color: var(--kapa-text-3);
+        }
+    }
+}
+
+// Desktop: the page sits in a centred column; with the Summary drawer open, it stays left of it
+@include desktop-screen {
+    .tab__dashboard__content {
+        padding: 3.2rem 2.4rem 0 !important;
+        overflow-y: auto !important;
+
+        .quick-panel {
+            max-width: 96rem;
+            margin: 0 auto;
+        }
+    }
+}
+
+// Visitors: a short "Not logged in" card under the tiles
+.kapa-notice.kapa-login {
+    @include k.surface;
+
+    max-width: 45rem;
+    margin: 0.8rem auto 2.4rem;
+    padding: 1.8rem 2rem;
+    text-align: center;
+    color: var(--kapa-text-2);
+    font-size: 1.4rem;
+    line-height: 1.5;
+    animation: kapa-rise 0.36s k.$ease both;
+
+    p {
+        margin: 0 0 1.2rem;
+    }
+
+    b {
+        color: var(--kapa-text-1);
+    }
+
+    .kapa-notice__btn {
+        @include k.primary;
+
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        min-height: 4rem;
+        margin: 0;
+        padding: 0 2.8rem;
+        font: inherit;
+        font-size: 1.4rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+            transform 0.16s k.$ease,
+            filter 0.16s k.$ease;
+
+        &:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+        }
+
+        &:focus-visible {
+            outline: 2px solid #f0c85e;
+            outline-offset: 2px;
+        }
+    }
+}
+
+// Desktop: the five tiles in one row in the column next to the drawer (the login card then shows without scrolling)
+@include desktop-screen {
+    .tab__dashboard__table__tiles:has(.kapa-tile) {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 1.6rem;
+        padding-inline: 0;
+    }
+}
+
+// Phones and the 980px layout: room under the last card so it can scroll above the floating buttons
+@include mobile-or-tablet-screen {
+    .tab__dashboard .quick-panel {
+        padding-bottom: 16rem;
+    }
+}
+
+// Hero: no empty band under the title (the template gave it a 7.2rem box and a very tall line height)
+.tab__dashboard .tab__dashboard__header .title.kapa-intro-title {
+    height: auto;
+    line-height: 1.2 !important;
+    margin: 0.4rem 0 0;
+}
+
+.tab__dashboard .tab__dashboard__header .subtitle {
+    margin-top: 0.8rem;
+}
+
+// Phones and the 980px layout: the login card keeps clear of the orb and the risk button at the sides
+@include mobile-or-tablet-screen {
+    .kapa-notice.kapa-login {
+        margin-inline: max(var(--kapa-fab-gutter), (100% - 45rem) / 2);
+        padding: 1.4rem 1.4rem;
+        font-size: 1.3rem;
+    }
+}
+
+// Small phones: the title stays on one line, so the login card comes up into the first screen
+@media (max-width: 599px) {
+    body .tab__dashboard .tab__dashboard__header .title.kapa-intro-title {
+        font-size: 2.2rem !important;
+    }
+
+    .tab__dashboard .tab__dashboard__header {
+        padding: 1.8rem 1.6rem !important;
     }
 }

@@ -37,16 +37,17 @@
         <div id="modal_root" class="modal-root"></div>
         <div id="popup_root" class="popup-root"></div>
         <div id="root">
-            <!-- Shown at once while the app loads; the app replaces it -->
+            <!-- Shown at once while the app loads (the same look as the opening screen); the app replaces it -->
             <div
-                style="position:fixed;inset:0;display:grid;place-items:center;background:#050b1e;color:#c8d1ec;font:500 15px/1.5 'IBM Plex Sans',system-ui,sans-serif;text-align:center;z-index:1"
+                style="position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(60rem 42rem at 50% 42%,#10264a 0%,#071426 62%,#050e1d 100%);color:#e0b757;font:500 11px/1.5 'Outfit',system-ui,sans-serif;text-align:center;z-index:1"
             >
                 <div>
+                    <div style="letter-spacing:6.5px;text-transform:uppercase;opacity:0.72">Digit trading on Deriv</div>
                     <div
-                        style="width:64px;height:64px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:#1d4ed8;border:2px solid #f5c542;color:#fff;font-weight:800;font-size:22px"
+                        style="width:88px;height:88px;margin:34px auto 26px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(224,183,87,0.6);color:#f2d581;font-weight:700;font-size:32px"
                     >KA</div>
-                    <div style="color:#f5c542;font-weight:700;letter-spacing:0.2em">KAPA TRADER</div>
-                    <div id="kapa-boot-msg" style="margin-top:8px">Loading Kapa Trader…</div>
+                    <div style="color:#f5f8fc;font-weight:600;font-size:30px;letter-spacing:5px">KAPA <span style="color:#e0b757">TRADER</span></div>
+                    <div id="kapa-boot-msg" style="margin-top:26px;letter-spacing:3px;text-transform:uppercase;color:rgba(220,228,240,0.56)">Loading Kapa Trader…</div>
                 </div>
             </div>
         </div>

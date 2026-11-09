@@ -16,6 +16,7 @@ import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observab
 import { isDbotRTL } from '@/external/bot-skeleton/utils/workspace';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
+import { KAPA_NO_SESSION_AT_LOAD } from '@/stores/dashboard-store';
 import {
     disableUrlParameterApplication,
     enableUrlParameterApplication,
@@ -54,7 +55,7 @@ const ChartWrapper = lazy(() => import('../chart/chart-wrapper'));
 const Tutorial = lazy(() => import('../tutorials'));
 
 const AppWrapper = observer(() => {
-    const { connectionStatus } = useApiBase();
+    const { connectionStatus, isAuthorizing, activeLoginid } = useApiBase();
     const { dashboard, load_modal, run_panel, quick_strategy, summary_card, blockly_store, client } = useStore();
     const { is_loading } = blockly_store;
     const {
@@ -147,8 +148,31 @@ const AppWrapper = observer(() => {
         };
     }, [setActiveTab]);
 
-    // KAPA AI has its own Start/Stop bar; keep the Bot Builder run panel out of its way unless a Bot Builder strategy is running
+    // Where the Bot Builder run panel shows (as in the reference bot):
+    // - desktop: the Run row and the Summary drawer on every tab but KAPA AI, which has its own Start/Stop bar;
+    // - phones and the 980px layout: the bottom Run bar only on Bot Builder and Charts (and during the tour).
+    // A running Bot Builder strategy keeps its Run/Stop control on whatever tab is open.
     const show_bot_run_panel = active_tab !== DBOT_TABS.KAPA_AI || run_panel.is_running;
+    const show_mobile_run_bar =
+        [DBOT_TABS.BOT_BUILDER, DBOT_TABS.CHART].includes(active_tab) || run_panel.is_running || Boolean(active_tour);
+    const drawer_open = isDesktop && show_bot_run_panel && is_drawer_open;
+
+    // A visitor who turns out not to be logged in (e.g. Deriv refused the automatic reconnection) lands on
+    // the Dashboard, unless they already picked a tab themselves
+    // the Deriv auth state can stay "authorizing" when a login is refused: give up waiting after 5 s, like the header
+    const tab_chosen = React.useRef(false);
+    const [auth_wait_over, setAuthWaitOver] = useState(false);
+    useEffect(() => {
+        const t = setTimeout(() => setAuthWaitOver(true), 5000);
+        return () => clearTimeout(t);
+    }, []);
+    useEffect(() => {
+        if (!KAPA_NO_SESSION_AT_LOAD || tab_chosen.current || location.hash || activeLoginid || client?.is_logged_in)
+            return;
+        if (isAuthorizing && !auth_wait_over) return;
+        if (active_tab === DBOT_TABS.KAPA_AI) setActiveTab(DASHBOARD);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthorizing, activeLoginid, client?.is_logged_in, auth_wait_over]);
 
     // Set up modal state change listener
     React.useEffect(() => {
@@ -402,7 +426,12 @@ const AppWrapper = observer(() => {
     // [/AI]
     return (
         <React.Fragment>
-            <div className={classNames('main', { 'main--no-run-panel': !show_bot_run_panel })}>
+            <div
+                className={classNames('main', {
+                    'main--no-run-panel': !show_bot_run_panel,
+                    'main--drawer-open': drawer_open,
+                })}
+            >
                 <div
                     className={classNames('main__container', {
                         'main__container--active': active_tour && active_tab === DASHBOARD && !isDesktop,
@@ -410,7 +439,15 @@ const AppWrapper = observer(() => {
                 >
                     <div>
                         {!isDesktop && left_tab_shadow && <span className='tabs-shadow tabs-shadow--left' />}{' '}
-                        <Tabs active_index={active_tab} className='main__tabs' onTabItemClick={handleTabChange} top>
+                        <Tabs
+                            active_index={active_tab}
+                            className='main__tabs'
+                            onTabItemClick={(index: number) => {
+                                tab_chosen.current = true;
+                                handleTabChange(index);
+                            }}
+                            top
+                        >
                             <div
                                 label={
                                     <>
@@ -546,7 +583,7 @@ const AppWrapper = observer(() => {
                 <ChartModal />
                 <TradingViewModal />
             </DesktopWrapper>
-            <MobileWrapper>{!is_open && show_bot_run_panel && <RunPanel />}</MobileWrapper>
+            <MobileWrapper>{!is_open && show_mobile_run_bar && <RunPanel />}</MobileWrapper>
             <KapaOrb />
             <Dialog
                 cancel_button_text={cancel_button_text || localize('Cancel')}

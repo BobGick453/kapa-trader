@@ -1,0 +1,243 @@
+// Kapa: global finish shared by every page (tokens, page background, fonts, onboarding, run panel, toolbar)
+@use 'components/shared/styles/kapa-tokens' as k;
+@use 'components/shared/styles/mixins' as *;
+
+// ---- Tokens (CSS custom properties; the SCSS mixins in kapa-tokens apply them) ----
+:root,
+.theme--dark {
+    @include k.tokens-dark;
+
+    --kapa-ease: #{k.$ease};
+    --kapa-radius-card: #{k.$radius-card};
+    --kapa-radius-btn: #{k.$radius-btn};
+    --kapa-radius-pill: #{k.$radius-pill};
+}
+
+.theme--light {
+    @include k.tokens-light;
+
+    // Kapa's primary action is blue in both themes (the template's light theme used Deriv red)
+    --button-primary-default: #2563eb;
+    --button-primary-hover: #1d4fd8;
+}
+
+// ---- Floating buttons: the side room a first-screen action keeps free so the orb (right) and the risk button
+// (left) never cover it. Orb: 1.2rem from the edge + 5.2rem wide on phones, 1.6rem + 6rem from 600px; plus a gap.
+:root {
+    --kapa-fab-gutter: 7.2rem;
+
+    @media (width >= 600px) {
+        --kapa-fab-gutter: 8.4rem;
+    }
+}
+
+// ---- Fonts: Outfit everywhere. The quill components ask for IBM Plex Sans, which Kapa doesn't load
+// (it would fall back to a serif): point their font token at Outfit instead.
+html:root {
+    --core-fontFamily-ibmPlex-sans: 'Outfit', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --core-fontFamily-inter: 'Outfit', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+    font-family: var(--brand-font-primary);
+}
+
+// ---- Page background: deep navy with two soft glows (top-left, bottom-right) ----
+body.theme--dark,
+body.theme--light {
+    background: var(--kapa-bg-glow), var(--kapa-bg);
+}
+
+body.theme--dark,
+body.theme--light {
+    .main,
+    .main__container,
+    .dc-tabs--main__tabs,
+    .dc-tabs__content--main__tabs,
+    .tab__dashboard__content {
+        background: transparent;
+    }
+
+    .dc-tabs__content--main__tabs {
+        @include mobile-or-tablet-screen {
+            background: transparent;
+        }
+    }
+}
+
+// ---- Entry animation for a page or a card: fade and rise (transform/opacity only) ----
+@keyframes kapa-rise {
+    from {
+        opacity: 0;
+        transform: translateY(0.8rem);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes kapa-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+// ---- Onboarding: the tour's Start button uses Kapa's blue, never Deriv red ----
+body .dbot-slider__button-group button.danger,
+body .tour-dialog .dc-btn--primary,
+.react-joyride__tooltip .dc-btn--primary,
+.onboard .dc-btn--primary {
+    @include k.primary;
+
+    span {
+        color: #fff !important;
+    }
+}
+
+body .dc-progress-bar-tracker-rectangle {
+    background-color: #3b82f6;
+}
+
+// ---- Run panel (desktop drawer and phone sheet) ----
+.run-panel__content {
+    // Summary / Transactions / Journal: a pill segmented control
+    .dc-tabs--top > .dc-tabs__list,
+    .dc-tabs__list--top {
+        gap: 0.4rem;
+        padding: 0.4rem;
+        margin: 0.8rem 0.8rem 0.4rem;
+        border-radius: 999px;
+        background: var(--kapa-inset-bg);
+        box-shadow: var(--kapa-inset-shadow);
+        border: 0;
+        width: auto !important; // the side margins stay inside the panel
+        box-sizing: border-box;
+
+        // phone sheet: the template places the tab content right under a 40px tab row, so the control keeps
+        // to that height instead of running under it
+        @include mobile-or-tablet-screen {
+            height: 3.8rem;
+            margin: 0.1rem 0.8rem 0.1rem;
+            padding: 0.3rem;
+
+            .dc-tabs__item {
+                height: 3.2rem;
+            }
+        }
+    }
+
+    .dc-tabs__item {
+        flex: 1;
+        height: 3.8rem;
+        border-radius: 999px;
+        color: var(--kapa-text-2);
+        font-size: 1.4rem;
+        font-weight: 400;
+        transition:
+            background 0.22s k.$ease,
+            color 0.22s k.$ease,
+            box-shadow 0.22s k.$ease;
+
+        .dc-text,
+        span {
+            color: inherit !important;
+            font-size: inherit;
+            font-weight: inherit;
+        }
+    }
+
+    .dc-tabs__active {
+        background: rgb(23 63 109 / 72%) !important;
+        color: var(--kapa-text-1);
+        font-weight: 700;
+        box-shadow:
+            0 3px 8px rgb(0 5 14 / 32%),
+            inset 0 1px 0 rgb(96 165 250 / 16%),
+            inset 0 -2px 0 #3b82f6;
+    }
+
+    .dc-tabs__active-line {
+        display: none;
+    }
+}
+
+.theme--light .run-panel__content .dc-tabs__active {
+    background: #fff !important;
+    box-shadow:
+        0 3px 8px rgb(15 35 70 / 12%),
+        inset 0 -2px 0 #2563eb;
+}
+
+// Stat tiles: each value in its own bordered tile; values fade in
+.run-panel__stat--tiles {
+    gap: 0.5rem;
+    padding: 0 0.8rem 0.6rem;
+    box-sizing: border-box;
+    grid-template: 5.2rem 5.2rem / 1fr 1fr 1fr !important;
+
+    .run-panel__tile {
+        border: 1px solid var(--kapa-line);
+        border-radius: 1rem;
+        background: var(--kapa-surface);
+        box-shadow: inset 0 1px 0 rgb(148 197 255 / 10%);
+        justify-content: center;
+        padding: 0.4rem;
+
+        &-title {
+            color: var(--kapa-text-2);
+            font-size: 1.15rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 0.2rem;
+        }
+
+        &-content {
+            color: var(--kapa-text-1);
+            font-weight: 700;
+            animation: kapa-fade 0.3s k.$ease both;
+        }
+    }
+}
+
+.run-panel__stat {
+    background: transparent !important;
+}
+
+// Phone Run sheet: Kapa navy surface on the bar
+.controls__section {
+    @include mobile-or-tablet-screen {
+        background: var(--kapa-surface-flat);
+        box-shadow: 0 -8px 22px rgb(0 5 14 / 35%);
+        border-top: 1px solid var(--kapa-line);
+    }
+}
+
+// ---- Bot Builder toolbar and Quick strategy button ----
+.toolbar__group {
+    border-radius: k.$radius-btn !important;
+    box-shadow: var(--kapa-shadow);
+    border-color: var(--kapa-line) !important;
+}
+
+.toolbar__btn--start,
+.toolbar__group .dc-btn--primary,
+#db-toolbar__get-started-button {
+    @include k.primary;
+}
+
+// KAPA AI page: no rectangle of its own over the page background
+body .kapa-ai {
+    background: radial-gradient(900px 420px at 50% 0, rgb(17 37 92 / 45%) 0%, transparent 70%);
+}

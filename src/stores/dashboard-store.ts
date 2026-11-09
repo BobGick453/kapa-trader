@@ -63,6 +63,24 @@ export interface IDashboardStore {
     setPreviewOnPopup: (is_preview_on_popup: boolean) => void;
 }
 
+/**
+ * Kapa: the tab the app opens on. A visitor who is not logged in (and is not coming back from Deriv's
+ * login, or reconnecting a linked device) lands on the Dashboard; a logged-in user opens KAPA AI.
+ */
+const kapaLoadState = (() => {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const session = Boolean(JSON.parse(sessionStorage.getItem('auth_info') || 'null')?.access_token);
+        const linked = localStorage.getItem('kapa_deriv_linked') === '1';
+        return { login: params.has('code') || session, maybe: params.has('state') || linked };
+    } catch {
+        return { login: true, maybe: false };
+    }
+})();
+const kapaStartTab = (): number => (kapaLoadState.login || kapaLoadState.maybe ? 4 : 0);
+/** True when the page was opened without a Deriv session and without a login code to finish. */
+export const KAPA_NO_SESSION_AT_LOAD = !kapaLoadState.login;
+
 export default class DashboardStore implements IDashboardStore {
     root_store: RootStore;
     core: TStores;
@@ -178,7 +196,7 @@ export default class DashboardStore implements IDashboardStore {
         this.initInfoPanel();
     }
 
-    active_tab = 4; // Kapa: open on the KAPA AI tab
+    active_tab = kapaStartTab(); // Kapa: KAPA AI for a logged-in user, the Dashboard for a visitor
     active_tab_tutorials = 0;
     active_tour_step_number = 0;
     dialog_options: TDialogOptions = {};

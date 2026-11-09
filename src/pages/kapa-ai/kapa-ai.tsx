@@ -456,6 +456,9 @@ const KapaAI = observer(() => {
         const url = await generateOAuthURL();
         if (url) window.location.replace(url);
     };
+    const loginProblems = diag.filter(
+        d => d.kind === 'login' || d.kind === 'csp' || (d.kind === 'ws' && !/^Connected/.test(d.text))
+    );
 
     const scan = async () => {
         if (scanning || running) return;
@@ -767,11 +770,11 @@ const KapaAI = observer(() => {
             /* this visit only */
         }
     };
+    // Visitors see the same Premium card (as on the reference bot), with a Log in line
     const showLock =
-        logged_in &&
         premiumEnabled() &&
         !isPremium &&
-        premium.status === 'inactive' &&
+        (premium.status === 'inactive' || !logged_in) &&
         !freeMode &&
         !running &&
         s.strategy === 'fixed';
@@ -805,12 +808,21 @@ const KapaAI = observer(() => {
             <button className='kapa-lock__free' type='button' onClick={useFree}>
                 Use the free strategies
             </button>
+            {!logged_in && (
+                <p className='kapa-lock__login'>
+                    Not logged in.{' '}
+                    <button type='button' onClick={login}>
+                        Log in with Deriv
+                    </button>{' '}
+                    to trade.
+                </p>
+            )}
         </section>
     );
 
     return (
         <div className='kapa-ai'>
-            <div className='kapa-ai__scroll'>
+            <div className={classNames('kapa-ai__scroll', { 'kapa-ai__scroll--lock': showLock })}>
                 {showLock ? (
                     lockCard
                 ) : (
@@ -841,13 +853,15 @@ const KapaAI = observer(() => {
                             <button className='kapa-btn kapa-btn--gold' onClick={login} type='button'>
                                 Log in with Deriv
                             </button>
-                            {diag.length > 0 && (
-                                <details className='kapa-diag' open>
-                                    <summary>Connection details</summary>
+                            {/* Only real problems, closed by default, without server addresses */}
+                            {loginProblems.length > 0 && (
+                                <details className='kapa-diag'>
+                                    <summary>Why can&apos;t I connect?</summary>
                                     <ul>
-                                        {diag.slice(-8).map((d, i) => (
+                                        {loginProblems.slice(-5).map((d, i) => (
                                             <li key={`${d.at}-${i}`} className={`kapa-diag__${d.kind}`}>
-                                                <time>{new Date(d.at).toLocaleTimeString()}</time> {d.text}
+                                                <time>{new Date(d.at).toLocaleTimeString()}</time>{' '}
+                                                {d.text.replace(/\b(wss?|https?):\/\/\S+/g, 'Deriv server')}
                                             </li>
                                         ))}
                                     </ul>
@@ -959,9 +973,11 @@ const KapaAI = observer(() => {
                 </section>
                 )}
 
-                {wide && panelSection}
+                {wide && !showLock && panelSection}
             </div>
 
+            {/* Locked Premium card alone: no Start bar and no Summary until the free strategies are picked */}
+            {!showLock && (
             <div className={classNames('kapa-dock', { 'kapa-dock--open': panelOpen && !wide })}>
                 {!wide && (
                     <>
@@ -1015,6 +1031,7 @@ const KapaAI = observer(() => {
                     </div>
                 </div>
             </div>
+            )}
 
             {settingsOpen && (
                 <div

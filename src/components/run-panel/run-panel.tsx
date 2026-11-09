@@ -310,8 +310,10 @@ const RunPanel = observer(() => {
         />
     );
 
-    const show_run_panel = [BOT_BUILDER, CHART].includes(active_tab) || active_tour;
-    if ((!show_run_panel && isDesktop) || active_tour === 'bot_builder') return null;
+    // Kapa: on desktop the drawer shows on every tab where the page renders it (main.tsx decides: all but KAPA AI)
+    const show_run_panel =
+        isDesktop || [BOT_BUILDER, CHART].includes(active_tab) || active_tour || run_panel.is_running;
+    if (!show_run_panel || active_tour === 'bot_builder') return null;
 
     return (
         <>

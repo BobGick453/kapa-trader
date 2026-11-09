@@ -30,19 +30,10 @@ const KapaOrb = observer(() => {
     const [rows, setRows] = useState<TScanRow[] | null>(null);
     const [scanned, setScanned] = useState<TPresetKey>('martingale');
     const [error, setError] = useState('');
-    // Both buttons float over every page and can be dragged; defaults keep them clear of the Run bars
-    const orbFloat = useFloating(
-        'kapa_orb_spot',
-        () => ({ side: 'right', y: isDesktop() ? 0.55 : 0.82 }),
-        window.innerWidth <= 599 ? 56 : 62
-    );
-    // On desktop the warning sits in the footer's empty left corner, clear of every page's buttons
-    const riskFloat = useFloating(
-        'kapa_risk_spot',
-        () => ({ side: 'left', y: isDesktop() ? 1 : 0.82 }),
-        isDesktop() ? 32 : 46,
-        () => (isDesktop() ? 2 : 16)
-    );
+    // Both buttons float over every page and can be dragged. Until they are moved, CSS keeps them at the
+    // bottom corners above the footer and the Run bars (kapa-orb.scss)
+    const orbFloat = useFloating('kapa_orb_spot', window.innerWidth <= 599 ? 52 : 60);
+    const riskFloat = useFloating('kapa_risk_spot', isDesktop() ? 38 : 36);
 
     if (connectionStatus === CONNECTION_STATUS.OPENED && !wasOpen) setWasOpen(true);
     const state =
@@ -108,7 +99,10 @@ const KapaOrb = observer(() => {
                 onClick={() => setOpen(true)}
                 aria-label={`KAPA Live Scanner, ${state}. Drag to move.`}
             >
-                AI
+                <span className='kapa-fab-orb__halo' aria-hidden />
+                <span className='kapa-fab-orb__arc' aria-hidden />
+                <span className='kapa-fab-orb__label'>AI</span>
+                <span className='kapa-fab-orb__dot' aria-hidden />
                 <span className='kapa-fab-orb__badge'>{state.toUpperCase()}</span>
             </button>
             <button
@@ -119,17 +113,9 @@ const KapaOrb = observer(() => {
                 onClick={() => setRisk(true)}
                 aria-label='Risk warning. Drag to move.'
             >
-                <svg
-                    viewBox='0 0 24 24'
-                    width='22'
-                    height='22'
-                    fill='none'
-                    stroke='currentColor'
-                    strokeWidth='2'
-                    aria-hidden
-                >
-                    <path d='M12 3l10 18H2z' />
-                    <path d='M12 10v5M12 18h.01' />
+                <svg viewBox='0 0 24 24' width='18' height='18' aria-hidden>
+                    <path d='M12 2.8 22.6 21H1.4z' fill='currentColor' strokeLinejoin='round' />
+                    <path d='M12 9.5v5.2M12 17.6v.1' stroke='#fff8e6' strokeWidth='2.2' strokeLinecap='round' />
                 </svg>
             </button>
 

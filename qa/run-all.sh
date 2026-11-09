@@ -15,7 +15,7 @@ CLIENT_ID=34QvhOYOwdiGB0X15zX0W APP_ENV=production PUBLIC_PATH=/kapa-trader/ KAP
 cd qa/browser && mkdir -p x
 node serve.js "$ROOT/dist" >/dev/null 2>&1 & SRV=$!
 sleep 1
-for t in premium3-nl limits lab classic ui relink drag; do
+for t in premium3-nl limits lab classic ui relink drag design; do
   r=$(timeout 450 node $t.js 2>&1); echo "== $t: $(echo "$r" | grep -c '^PASS') pass, $(echo "$r" | grep -c '^FAIL') fail"; echo "$r" | grep '^FAIL'
 done
 r=$(MOCK_FACTOR=0.9226 timeout 300 node markup.js 2>&1); echo "== markup: $(echo "$r" | grep -c '^PASS') pass, $(echo "$r" | grep -c '^FAIL') fail"

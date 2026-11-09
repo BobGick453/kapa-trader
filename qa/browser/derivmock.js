@@ -45,6 +45,12 @@ exports.install = async (page, opts = {}) => {
         send({ msg_type: 'history', req_id: r, echo_req: m, pip_size: 2, history: { prices, times: prices.map((_, i) => now - (n - i) * 2) }, subscription: m.subscribe ? { id: 'th' + r } : undefined });
         if (m.subscribe) timers.push(setInterval(() => send({ msg_type: 'tick', echo_req: m, req_id: r, tick: { symbol: m.ticks_history, underlying_symbol: m.ticks_history, quote: +(st.quote += (Math.random() - .5)).toFixed(2), epoch: Date.now() / 1000 | 0, pip_size: 2 }, subscription: { id: 'th' + r } }), 1000));
         return; }
+      if (m.ticks) { // live ticks: one subscription for one symbol or a list of symbols
+        const syms = [].concat(m.ticks); const id = 'tk' + r; (st.tickSubs ||= []).push({ id, syms, at: Date.now() });
+        const q = (st.tq ||= {}); const tick = (s) => send({ msg_type: 'tick', req_id: r, echo_req: m, subscription: m.subscribe ? { id } : undefined, tick: { symbol: s, quote: +(q[s] = (q[s] ?? 1000) + (Math.random() - 0.5)).toFixed(2), epoch: Date.now() / 1000 | 0, pip_size: 2, id } });
+        syms.forEach(tick); if (m.subscribe) { const t = setInterval(() => syms.forEach(tick), 1000); timers.push(t); (st.tickTimers ||= {})[id] = t; }
+        return; }
+      if (m.forget && st.tickTimers?.[m.forget]) { clearInterval(st.tickTimers[m.forget]); delete st.tickTimers[m.forget]; (st.forgotten ||= []).push(m.forget); }
       if (m.forget || m.forget_all) return send({ msg_type: m.forget ? 'forget' : 'forget_all', req_id: r, echo_req: m, [m.forget ? 'forget' : 'forget_all']: m.forget ? 1 : [] });
       st.unknown.add(type);
       send({ msg_type: type, req_id: r, echo_req: m, error: { code: 'MockUnhandled', message: `mock: ${type}` } });

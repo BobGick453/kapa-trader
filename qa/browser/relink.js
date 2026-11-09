@@ -22,6 +22,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(9000);
   await pg.screenshot({ path: 'relink-err.png' }); console.log('url after refusal:', pg.url());
   ok(authHits === 1 && await pg.locator('.kapa-login .kapa-btn').isVisible(), `if Deriv can't log in, it tries once and shows Log in (attempts: ${authHits})`);
+  ok(await pg.locator('#id-dbot-dashboard.dc-tabs__active--main__tabs').count() === 1, 'and the visitor lands on the Dashboard with the login card');
   await pg.close();
   // logout from the menu turns automatic reconnection off
   ({ pg, st } = await open()); await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(9000);

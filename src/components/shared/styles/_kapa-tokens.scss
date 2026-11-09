@@ -1,0 +1,103 @@
+// Kapa design tokens: one place for the surfaces, gradients, text levels and motion used across the app.
+// Values are Kapa's own (navy + gold). Use the CSS custom properties in components; the mixins below
+// apply a whole surface in one line.
+//
+//   @use 'components/shared/styles/kapa-tokens' as k;
+//   .card { @include k.surface; }            // raised navy card, 22px radius
+//   .pill { @include k.surface(999px); }     // same surface as a pill
+//   .tile { @include k.inset; }              // pressed-in icon tile
+//   .btn  { @include k.primary; }            // blue gradient with lift shadow
+
+$ease: cubic-bezier(0.22, 1, 0.36, 1); // ease-out-quint, for almost every transition
+$radius-card: 2.2rem;
+$radius-btn: 1.4rem;
+$radius-pill: 999px;
+
+@mixin surface($radius: var(--kapa-radius-card)) {
+    background: var(--kapa-surface);
+    border: 1px solid var(--kapa-line);
+    border-radius: $radius;
+    box-shadow: var(--kapa-shadow);
+}
+
+@mixin inset($radius: 2rem) {
+    background: var(--kapa-inset-bg);
+    border: 0;
+    border-radius: $radius;
+    box-shadow: var(--kapa-inset-shadow);
+}
+
+@mixin primary($radius: var(--kapa-radius-btn)) {
+    background: var(--kapa-primary);
+    border: 0;
+    border-radius: $radius;
+    color: #fff;
+    box-shadow: var(--kapa-lift);
+}
+
+@mixin motion($props...) {
+    transition-property: $props;
+    transition-duration: 0.22s;
+    transition-timing-function: $ease;
+
+    @media (prefers-reduced-motion: reduce) {
+        transition-duration: 0.01s;
+    }
+}
+
+@mixin tokens-dark {
+    --kapa-bg: #071426;
+    --kapa-bg-glow:
+        radial-gradient(circle at 12% 8%, rgb(37 99 235 / 16%) 0 8%, transparent 30%),
+        radial-gradient(circle at 88% 92%, rgb(30 64 175 / 20%) 0 7%, transparent 28%);
+    --kapa-surface: linear-gradient(145deg, #102641 0%, #0b1b30 54%, #071322 100%);
+    --kapa-surface-flat: #0b1b30;
+    --kapa-line: rgb(96 165 250 / 24%);
+    --kapa-line-strong: rgb(96 165 250 / 57%);
+    --kapa-shadow:
+        -7px -7px 16px rgb(30 58 93 / 28%), 8px 8px 18px rgb(0 5 14 / 48%), inset 0 1px 0 rgb(148 197 255 / 13%);
+    --kapa-shadow-deep: 0 12px 30px rgb(0 4 12 / 50%), 0 3px 10px rgb(37 99 235 / 20%);
+    --kapa-inset-bg: #071628;
+    --kapa-inset-shadow: inset 4.5px 4.5px 10px rgb(0 4 12 / 52%), inset -4px -4px 10px rgb(40 82 126 / 20%);
+    --kapa-primary: linear-gradient(135deg, #163c73 0%, #1d4ed8 50%, #2563eb 76%, #60a5fa 100%);
+    --kapa-lift: 0 12px 30px rgb(0 4 12 / 50%), 0 3px 10px rgb(37 99 235 / 20%);
+    --kapa-lift-sm: 0 8px 18px rgb(37 99 235 / 24%), inset 0 1px 0 rgb(255 255 255 / 36%);
+    --kapa-text-1: #f5f8fc;
+    --kapa-text-2: #a8b6c9;
+    --kapa-text-3: #8e9db8;
+    --kapa-link: #bfdbfe;
+    --kapa-gold: #f0c85e;
+    --kapa-gold-eyebrow: #e1b84d;
+    --kapa-gold-cta: linear-gradient(135deg, #f0c85e, #c79426);
+    --kapa-header: linear-gradient(135deg, rgb(12 30 52 / 97%), rgb(7 20 38 / 96%));
+    --kapa-header-line: rgb(96 165 250 / 12%);
+    --kapa-header-shadow: 0 7px 22px rgb(0 5 14 / 40%);
+}
+
+@mixin tokens-light {
+    --kapa-bg: #eef3f9;
+    --kapa-bg-glow:
+        radial-gradient(circle at 12% 8%, rgb(37 99 235 / 8%) 0 8%, transparent 30%),
+        radial-gradient(circle at 88% 92%, rgb(30 64 175 / 8%) 0 7%, transparent 28%);
+    --kapa-surface: linear-gradient(145deg, #ffffff 0%, #f6f9fd 54%, #edf2f8 100%);
+    --kapa-surface-flat: #ffffff;
+    --kapa-line: rgb(37 99 235 / 16%);
+    --kapa-line-strong: rgb(37 99 235 / 45%);
+    --kapa-shadow: -6px -6px 14px rgb(255 255 255 / 90%), 6px 6px 16px rgb(15 35 70 / 12%), inset 0 1px 0 #fff;
+    --kapa-shadow-deep: 0 12px 28px rgb(15 35 70 / 18%), 0 3px 10px rgb(37 99 235 / 14%);
+    --kapa-inset-bg: #e9eff7;
+    --kapa-inset-shadow: inset 3px 3px 8px rgb(15 35 70 / 14%), inset -3px -3px 8px rgb(255 255 255 / 90%);
+    --kapa-primary: linear-gradient(135deg, #1e40af 0%, #1d4ed8 50%, #2563eb 76%, #60a5fa 100%);
+    --kapa-lift: 0 10px 24px rgb(15 35 70 / 18%), 0 3px 10px rgb(37 99 235 / 22%);
+    --kapa-lift-sm: 0 8px 18px rgb(37 99 235 / 22%), inset 0 1px 0 rgb(255 255 255 / 36%);
+    --kapa-text-1: #0f1b2d;
+    --kapa-text-2: #44546b;
+    --kapa-text-3: #5f6f86;
+    --kapa-link: #1d4ed8;
+    --kapa-gold: #a87508;
+    --kapa-gold-eyebrow: #9a6a00;
+    --kapa-gold-cta: linear-gradient(135deg, #f0c85e, #c79426);
+    --kapa-header: linear-gradient(135deg, rgb(255 255 255 / 97%), rgb(246 249 253 / 96%));
+    --kapa-header-line: rgb(37 99 235 / 12%);
+    --kapa-header-shadow: 0 6px 18px rgb(15 35 70 / 8%);
+}

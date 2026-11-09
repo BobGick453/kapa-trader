@@ -11,25 +11,21 @@ const TOP = 64; // keeps clear of the header
 const DRAG_THRESHOLD = 6; // px of movement before a press becomes a drag
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
-const defaultBottomGap = () => (window.innerWidth >= 1280 ? 44 : 16); // the desktop footer is 36px tall
+const defaultBottomGap = () => (window.innerWidth >= 1280 ? 52 : 16); // the desktop footer is 36px tall
 
-const readSpot = (key: string, fallback: TSpot): TSpot => {
+const readSpot = (key: string): TSpot | null => {
     try {
         const s = JSON.parse(localStorage.getItem(key) || 'null');
         if (s && (s.side === 'left' || s.side === 'right') && typeof s.y === 'number' && s.y >= 0 && s.y <= 1) return s;
     } catch {
         /* storage unavailable: use the default place */
     }
-    return fallback;
+    return null;
 };
 
-export const useFloating = (
-    key: string,
-    fallback: () => TSpot,
-    size: number,
-    bottomGap: () => number = defaultBottomGap
-) => {
-    const [spot, setSpot] = useState<TSpot>(() => readSpot(key, fallback()));
+/** Until the user moves the button, it has no inline position: its stylesheet places it (and can follow the page). */
+export const useFloating = (key: string, size: number, bottomGap: () => number = defaultBottomGap) => {
+    const [spot, setSpot] = useState<TSpot | null>(() => readSpot(key));
     const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
     const [, setViewport] = useState(0);
     const start = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
@@ -100,12 +96,14 @@ export const useFloating = (
 
     const style: React.CSSProperties = drag
         ? { left: drag.x, top: drag.y, right: 'auto', bottom: 'auto', transition: 'none' }
-        : {
-              [spot.side]: `calc(${EDGE}px + env(safe-area-inset-${spot.side}, 0px))`,
-              [spot.side === 'left' ? 'right' : 'left']: 'auto',
-              top: TOP + spot.y * freeHeight(),
-              bottom: 'auto',
-          };
+        : !spot
+          ? {}
+          : {
+                [spot.side]: `calc(${EDGE}px + env(safe-area-inset-${spot.side}, 0px))`,
+                [spot.side === 'left' ? 'right' : 'left']: 'auto',
+                top: TOP + spot.y * freeHeight(),
+                bottom: 'auto',
+            };
 
     return {
         style,

@@ -10,6 +10,7 @@ import { useStore } from '@/hooks/useStore';
 import { navigateToTransfer } from '@/utils/transfer-utils';
 import { Localize } from '@deriv-com/translations';
 import { Header, useDevice, Wrapper } from '@deriv-com/ui';
+import KapaTicker from '@/components/kapa-ticker/kapa-ticker';
 import { AppLogo } from '../app-logo';
 import AccountSwitcher from './account-switcher';
 import MenuItems from './menu-items';
@@ -172,12 +173,14 @@ const AppHeader = observer(() => {
             ) {
                 return (
                     <div className='auth-actions'>
-                        <Button tertiary onClick={handleLogin}>
-                            <Localize i18n_default_text='Log in' />
-                        </Button>
-                        <Button primary_light onClick={handleSignup}>
-                            <Localize i18n_default_text='Sign up' />
-                        </Button>
+                        <div className='kapa-auth'>
+                            <Button tertiary className='kapa-auth__login' onClick={handleLogin}>
+                                <Localize i18n_default_text='Log in' />
+                            </Button>
+                            <Button primary className='kapa-auth__signup' onClick={handleSignup}>
+                                <Localize i18n_default_text='Sign up' />
+                            </Button>
+                        </div>
                     </div>
                 );
             }
@@ -237,6 +240,7 @@ const AppHeader = observer(() => {
                 <Wrapper variant='left'>
                     <MobileMenu onLogout={handleLogout} />
                     <AppLogo />
+                    {isDesktop && <KapaTicker />}
                     {isDesktop ? <MenuItems /> : renderAccountSection('left')}
                 </Wrapper>
                 <Wrapper variant='right'>{renderAccountSection('right')}</Wrapper>

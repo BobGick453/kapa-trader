@@ -111,3 +111,19 @@
         opacity: 0.2;
     }
 }
+
+// Kapa: the theme switch carries a "Theme" label
+.app-footer__theme {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.app-footer__theme-label {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-prominent);
+}

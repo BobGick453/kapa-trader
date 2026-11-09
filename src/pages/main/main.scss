@@ -1,6 +1,8 @@
 @use 'components/shared/styles/constants' as *;
 @use 'components/shared/styles/mixins' as *;
 
+$kapa-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
 .run-panel {
     // fix for the RTL issue on tab active line
     .dc-tabs__active-line {
@@ -789,22 +791,28 @@
     display: none;
 }
 
-// Tabs: rounded pills on a blue band, in the reference bot's order
+// Tab bar: a full-width blue strip right under the header (in the reference bot's order). Inactive tabs are
+// translucent so the strip shows through; the active tab glows, sits 1px higher and pops in.
 .dc-tabs__list--main__tabs {
+    position: relative;
     gap: 0.8rem;
-    padding: 0.6rem !important;
-    margin: 0 1.6rem 1.2rem;
-    border-radius: 1.6rem;
-    background: linear-gradient(90deg, #0f1d44 0%, #13307c 55%, #2563eb 100%) !important;
-    box-shadow: inset 0 -3px 0 #2563eb;
+    align-items: center;
+    padding: 0.8rem 1.6rem !important;
+    margin: -1.6rem -1.6rem 1.6rem;
+    min-height: 6.2rem;
+    border-radius: 0;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 48%, #1d4ed8 78%, #2563eb 100%) !important;
+    box-shadow:
+        inset 0 1px 0 rgb(195 220 248 / 35%),
+        inset 0 -1px 0 rgb(41 93 146 / 65%);
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
     scroll-snap-type: x proximity;
-    scroll-padding-inline: 0.6rem;
+    scroll-padding-inline: 1.2rem;
     -webkit-overflow-scrolling: touch;
     width: auto !important;
-    max-width: 100%;
+    max-width: none;
     box-sizing: border-box;
 
     &::-webkit-scrollbar {
@@ -812,18 +820,19 @@
     }
 
     @include desktop-screen {
-        // leaves room for the Run panel at the top right
-        margin-inline-end: 38rem;
-        min-height: 5.6rem;
+        // ends where the Run column starts (36.6rem wide, flush with the right edge)
+        margin-inline-end: calc(36.6rem - 1.6rem);
 
         .main--no-run-panel & {
-            margin-inline-end: 1.6rem;
+            margin-inline-end: -1.6rem;
         }
     }
 
     @include mobile-or-tablet-screen {
         margin: 0.8rem 1.2rem 1rem;
-        border-radius: 1.4rem;
+        min-height: 6rem;
+        padding: 0.8rem 1.2rem !important;
+        scroll-padding-inline: 1.2rem;
     }
 
     .dc-tabs__item--main__tabs {
@@ -832,59 +841,76 @@
         width: auto !important;
         min-width: 0;
         height: 4.4rem;
-        padding: 0 1.6rem;
-        border-radius: 99rem;
-        border: 1px solid #2b3d74;
-        background: rgba(10, 20, 50, 0.85);
-        color: #eef2ff !important;
+        padding: 0.8rem 1.8rem;
+        border-radius: 999px;
+        border: 1px solid rgb(191 219 254 / 18%);
+        background: rgb(255 255 255 / 8%);
+        color: #dbeafe !important;
         font-size: 1.4rem;
         font-weight: 600;
         white-space: nowrap;
         scroll-snap-align: start;
         transition:
-            background 0.2s,
-            border-color 0.2s,
-            box-shadow 0.2s;
+            color 0.22s $kapa-ease,
+            background 0.3s $kapa-ease,
+            border-color 0.3s $kapa-ease,
+            box-shadow 0.3s $kapa-ease,
+            transform 0.22s $kapa-ease;
 
         &:hover {
-            border-color: #4a64b0;
+            border-color: rgb(191 219 254 / 36%);
+            background: rgb(255 255 255 / 12%);
         }
         &:focus-visible {
-            outline: 2px solid #f5c542;
+            outline: 2px solid #f0c85e;
             outline-offset: 2px;
         }
 
         svg {
             fill: currentColor !important;
-            width: 1.6rem;
-            height: 1.6rem;
+            width: 1.8rem;
+            height: 1.8rem;
             margin-inline-end: 0 !important;
         }
         .dc-text,
         span {
             font-size: inherit !important;
             line-height: 1;
+            color: inherit !important;
         }
         .kapa-tab-icon {
-            font-size: 1.4rem;
+            font-size: 1.5rem;
             line-height: 1;
         }
 
         @include mobile-or-tablet-screen {
-            height: 4rem;
-            padding: 0 1.4rem;
-            font-size: 1.3rem;
+            height: 4.4rem;
+            padding: 0.8rem 1.2rem;
+            font-size: 1.2rem;
             gap: 0.6rem;
 
+            svg {
+                width: 1.6rem;
+                height: 1.6rem;
+            }
             .dc-tabs__item__icon {
                 padding-top: 0;
             }
         }
     }
     .dc-tabs__active--main__tabs {
-        background: linear-gradient(180deg, #2f6ff5, #1f55e0) !important;
-        border-color: #5b8cff;
-        box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.25);
+        background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+        border-color: rgb(147 197 253 / 58%);
+        color: #fff !important;
+        box-shadow:
+            inset 0 1px 0 rgb(255 255 255 / 38%),
+            0 6px 16px rgb(37 99 235 / 42%);
+        transform: translateY(-1px);
+        animation: kapa-tab-pop 0.36s $kapa-ease;
+
+        &:hover {
+            border-color: rgb(147 197 253 / 75%);
+        }
     }
     ~ .dc-tabs__active-line,
     .dc-tabs__active-line {
@@ -913,32 +939,98 @@
         order: 5;
     }
 }
+
+@keyframes kapa-tab-pop {
+    0% {
+        transform: translateY(0) scale(0.96);
+        filter: brightness(0.9);
+    }
+    60% {
+        transform: translateY(-1.5px) scale(1.025);
+        filter: brightness(1.12);
+    }
+    100% {
+        transform: translateY(-1px) scale(1);
+        filter: brightness(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dc-tabs__list--main__tabs .dc-tabs__active--main__tabs {
+        animation: none;
+    }
+}
+
 .dc-tabs__list--header--main__tabs {
     // never wider than the page: the bar scrolls inside it instead
+    position: relative;
     width: 100% !important;
     min-width: 0;
     max-width: 100%;
 
     @include mobile-or-tablet-screen {
         padding: 0 !important;
+
+        // a dark fade on the right edge hints that the row scrolls (it does not scroll with the tabs)
+        &::after {
+            content: '';
+            position: absolute;
+            top: 0.8rem;
+            right: 1.2rem;
+            width: 3.6rem;
+            height: 6rem;
+            pointer-events: none;
+            background: linear-gradient(90deg, rgb(7 20 38 / 0%), rgb(7 20 38 / 78%));
+            z-index: 2;
+        }
     }
 }
 .main__run-strategy-wrapper {
+    // Run row: its own 36.6rem column at the top right, level with the tab strip
     @include desktop-screen {
-        top: 1.6rem;
+        top: 0;
+        inset-inline-end: 0;
+        width: 36.6rem;
+        padding: 1.1rem 0 0;
+        box-sizing: border-box;
+        background: var(--kapa-surface);
+        box-shadow:
+            inset 0 1px 0 rgb(148 197 255 / 13%),
+            inset 0 -1px 0 var(--kapa-line),
+            inset 1px 0 0 var(--kapa-line);
+
+        .toolbar__section {
+            height: 4rem;
+            margin: 0 1.6rem 1.1rem;
+        }
+        .animation__wrapper {
+            width: 100%;
+        }
     }
 }
 
-// KAPA AI tab: shown first, with a gold "AI" badge like the reference bot's AI pill
+// KAPA AI tab: shown first, with a small gold "AI" tile like the reference bot's AI badge
 #id-kapa-ai {
     .kapa-tab-badge {
-        font-size: 1rem !important;
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+        width: 2.2rem;
+        height: 2.2rem;
+        border-radius: 0.8rem;
+        font-size: 0.9rem !important;
         font-weight: 800;
         line-height: 1;
-        border: 1.5px solid #f5c542;
-        color: #f5c542;
-        border-radius: 0.6rem;
-        padding: 0.2rem 0.4rem;
+        letter-spacing: 0.02rem;
+        color: #f0c85e !important;
+        background: rgb(240 200 94 / 14%);
+        border: 1px solid rgb(240 200 94 / 60%);
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%);
+    }
+    &.dc-tabs__active--main__tabs .kapa-tab-badge {
+        color: #fff !important;
+        background: rgb(255 255 255 / 14%);
+        border-color: rgb(253 230 138 / 70%);
     }
     .kapa-tab-label {
         font-weight: 700;
@@ -959,8 +1051,7 @@ body {
         .db-info-panel__close-action,
         .dc-mobile-dialog__close-btn,
         .load-strategy__local-preview-close,
-        .deriv-modal__close-icon,
-        .deriv-drawer__header__close-btn
+        .deriv-modal__close-icon
     ) {
         flex: none;
         display: inline-grid;
@@ -1029,38 +1120,26 @@ body {
         margin: 1.2rem 1.6rem 1.2rem auto;
     }
 
-    .deriv-drawer__header__close-btn {
-        margin-inline: 0.8rem 0.4rem;
-    }
 }
 
-// Reference-bot finish: dark Transfer pill in the header, larger dashboard heading
-body .kapa-transfer {
-    background: #0b1530 !important;
-    border: 1px solid #22345f !important;
-    color: #eef2ff !important;
-    border-radius: 99rem !important;
-    font-weight: 700 !important;
-    box-shadow: none !important;
-
-    &:hover:not(:disabled) {
-        background: #12214a !important;
-    }
-}
+// Larger dashboard heading (the header's Transfer button is styled in layout/header/header.scss)
 body .kapa-intro-title {
     font-size: 2.6rem !important;
     font-weight: 800 !important;
     letter-spacing: -0.02rem;
 }
 
-// Reference-bot tab bar on phones and tablets (900px layout): taller pills, all seven in one row
-@include mobile-or-tablet-screen {
-    .main__tabs .dc-tabs__list--main__tabs .dc-tabs__item--main__tabs,
-    .dc-tabs__list--main__tabs .dc-tabs__item--main__tabs {
-        height: 4.8rem;
-        padding: 0 1.7rem;
-        font-size: 1.4rem;
-        font-weight: 600;
-        gap: 0.7rem;
+// Desktop: with the Summary drawer open, the page stays in the column left of it
+@include desktop-screen {
+    .main--drawer-open {
+        .tab__dashboard,
+        .free-bot,
+        .tutorials-wrapper,
+        .kapa-admin {
+            flex: 1 1 auto;
+            width: auto;
+            min-width: 0;
+            margin-inline-end: calc(36.6rem - 1.6rem);
+        }
     }
 }

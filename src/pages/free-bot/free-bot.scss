@@ -1,3 +1,5 @@
+@use 'components/shared/styles/kapa-tokens' as k;
+
 // Free Bot: the reference bot's "Bot Library", in Kapa navy and blue
 .free-bot {
     height: 100%;
@@ -204,14 +206,15 @@
 }
 
 .free-bot__section {
-    margin: 2.4rem 0 0.8rem;
+    // block margins only: the inline margins centre it in the same column as the cards
+    margin-block: 2.4rem 0.8rem;
     font-size: 1.7rem;
     color: #f5c542;
 }
 
 .free-bot__intro {
-    margin: 0 0 1.2rem;
-    color: #c8d1ec;
+    margin-block: 0 1.2rem;
+    color: var(--kapa-text-2);
     font-size: 1.3rem;
     line-height: 1.5;
 }
@@ -219,4 +222,80 @@
 .free-bot__badge--ai {
     background: #2563eb;
     color: #fff;
+}
+
+// ---- Kapa tokens: raised navy surfaces, blue gradient buttons ----
+.free-bot {
+    color: var(--kapa-text-1);
+
+    &__hero {
+        @include k.surface;
+
+        animation: kapa-rise 0.48s k.$ease both;
+
+        h2 {
+            font-weight: 800;
+            letter-spacing: -0.03rem;
+        }
+
+        p {
+            color: var(--kapa-text-2);
+        }
+    }
+
+    &__filters button {
+        @include k.surface(999px);
+
+        color: var(--kapa-text-2);
+        transition:
+            color 0.16s k.$ease,
+            border-color 0.16s k.$ease,
+            background 0.16s k.$ease,
+            box-shadow 0.16s k.$ease,
+            transform 0.16s k.$ease;
+
+        &:hover:not(.on) {
+            border-color: var(--kapa-line-strong);
+            transform: translateY(-1px);
+        }
+
+        &.on {
+            @include k.primary(999px);
+        }
+    }
+
+    &__card {
+        @include k.surface;
+
+        animation: kapa-rise 0.48s k.$ease both;
+
+        p {
+            color: var(--kapa-text-2);
+        }
+
+        small {
+            color: var(--kapa-text-3);
+        }
+    }
+
+    &__load:not(.locked) {
+        @include k.primary;
+
+        transition:
+            transform 0.16s k.$ease,
+            filter 0.16s k.$ease;
+
+        &:hover:not(:disabled) {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+        }
+    }
+
+    &__load.locked {
+        border-radius: k.$radius-btn;
+    }
+}
+
+.free-bot__section {
+    color: var(--kapa-gold);
 }
