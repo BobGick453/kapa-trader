@@ -13,6 +13,9 @@ import './kapa-orb.scss';
 
 const isDesktop = () => window.innerWidth >= 1280;
 
+// Words for the connection state shown on the scanner's status pill (the same state as the orb's badge)
+const STATE_LABEL = { live: 'Live', connecting: 'Connecting', reconnecting: 'Reconnecting', offline: 'Offline' } as const;
+
 /** Floating "AI" orb with the live connection state; opens the KAPA Live Scanner. A risk-warning button sits on the left. */
 const KapaOrb = observer(() => {
     const { client } = useStore();
@@ -120,121 +123,132 @@ const KapaOrb = observer(() => {
             </button>
 
             {open && (
-                <div className='kapa-scan' role='dialog' aria-modal aria-label='KAPA Live Scanner'>
-                    <div className='kapa-scan__head'>
-                        <span className='kapa-scan__logo'>KA</span>
-                        <b>KAPA LIVE SCANNER</b>
-                        <KapaClose className='kapa-scan__x' onClick={() => setOpen(false)} label='Close scanner' />
-                    </div>
-                    <div className='kapa-scan__body'>
-                        <section className='kapa-scan__box'>
-                            <label>
-                                <span>Scanner strategy</span>
-                                <select value={preset} onChange={e => setPreset(e.target.value as TPresetKey)}>
-                                    {PREMIUM_PRESETS.map(k => (
-                                        <option key={k} value={k}>
-                                            {STRATEGIES[k].label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label>
-                                <span>Initial stake</span>
-                                <input
-                                    type='number'
-                                    min={0.35}
-                                    step={0.01}
-                                    value={stake}
-                                    onChange={e => setStake(+e.target.value)}
-                                />
-                            </label>
-                            <label>
-                                <span>Duration</span>
-                                <select disabled value='1'>
-                                    <option value='1'>1 tick · Fixed</option>
-                                </select>
-                            </label>
-                            <label className='kapa-scan__switch'>
-                                <input type='checkbox' checked={all} onChange={e => setAll(e.target.checked)} />
+                <div className='kapa-scan-mask' onClick={e => e.target === e.currentTarget && setOpen(false)}>
+                    <div className='kapa-scan' role='dialog' aria-modal aria-label='KAPA Live Scanner'>
+                        <div className='kapa-scan__head'>
+                            <span className='kapa-scan__logo' aria-hidden>
+                                KA
+                            </span>
+                            <div className='kapa-scan__titles'>
+                                <small className='kapa-scan__eyebrow'>Live price comparison</small>
+                                <b>KAPA LIVE SCANNER</b>
+                            </div>
+                            <span className={`kapa-scan__pill kapa-scan__pill--${state}`} role='status'>
                                 <i aria-hidden />
-                                <span>Scan All Markets</span>
-                            </label>
-                            {!all && (
-                                <label>
-                                    <span>Market</span>
-                                    <select value={single} onChange={e => setSingle(e.target.value)}>
-                                        {SCAN_MARKETS.map(m => (
-                                            <option key={m} value={m}>
-                                                {MARKETS[m]}
+                                {STATE_LABEL[state]}
+                            </span>
+                            <KapaClose className='kapa-scan__x' onClick={() => setOpen(false)} label='Close scanner' />
+                        </div>
+                        <div className='kapa-scan__body'>
+                            <section className='kapa-scan__box'>
+                                <label className='kapa-scan__f kapa-scan__f--strategy'>
+                                    <span>Scanner strategy</span>
+                                    <select value={preset} onChange={e => setPreset(e.target.value as TPresetKey)}>
+                                        {PREMIUM_PRESETS.map(k => (
+                                            <option key={k} value={k}>
+                                                {STRATEGIES[k].label}
                                             </option>
                                         ))}
                                     </select>
                                 </label>
-                            )}
-                            <div className={classNames('kapa-scan__status', { 'kapa-scan__status--off': !live })}>
-                                <i aria-hidden />
-                                {live ? 'Live Deriv market data is available.' : 'Market data is offline or stale.'}
-                            </div>
-                        </section>
-
-                        <section className='kapa-scan__result'>
-                            {!rows && !busy && (
-                                <>
-                                    <h4>Ready to inspect live conditions</h4>
-                                    <p>{description}</p>
-                                </>
-                            )}
-                            {busy && <h4>Scanning live markets…</h4>}
-                            {rows?.map((r, i) => (
-                                <div key={r.symbol} className={classNames('kapa-scan__row', { best: i === 0 })}>
-                                    <div className='kapa-scan__row-head'>
-                                        <b>{MARKETS[r.symbol]}</b>
-                                        {i === 0 && <span>BEST TERMS</span>}
-                                    </div>
-                                    <div className='kapa-scan__grid'>
-                                        <div>
-                                            <small>Win chance</small>
-                                            <b>{(r.win_chance * 100).toFixed(0)}%</b>
-                                        </div>
-                                        <div>
-                                            <small>Payout</small>
-                                            <b>+{(r.payout * 100).toFixed(1)}%</b>
-                                        </div>
-                                        <div>
-                                            <small>Deriv margin</small>
-                                            <b className={r.tradable ? undefined : 'down'}>{(r.margin * 100).toFixed(1)}%</b>
-                                        </div>
-                                    </div>
-                                    <p>
-                                        Best-paid contract: {keyLabel(r.contract)}.
-                                        {!r.tradable && ' Priced worse than usual: KAPA AI won’t trade it now.'}{' '}
-                                        {r.randomness &&
-                                            `Last ${r.randomness.ticks} ticks: ${
-                                                r.randomness.uniform_p >= 0.01 && r.randomness.serial_p >= 0.01
-                                                    ? 'no pattern found'
-                                                    : 'an unusual run, which happens by chance about 1 time in 100'
-                                            } (randomness tests p=${r.randomness.uniform_p.toFixed(2)} and ${r.randomness.serial_p.toFixed(2)}).`}
-                                    </p>
-                                    <button type='button' onClick={() => sendToKapa(r)}>
-                                        Use in KAPA AI
-                                    </button>
+                                <label className='kapa-scan__f'>
+                                    <span>Initial stake</span>
+                                    <input
+                                        type='number'
+                                        min={0.35}
+                                        step={0.01}
+                                        value={stake}
+                                        onChange={e => setStake(+e.target.value)}
+                                    />
+                                </label>
+                                <label className='kapa-scan__f'>
+                                    <span>Duration</span>
+                                    <select disabled value='1'>
+                                        <option value='1'>1 tick · Fixed</option>
+                                    </select>
+                                </label>
+                                <label className='kapa-scan__switch'>
+                                    <input type='checkbox' checked={all} onChange={e => setAll(e.target.checked)} />
+                                    <i aria-hidden />
+                                    <span>Scan All Markets</span>
+                                </label>
+                                {!all && (
+                                    <label className='kapa-scan__f kapa-scan__f--wide'>
+                                        <span>Market</span>
+                                        <select value={single} onChange={e => setSingle(e.target.value)}>
+                                            {SCAN_MARKETS.map(m => (
+                                                <option key={m} value={m}>
+                                                    {MARKETS[m]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                )}
+                                <div className={classNames('kapa-scan__status', { 'kapa-scan__status--off': !live })}>
+                                    <i aria-hidden />
+                                    {live ? 'Live Deriv market data is available.' : 'Market data is offline or stale.'}
                                 </div>
-                            ))}
-                            {error && <p className='kapa-scan__error'>{error}</p>}
-                        </section>
-                        <p className='kapa-scan__note'>
-                            Win chance is the true probability of the contract. The digits come from Deriv&apos;s random
-                            number generator: past ticks never predict the next one, so KAPA AI compares prices, not
-                            patterns. This scanner never places trades.
-                        </p>
-                    </div>
-                    <div className='kapa-scan__foot'>
-                        <button type='button' onClick={() => setOpen(false)}>
-                            Cancel
-                        </button>
-                        <button type='button' className='primary' onClick={scan} disabled={busy}>
-                            {!isPremium ? '🔒 Scan Markets · Premium' : busy ? 'Scanning…' : 'Scan Markets'}
-                        </button>
+                            </section>
+
+                            <section className='kapa-scan__result'>
+                                {!rows && !busy && (
+                                    <>
+                                        <h4>Ready to inspect live conditions</h4>
+                                        <p>{description}</p>
+                                    </>
+                                )}
+                                {busy && <h4>Scanning live markets…</h4>}
+                                {rows?.map((r, i) => (
+                                    <div key={r.symbol} className={classNames('kapa-scan__row', { best: i === 0 })}>
+                                        <div className='kapa-scan__row-head'>
+                                            <b>{MARKETS[r.symbol]}</b>
+                                            {i === 0 && <span>BEST TERMS</span>}
+                                        </div>
+                                        <div className='kapa-scan__grid'>
+                                            <div>
+                                                <small>Win chance</small>
+                                                <b>{(r.win_chance * 100).toFixed(0)}%</b>
+                                            </div>
+                                            <div>
+                                                <small>Payout</small>
+                                                <b>+{(r.payout * 100).toFixed(1)}%</b>
+                                            </div>
+                                            <div>
+                                                <small>Deriv margin</small>
+                                                <b className={r.tradable ? undefined : 'down'}>{(r.margin * 100).toFixed(1)}%</b>
+                                            </div>
+                                        </div>
+                                        <p>
+                                            Best-paid contract: {keyLabel(r.contract)}.
+                                            {!r.tradable && ' Priced worse than usual: KAPA AI won’t trade it now.'}{' '}
+                                            {r.randomness &&
+                                                `Last ${r.randomness.ticks} ticks: ${
+                                                    r.randomness.uniform_p >= 0.01 && r.randomness.serial_p >= 0.01
+                                                        ? 'no pattern found'
+                                                        : 'an unusual run, which happens by chance about 1 time in 100'
+                                                } (randomness tests p=${r.randomness.uniform_p.toFixed(2)} and ${r.randomness.serial_p.toFixed(2)}).`}
+                                        </p>
+                                        <button type='button' onClick={() => sendToKapa(r)}>
+                                            Use in KAPA AI
+                                        </button>
+                                    </div>
+                                ))}
+                                {error && <p className='kapa-scan__error'>{error}</p>}
+                            </section>
+                            <p className='kapa-scan__note'>
+                                Win chance is the true probability of the contract. The digits come from Deriv&apos;s random
+                                number generator: past ticks never predict the next one, so KAPA AI compares prices, not
+                                patterns. This scanner never places trades.
+                            </p>
+                        </div>
+                        <div className='kapa-scan__foot'>
+                            <button type='button' onClick={() => setOpen(false)}>
+                                Cancel
+                            </button>
+                            <button type='button' className='primary' onClick={scan} disabled={busy}>
+                                {!isPremium ? '🔒 Scan Markets · Premium' : busy ? 'Scanning…' : 'Scan Markets'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -249,9 +263,14 @@ const KapaOrb = observer(() => {
                 >
                     <div className='kapa-risk__box' onClick={e => e.stopPropagation()}>
                         <div className='kapa-risk__head'>
-                            <span aria-hidden>⚠</span>
+                            <span className='kapa-risk__icon' aria-hidden>
+                                <svg viewBox='0 0 24 24' width='22' height='22'>
+                                    <path d='M12 3.2 21.8 20H2.2z' fill='currentColor' strokeLinejoin='round' />
+                                    <path d='M12 9.6v4.6M12 16.9v.1' stroke='#fffbeb' strokeWidth='2.1' strokeLinecap='round' />
+                                </svg>
+                            </span>
                             <b>Risk warning</b>
-                            <KapaClose className='kapa-close--light' onClick={() => setRisk(false)} />
+                            <KapaClose className='kapa-close--light' onClick={() => setRisk(false)} label='Close risk warning' />
                         </div>
                         <p>
                             Deriv offers complex derivatives, such as options and contracts for difference

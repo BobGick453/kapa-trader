@@ -8,6 +8,7 @@ ROOT=$PWD
 cp server/dist/kapa-premium-worker.js qa/server/worker.mjs
 cp server/dist/kapa-premium-worker.js qa/browser/worker.mjs
 echo '== strategy engine'; node qa/server/strategy.test.mjs 2>/dev/null | grep -E 'FAIL|ALL'
+echo '== trade runner'; node qa/server/engine.test.mjs 2>/dev/null | grep -E 'FAIL|ALL'
 echo '== premium server'; (cd qa/server && node worker.test.mjs | grep -E 'FAIL|ALL')
 if [ -d node_modules/@netlify/blobs ]; then echo '== netlify adapter'; (cd qa/server && node netlify.test.mjs | grep -E 'FAIL|ALL'); else echo '== netlify adapter: skipped (npm i --no-save @netlify/blobs@11.1.4)'; fi
 echo '== build'
@@ -15,7 +16,7 @@ CLIENT_ID=34QvhOYOwdiGB0X15zX0W APP_ENV=production PUBLIC_PATH=/kapa-trader/ KAP
 cd qa/browser && mkdir -p x
 node serve.js "$ROOT/dist" >/dev/null 2>&1 & SRV=$!
 sleep 1
-for t in premium3-nl limits lab classic ui relink drag design; do
+for t in premium3-nl apex conn limits lab classic ui relink drag design; do
   r=$(timeout 450 node $t.js 2>&1); echo "== $t: $(echo "$r" | grep -c '^PASS') pass, $(echo "$r" | grep -c '^FAIL') fail"; echo "$r" | grep '^FAIL'
 done
 r=$(MOCK_FACTOR=0.9226 timeout 300 node markup.js 2>&1); echo "== markup: $(echo "$r" | grep -c '^PASS') pass, $(echo "$r" | grep -c '^FAIL') fail"

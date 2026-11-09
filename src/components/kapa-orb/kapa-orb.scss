@@ -1,85 +1,287 @@
-// KAPA Live Scanner sheet and Risk warning dialog (the floating buttons are at the end of this file)
-.kapa-scan {
+// KAPA Live Scanner and Risk warning dialog (the floating buttons are at the end of this file)
+@use 'components/shared/styles/kapa-tokens' as k;
+
+$chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2393a3cc' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+
+// ---- Scanner: a centred window over the dimmed, blurred page; a full-screen sheet on phones ----
+.kapa-scan-mask {
+    @include k.tokens-dark; // the scanner is navy in both themes
+
     position: fixed;
     inset: 0;
     z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 3.2rem 2rem;
+    background: rgb(2 8 20 / 62%);
+    backdrop-filter: blur(8px);
+    animation: kapa-fade 0.22s k.$ease both;
+
+    @media (width <= 767px) {
+        place-items: stretch;
+        padding: 0;
+    }
+}
+
+.kapa-scan {
+    position: relative;
     display: flex;
     flex-direction: column;
-    background: #071026;
-    color: #eef2ff;
+    width: min(92rem, 100%);
+    max-height: calc(100dvh - 6.4rem);
+    overflow: hidden;
+    border: 1px solid var(--kapa-line);
+    border-radius: var(--kapa-radius-card, 2.2rem);
+    background: var(--kapa-surface);
+    box-shadow:
+        0 30px 80px rgb(0 4 12 / 62%),
+        inset 0 1px 0 rgb(148 197 255 / 13%);
+    color: var(--kapa-text-1);
+    font-family: var(--brand-font-primary);
     font-size: 1.4rem;
+    line-height: 1.45;
+    animation: kapa-rise 0.32s k.$ease both;
 
-    @media (width >= 768px) {
-        inset: 4rem auto 4rem 50%;
-        width: 52rem;
-        transform: translateX(-50%);
-        border: 1px solid #2a3f78;
-        border-radius: 2rem;
-        box-shadow: 0 3rem 8rem rgb(0 0 0 / 60%);
+    @media (width <= 767px) {
+        width: 100%;
+        height: 100%;
+        max-height: none;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
     }
 
+    // Header: monogram tile, eyebrow and title, connection pill, close
     &__head {
-        display: flex;
+        flex: none;
+        display: grid;
+        grid-template: 'logo titles pill close' auto / auto minmax(0, 1fr) auto auto;
         align-items: center;
-        gap: 1rem;
-        padding: 1.4rem 1.6rem;
-        padding-top: calc(1.4rem + env(safe-area-inset-top, 0px));
-        border-bottom: 1px solid #1d2e5c;
+        gap: 0.4rem 1.2rem;
+        padding: 1.6rem 2rem;
+        padding-top: calc(1.6rem + env(safe-area-inset-top, 0px));
+        border-bottom: 1px solid var(--kapa-header-line);
+        background: linear-gradient(180deg, rgb(37 99 235 / 9%), transparent);
 
-        b {
-            font-size: 1.7rem;
-            letter-spacing: 0.05rem;
+        // phones: the pill goes under the title so the title keeps one line
+        @media (width <= 599px) {
+            grid-template:
+                'logo titles close' auto
+                'logo pill close' auto / auto minmax(0, 1fr) auto;
+            padding: 1.2rem 1.6rem;
+            padding-top: calc(1.2rem + env(safe-area-inset-top, 0px));
         }
     }
 
     &__logo {
-        width: 4rem;
-        height: 4rem;
-        border-radius: 1rem;
+        grid-area: logo;
+        width: 4.4rem;
+        height: 4.4rem;
         display: grid;
         place-items: center;
+        border-radius: 1.3rem;
+        border: 1px solid rgb(240 200 94 / 70%);
+        background: var(--kapa-primary);
+        box-shadow: var(--kapa-lift-sm);
+        font-size: 1.5rem;
         font-weight: 800;
-        background: linear-gradient(180deg, #2f6ff5, #1f55e0);
-        border: 1px solid #f5c542;
+        letter-spacing: 0.05rem;
+        color: #fff;
+    }
+
+    &__titles {
+        grid-area: titles;
+        min-width: 0;
+        display: grid;
+        gap: 0.2rem;
+
+        b {
+            font-size: 1.8rem;
+            font-weight: 500;
+            letter-spacing: 0.04rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+
+            @media (width <= 599px) {
+                font-size: 1.7rem;
+            }
+        }
+    }
+
+    &__eyebrow {
+        color: #93c5fd;
+        font-size: 1rem;
+        font-weight: 800;
+        letter-spacing: 0.14rem;
+        line-height: 1.3;
+        text-transform: uppercase;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    // Connection state from the app's socket (the same state as the orb's badge)
+    &__pill {
+        grid-area: pill;
+        justify-self: start;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        height: 2.8rem;
+        padding: 0 1.1rem;
+        border-radius: 999px;
+        border: 1px solid rgb(148 163 184 / 35%);
+        background: rgb(148 163 184 / 10%);
+        color: #cbd5e1;
+        font-size: 1.1rem;
+        font-weight: 800;
+        letter-spacing: 0.08rem;
+        text-transform: uppercase;
+        white-space: nowrap;
+
+        i {
+            width: 0.8rem;
+            height: 0.8rem;
+            border-radius: 50%;
+            background: currentcolor;
+        }
+
+        &--live {
+            border-color: rgb(34 197 94 / 38%);
+            background: rgb(34 197 94 / 12%);
+            color: #4ade80;
+
+            i {
+                box-shadow: 0 0 0 3px rgb(34 197 94 / 18%);
+                animation: kapa-scan-pulse 2s k.$ease infinite;
+            }
+        }
+
+        &--connecting,
+        &--reconnecting {
+            border-color: rgb(251 191 36 / 40%);
+            background: rgb(251 191 36 / 12%);
+            color: #fcd34d;
+        }
+
+        &--offline {
+            border-color: rgb(248 113 113 / 40%);
+            background: rgb(248 113 113 / 12%);
+            color: #fca5a5;
+        }
+
+        @media (width <= 599px) {
+            height: 2.4rem;
+            padding: 0 0.9rem;
+            font-size: 1rem;
+        }
     }
 
     &__x {
-        margin-inline-start: auto;
+        grid-area: close;
     }
 
     &__body {
         flex: 1;
         min-height: 0;
         overflow-y: auto;
-        padding: 1.6rem;
+        overscroll-behavior: contain;
         display: grid;
-        gap: 1.4rem;
         align-content: start;
+        gap: 1.6rem;
+        padding: 2rem;
+
+        @media (width <= 599px) {
+            padding: 1.6rem;
+            gap: 1.4rem;
+        }
     }
 
+    // Form: strategy and stake, then duration and "Scan all markets" on desktop; stake and duration side by side
+    // on phones
     &__box {
+        @include k.surface(1.8rem);
+
         display: grid;
-        gap: 1.2rem;
-        background: #0d1a3a;
-        border: 1px solid #1d2e5c;
-        border-radius: 1.6rem;
-        padding: 1.6rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.4rem 1.2rem;
+        padding: 1.8rem;
+
+        @media (width >= 768px) {
+            grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+        }
+
+        @media (width <= 599px) {
+            padding: 1.6rem 1.4rem;
+            gap: 1.2rem 1rem;
+        }
+
+        > .kapa-scan__f--strategy,
+        > .kapa-scan__switch,
+        > .kapa-scan__f--wide,
+        > .kapa-scan__status {
+            grid-column: 1 / -1;
+        }
+
+        @media (width >= 768px) {
+            > .kapa-scan__f--strategy,
+            > .kapa-scan__switch {
+                grid-column: auto;
+            }
+
+            > .kapa-scan__switch {
+                align-self: end;
+                min-height: 4.6rem;
+            }
+        }
 
         label > span {
             display: block;
-            font-weight: 600;
             margin-bottom: 0.6rem;
+            color: var(--kapa-text-2);
+            font-size: 1.25rem;
+            font-weight: 700;
         }
 
         select,
         input[type='number'] {
+            @include k.inset(1.2rem);
+
             width: 100%;
-            background: #071029;
-            color: #c8d6ff;
-            border: 1px solid #2a3f78;
-            border-radius: 1.2rem;
-            padding: 1.2rem 1.4rem;
+            min-height: 4.6rem;
+            padding: 0 1.4rem;
+            border: 1px solid rgb(96 165 250 / 14%);
+            color: var(--kapa-text-1);
             font: inherit;
+            font-size: 1.5rem;
+            transition:
+                border-color 0.22s k.$ease,
+                box-shadow 0.22s k.$ease;
+
+            &:focus {
+                outline: none;
+                border-color: var(--kapa-line-strong);
+                box-shadow:
+                    var(--kapa-inset-shadow),
+                    0 0 0 3px rgb(59 130 246 / 22%);
+            }
+
+            &:disabled {
+                opacity: 0.8;
+                color: var(--kapa-text-2);
+            }
+        }
+
+        select {
+            appearance: none;
+            line-height: 1.2;
+            padding: calc((4.6rem - 1.8rem - 2px) / 2) 4rem calc((4.6rem - 1.8rem - 2px) / 2) 1.4rem;
+            background-image: $chevron;
+            background-repeat: no-repeat;
+            background-position: right 1.6rem center;
+            text-overflow: ellipsis;
         }
     }
 
@@ -96,13 +298,15 @@
 
         i {
             position: relative;
+            flex: none;
             width: 4.6rem;
             height: 2.6rem;
-            border-radius: 99rem;
-            background: #2a3f78;
-            transition: background 0.2s;
+            border-radius: 999px;
+            background: var(--kapa-inset-bg);
+            box-shadow: var(--kapa-inset-shadow);
+            transition: background 0.22s k.$ease;
 
-            &:after {
+            &::after {
                 content: '';
                 position: absolute;
                 top: 0.3rem;
@@ -111,24 +315,28 @@
                 height: 2rem;
                 border-radius: 50%;
                 background: #fff;
-                transition: left 0.2s;
+                box-shadow: 0 2px 6px rgb(0 4 12 / 40%);
+                transition: transform 0.22s k.$ease;
             }
         }
 
         input:checked + i {
-            background: #2563eb;
+            background: var(--kapa-primary);
         }
 
-        input:checked + i:after {
-            left: 2.3rem;
+        input:checked + i::after {
+            transform: translateX(2rem);
         }
 
         input:focus-visible + i {
-            outline: 2px solid #f5c542;
+            outline: 2px solid var(--kapa-gold);
+            outline-offset: 2px;
         }
 
         span {
             margin: 0 !important;
+            color: var(--kapa-text-1) !important;
+            font-size: 1.4rem !important;
         }
     }
 
@@ -136,11 +344,14 @@
         display: flex;
         align-items: center;
         gap: 0.8rem;
-        background: rgb(37 99 235 / 12%);
-        border-radius: 1rem;
         padding: 1rem 1.2rem;
+        border-radius: 1.2rem;
+        background: rgb(37 99 235 / 12%);
+        color: var(--kapa-text-2);
+        font-size: 1.3rem;
 
         i {
+            flex: none;
             width: 0.8rem;
             height: 0.8rem;
             border-radius: 50%;
@@ -148,62 +359,63 @@
         }
 
         &--off {
-            background: rgb(245 197 66 / 10%);
-            color: #ffe39a;
+            background: rgb(251 191 36 / 10%);
+            color: #fde68a;
 
             i {
-                background: #f5c542;
+                background: #fbbf24;
             }
         }
     }
 
     &__result {
-        border: 1px dashed #2a3f78;
-        border-radius: 1.6rem;
-        padding: 1.6rem;
-        text-align: center;
         display: grid;
         gap: 1rem;
+        padding: 2.4rem 2rem;
+        border: 1px dashed rgb(96 165 250 / 24%);
+        border-radius: 1.8rem;
+        text-align: center;
+
+        @media (width <= 599px) {
+            padding: 1.8rem 1.4rem;
+        }
 
         h4 {
             margin: 0;
             font-size: 1.7rem;
+            font-weight: 600;
         }
 
         p {
-            margin: 0;
-            color: #c8d1ec;
+            margin: 0 auto;
+            max-width: 62rem;
+            color: var(--kapa-text-2);
+            font-size: 1.35rem;
         }
     }
 
     &__row {
-        text-align: left;
-        background: #0f1d42;
-        border: 1px solid #1d2e5c;
-        border-radius: 1.4rem;
-        padding: 1.2rem;
+        @include k.surface(1.6rem);
+
         display: grid;
         gap: 0.8rem;
+        padding: 1.4rem;
+        text-align: left;
+        animation: kapa-rise 0.32s k.$ease both;
 
         &.best {
-            border-color: rgb(245 197 66 / 55%);
+            border-color: rgb(240 200 94 / 55%);
         }
 
         p {
-            font-size: 1.2rem;
-            color: #93a3cc !important;
+            font-size: 1.25rem;
+            color: var(--kapa-text-3) !important;
         }
 
         button {
-            border: 1px solid #4a3d14;
-            background: #120f05;
-            color: #f5c542;
-            border-radius: 1rem;
-            padding: 0.9rem 1.2rem;
-            font: inherit;
-            font-weight: 700;
-            text-align: left;
-            cursor: pointer;
+            border: 1px solid rgb(240 200 94 / 40%);
+            background: rgb(240 200 94 / 8%);
+            color: var(--kapa-gold);
         }
     }
 
@@ -211,14 +423,16 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 1rem;
 
         span {
+            padding: 0.2rem 0.7rem;
+            border-radius: 0.6rem;
+            background: var(--kapa-gold-cta);
+            color: #1b1405;
             font-size: 1rem;
             font-weight: 800;
-            color: #201600;
-            background: #f5c542;
-            border-radius: 0.6rem;
-            padding: 0.2rem 0.6rem;
+            letter-spacing: 0.06rem;
         }
     }
 
@@ -228,14 +442,14 @@
         gap: 0.6rem;
 
         div {
-            background: #071029;
-            border-radius: 0.8rem;
-            padding: 0.6rem 0.8rem;
+            @include k.inset(1rem);
+
+            padding: 0.7rem 0.9rem;
         }
 
         small {
             display: block;
-            color: #93a3cc;
+            color: var(--kapa-text-3);
             font-size: 1.1rem;
         }
 
@@ -258,122 +472,42 @@
 
     &__note {
         margin: 0;
-        text-align: center;
+        color: var(--kapa-text-3);
         font-size: 1.2rem;
-        color: #93a3cc;
+        text-align: center;
     }
 
     &__foot {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+        flex: none;
+        display: flex;
+        justify-content: flex-end;
         gap: 1rem;
-        padding: 1.2rem 1.6rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
-        border-top: 1px solid #1d2e5c;
+        padding: 1.4rem 2rem calc(1.4rem + env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--kapa-header-line);
+
+        // phones: Cancel takes what it needs, the scan button the rest (its label stays on one line)
+        @media (width <= 599px) {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            padding-inline: 1.6rem;
+        }
 
         button {
-            border: 1px solid #2a3f78;
-            border-radius: 1.2rem;
-            padding: 1.3rem;
-            background: #0d1a3a;
-            color: #eef2ff;
-            font: inherit;
-            font-weight: 700;
-            text-align: left;
-            cursor: pointer;
+            min-width: 14rem;
+            border: 1px solid var(--kapa-line);
+            border-radius: var(--kapa-radius-btn, 1.4rem);
+            background: var(--kapa-surface);
+            box-shadow: var(--kapa-shadow);
+            color: var(--kapa-text-1);
+
+            @media (width <= 599px) {
+                min-width: 0;
+                padding: 0 1.8rem;
+            }
 
             &.primary {
-                background: #2563eb;
-                border-color: #2563eb;
+                @include k.primary;
             }
-
-            &:disabled {
-                opacity: 0.6;
-            }
-        }
-    }
-}
-
-.kapa-risk {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    display: grid;
-    place-items: center;
-    padding: 1.6rem;
-    background: rgb(2 6 18 / 70%);
-
-    &__box {
-        width: 100%;
-        max-width: 42rem;
-        background: #fff;
-        color: #1b2238;
-        border-radius: 1.6rem;
-        padding: 1.8rem;
-        font-size: 1.4rem;
-        line-height: 1.55;
-
-        p {
-            margin: 0 0 1rem;
-        }
-    }
-
-    &__head {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1.2rem;
-
-        span {
-            color: #e09b00;
-            font-size: 2rem;
-        }
-
-        b {
-            flex: 1;
-            font-size: 1.8rem;
-            font-weight: 600;
-        }
-    }
-
-    &__close {
-        width: 100%;
-        border: 0;
-        border-radius: 1rem;
-        padding: 1.2rem;
-        background: #2563eb;
-        color: #fff;
-        font: inherit;
-        font-weight: 700;
-        text-align: left;
-        cursor: pointer;
-    }
-}
-
-// Sizing finish for the scanner and the risk dialog: same control height and radius as KAPA AI
-.kapa-scan {
-    @media (width >= 768px) {
-        max-height: calc(100dvh - 8rem);
-    }
-
-    &__body {
-        overscroll-behavior: contain;
-    }
-
-    &__box {
-        select,
-        input[type='number'] {
-            min-height: 4.8rem;
-            padding: 0 1.4rem;
-            font-size: 1.5rem;
-        }
-
-        select {
-            appearance: none;
-            line-height: 1.2;
-            padding: calc((4.8rem - 1.8rem - 2px) / 2) 4rem calc((4.8rem - 1.8rem - 2px) / 2) 1.4rem;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2393a3cc' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 1.6rem center;
         }
     }
 
@@ -383,38 +517,146 @@
         align-items: center;
         justify-content: center;
         min-height: 4.8rem;
-        padding: 0 1.4rem;
+        padding: 0 2.2rem;
+        border-radius: var(--kapa-radius-btn, 1.4rem);
+        font: inherit;
+        font-size: 1.5rem;
+        font-weight: 700;
         text-align: center;
-        transition: filter 0.15s;
+        white-space: nowrap;
+        cursor: pointer;
+        transition:
+            transform 0.22s k.$ease,
+            filter 0.22s k.$ease;
 
         &:hover:not(:disabled) {
             filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        &:active:not(:disabled) {
+            transform: none;
+        }
+
+        &:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        @media (width <= 360px) {
+            font-size: 1.4rem;
         }
     }
 
     button:focus-visible {
+        outline: 2px solid var(--kapa-gold);
         outline-offset: 2px;
     }
+}
 
-    button:focus-visible {
-        outline: 2px solid #f5c542;
+@keyframes kapa-scan-pulse {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.55;
+        transform: scale(0.8);
     }
 }
 
+// ---- Risk warning: white card over the dimmed, blurred page; the icon sits in a pale circle ----
 .kapa-risk {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 1.6rem;
+    background: rgb(2 8 20 / 58%);
+    backdrop-filter: blur(8px);
+    animation: kapa-fade 0.22s k.$ease both;
+
     &__box {
+        width: 100%;
+        max-width: 44rem;
         max-height: calc(100dvh - 3.2rem);
         overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 2.2rem;
+        border-radius: 2rem;
+        background: #fff;
+        box-shadow: 0 30px 80px rgb(0 4 12 / 45%);
+        color: #1b2238;
+        font-family: var(--brand-font-primary);
+        font-size: 1.4rem;
+        line-height: 1.55;
+        animation: kapa-rise 0.32s k.$ease both;
+
+        p {
+            margin: 0 0 1.2rem;
+            color: #33405a;
+        }
     }
 
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+        margin-bottom: 1.4rem;
+
+        b {
+            flex: 1;
+            font-size: 1.9rem;
+            font-weight: 600;
+        }
+    }
+
+    &__icon {
+        flex: none;
+        width: 4.8rem;
+        height: 4.8rem;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #fdf0c8;
+        color: #c2410c;
+
+        svg {
+            display: block;
+        }
+    }
 
     &__close {
+        @include k.primary;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
         min-height: 4.8rem;
+        margin-top: 0.4rem;
         padding: 0 1.4rem;
-        text-align: center;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+            transform 0.22s k.$ease,
+            filter 0.22s k.$ease;
+
+        &:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        &:focus-visible {
+            outline: 2px solid #c79426;
+            outline-offset: 2px;
+        }
     }
 }
-
 
 // ============================================================================
 // Floating AI orb (bottom right) and risk-warning button (bottom left), level with each other above the

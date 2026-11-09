@@ -12,6 +12,17 @@ const open = async (b, viewport, extra = {}) => {
 };
 const box = (pg, s) => pg.locator(s).first().boundingBox();
 const overflow = (pg) => pg.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+const hit = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
+const blurOf = (pg, s) => pg.locator(s).first().evaluate((e) => getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter || '').catch(() => '');
+// scanner header pill: the app's connection state (the orb's badge), never a fixed word
+const pillMatchesOrb = async (pg) => {
+  const pill = (await pg.locator('.kapa-scan__pill').innerText().catch(() => '')).trim().toLowerCase();
+  const badge = (await pg.locator('.kapa-fab-orb__badge').innerText().catch(() => '?')).trim().toLowerCase();
+  const cls = await pg.locator('.kapa-scan__pill').getAttribute('class').catch(() => '');
+  return pill && pill === badge && cls.includes('kapa-scan__pill--' + badge);
+};
+// the locked scan button keeps "🔒 Scan Markets · Premium" on one line, unclipped
+const scanLabelOneLine = (pg) => pg.locator('.kapa-scan__foot .primary').evaluate((e) => { const lh = parseFloat(getComputedStyle(e).lineHeight) || 20; const r = document.createRange(); r.selectNodeContents(e); return r.getClientRects().length === 1 && e.scrollWidth <= e.clientWidth + 1 && r.getBoundingClientRect().height < lh * 1.5; }).catch(() => false);
 (async () => {
   const b = await chromium.launch();
   // ---------- desktop 1366 x 800 ----------
@@ -46,6 +57,30 @@ const overflow = (pg) => pg.evaluate(() => document.documentElement.scrollWidth 
     ok(!(await pg.locator('.run-panel__container').count()), 'desktop: no Summary drawer on KAPA AI');
     await pg.click('.kapa-lock__free'); await pg.waitForTimeout(500);
     ok(await pg.locator('.kapa-runbar').count() === 1, 'free strategies: Start bar comes back');
+    { const [orb, risk, sb, st] = [await box(pg, '.kapa-fab-orb'), await box(pg, '.kapa-fab-risk'), await box(pg, '.kapa-runbtn'), await box(pg, '.kapa-runstat')];
+      ok(sb && st && !hit(orb, sb) && !hit(risk, sb) && !hit(orb, st) && !hit(risk, st), 'desktop free page: orb and risk button clear of Start KAPA AI and its status');
+      const ring = await box(pg, '.kapa-ring'); ok(ring && ring.y + ring.height <= (sb ? sb.y : 800), `desktop free page: the Activate ring is on the first screen (bottom ${ring && Math.round(ring.y + ring.height)})`);
+      const f = await box(pg, '.kapa-main__form'); ok(f && ring && ring.x > f.x + f.width, 'desktop free page: fields and Activate ring side by side'); }
+    await pg.click('.kapa-gear'); await pg.waitForTimeout(600);
+    { const w = await box(pg, '.kapa-settings'), m = await box(pg, '.kapa-settings__main'), sd = await box(pg, '.kapa-settings__side');
+      ok(w && w.width >= 900 && m && sd && sd.x > m.x + m.width - 1, `desktop settings: one wide window in two columns (${w && Math.round(w.width)}px)`);
+      ok(/blur/.test(await blurOf(pg, '.kapa-mask--sheet')), 'desktop settings: page behind is blurred'); }
+    await pg.click('.kapa-settings__foot .kapa-btn'); await pg.waitForTimeout(400);
+    // live scanner from the orb: centred ~920px window over a dimmed, blurred page
+    await pg.click('.kapa-fab-orb'); await pg.waitForTimeout(700);
+    { const d = await box(pg, '.kapa-scan');
+      ok(d && d.width >= 880 && d.width <= 940 && Math.abs(d.x + d.width / 2 - 683) < 4 && d.y > 0 && d.y + d.height < 800, `desktop scanner: centred window ${d && [Math.round(d.width), Math.round(d.height)]}`);
+      ok(/blur/.test(await blurOf(pg, '.kapa-scan-mask')), 'desktop scanner: page behind is dimmed and blurred');
+      ok(await pg.locator('.kapa-scan__logo').isVisible() && await pg.locator('.kapa-scan__eyebrow').isVisible() && await pg.locator('.kapa-scan__x').isVisible(), 'desktop scanner: monogram tile, eyebrow and round close');
+      ok(await pillMatchesOrb(pg), 'scanner status pill shows the real connection state (same as the orb)');
+      const [st, sk, du, sw] = [await box(pg, '.kapa-scan__f--strategy'), await box(pg, '.kapa-scan__box .kapa-scan__f:nth-of-type(2)'), await box(pg, '.kapa-scan__box .kapa-scan__f:nth-of-type(3)'), await box(pg, '.kapa-scan__switch')];
+      ok(st && sk && du && sw && Math.abs(st.y - sk.y) < 2 && sk.x > st.x + st.width - 1 && sw.x > du.x + du.width - 1, 'desktop scanner: two-column form (strategy | stake, duration | scan all)');
+      ok(await scanLabelOneLine(pg), 'desktop scanner: locked button label on one line'); }
+    await pg.click('.kapa-scan__x'); await pg.waitForTimeout(300);
+    await pg.click('.kapa-fab-risk'); await pg.waitForTimeout(500);
+    { const ic = await box(pg, '.kapa-risk__icon');
+      ok(/blur/.test(await blurOf(pg, '.kapa-risk')) && ic && ic.width >= 44 && ic.width <= 52 && Math.abs(ic.width - ic.height) < 1, 'risk warning: blurred backdrop, icon in a round tile'); }
+    await pg.click('.kapa-risk__close'); await pg.waitForTimeout(300);
     // Dashboard: drawer open, orb clear of it
     await pg.click('#id-dbot-dashboard'); await pg.waitForTimeout(1500); await skip(pg);
     const dr = await box(pg, '.run-panel__container'); const orb = await box(pg, '.kapa-fab-orb'); const risk = await box(pg, '.kapa-fab-risk');
@@ -74,6 +109,18 @@ const overflow = (pg) => pg.evaluate(() => document.documentElement.scrollWidth 
     await pg.click('.kapa-login .kapa-btn'); await pg.waitForTimeout(7000);
     ok(!(await pg.locator('.kapa-runbar').count()), 'phone: no Start KAPA AI bar on the locked card');
     const cta = await box(pg, '.kapa-lock__cta'); ok(cta && cta.y + cta.height <= 860, `phone: unlock button on the first screen (bottom ${cta && Math.round(cta.y + cta.height)})`);
+    await pg.click('.kapa-fab-orb'); await pg.waitForTimeout(700);
+    { const d = await box(pg, '.kapa-scan'); ok(d && d.x === 0 && d.y === 0 && d.width === 412 && d.height === 860, 'phone scanner: full-screen sheet');
+      const [sk, du] = [await box(pg, '.kapa-scan__box .kapa-scan__f:nth-of-type(2)'), await box(pg, '.kapa-scan__box .kapa-scan__f:nth-of-type(3)')];
+      ok(sk && du && Math.abs(sk.y - du.y) < 2 && du.x > sk.x + sk.width - 1, 'phone scanner: stake and duration side by side');
+      ok(await pillMatchesOrb(pg), 'phone scanner: status pill shows the real connection state');
+      ok(await scanLabelOneLine(pg), 'phone scanner: "Scan Markets · Premium" on one line');
+      ok(await overflow(pg) === 0, 'phone scanner: no horizontal overflow'); }
+    await pg.click('.kapa-scan__x'); await pg.waitForTimeout(300);
+    await pg.click('.kapa-lock__free'); await pg.waitForTimeout(600);
+    { const [orb, risk, sb, st] = [await box(pg, '.kapa-fab-orb'), await box(pg, '.kapa-fab-risk'), await box(pg, '.kapa-runbtn'), await box(pg, '.kapa-runstat')];
+      ok(sb && sb.y + sb.height <= 860 && !hit(orb, sb) && !hit(risk, sb) && !hit(orb, st) && !hit(risk, st), 'phone free page: Start KAPA AI on screen, clear of the orb and risk button');
+      ok(await overflow(pg) === 0, 'phone free page: no horizontal overflow'); }
     await pg.click('#id-dbot-dashboard', { force: true }); await pg.waitForTimeout(1500);
     ok(!(await pg.locator('.db-info-panel').count()), 'phone first Dashboard visit: only the tour, no guide panel on top');
     const start = pg.locator('.dbot-slider__button-group button.danger'); if (await start.count()) ok(/gradient/.test(await start.evaluate((e) => getComputedStyle(e).backgroundImage)), 'tour Start button is Kapa blue');
@@ -84,7 +131,6 @@ const overflow = (pg) => pg.evaluate(() => document.documentElement.scrollWidth 
     ok(await overflow(pg) === 0, 'phone: no horizontal overflow');
     await ctx.close(); }
   // ---------- 360 and 412 (Pixel 7): the floating buttons never cover the first-screen action ----------
-  const hit = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
   for (const [W, H] of [[360, 740], [412, 839]]) {
     const { ctx, pg } = await open(b, { width: W, height: H }, { isMobile: true, hasTouch: true });
     await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(5000);
@@ -96,6 +142,9 @@ const overflow = (pg) => pg.evaluate(() => document.documentElement.scrollWidth 
     ok(card && !hit(orb, card) && !hit(risk, card), `${W}px: orb and risk button clear of UNLOCK KAPA PREMIUM`);
     ok(card && card.y + card.height <= H, `${W}px: UNLOCK KAPA PREMIUM on the first screen`);
     ok(orb && orb.width >= 50 && risk && risk.width >= 34, `${W}px: floating buttons keep their size (${orb && orb.width}, ${risk && risk.width})`);
+    await pg.click('.kapa-fab-orb'); await pg.waitForTimeout(700);
+    ok(await scanLabelOneLine(pg) && await overflow(pg) === 0, `${W}px: scanner fits, "Scan Markets · Premium" on one line`);
+    await pg.click('.kapa-scan__x'); await pg.waitForTimeout(300);
     await ctx.close(); }
   console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); await b.close(); process.exit(0);
 })();

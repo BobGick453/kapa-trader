@@ -14,9 +14,9 @@
     line-height: 0;
     backdrop-filter: blur(4px);
     transition:
-        background 0.15s,
-        border-color 0.15s,
-        transform 0.15s;
+        background 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+        border-color 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 
     svg {
         display: block;
@@ -44,16 +44,18 @@
         z-index: 3;
     }
 
-    // On a light background (risk warning)
+    // On a light background (risk warning): a soft grey filled circle
     &--light {
-        border-color: #d5dbea;
-        background: #f3f5fb;
+        width: 4rem;
+        height: 4rem;
+        border-color: transparent;
+        background: #eef1f6;
         color: #1b2238;
         backdrop-filter: none;
 
         &:hover {
-            background: #e6ebf7;
-            border-color: #b9c3dd;
+            background: #e1e6ef;
+            border-color: transparent;
         }
     }
 }

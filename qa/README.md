@@ -3,8 +3,11 @@
 `bash qa/run-all.sh` runs everything. Browser tests use Playwright (pre-installed in Claude cloud sessions)
 and a fake Deriv (`browser/derivmock.js`, `browser/trademock.js`); they never touch a real account.
 
-- `server/` — strategy engine, Premium server (Cloudflare-style worker) and Netlify adapter tests.
-- `browser/` — end-to-end: Premium code, capital limits, strategy lab, classic bots, UI, Deriv relink,
+- `server/` — strategy engine, KAPA AI trade runner (`engine.test.mjs`: stake rounding, stake caps, lost
+  connection, daily loss record; loads the TypeScript through `ts-load.mjs`), Premium server (Cloudflare-style
+  worker) and Netlify adapter tests.
+- `browser/` — end-to-end: Premium code, KAPA Apex with default settings (`apex.js`), lost connection during a
+  contract (`conn.js`), capital limits, strategy lab, classic bots, UI, Deriv relink,
   floating buttons, marked-up prices. Screenshots go to `browser/x/`.
 - `real/` — real Deriv data and backtests:
   - `real-2026-11-04.json`: 300,000 real ticks (10 Volatility indices) and real prices of 32 contracts.

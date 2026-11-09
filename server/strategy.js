@@ -69,6 +69,11 @@ export const DEFAULT_BOTS = {
 };
 
 const PRESET_KEYS = ['apex', 'pegasus', 'martingale', 'recover'];
+/**
+ * Most losses in a row a session may take. Apex's default (30) is the value its real-tick backtests use;
+ * a run that long is rare, and every stake still fits under the stop-loss whatever this limit is.
+ */
+export const MAX_LOSSES = 30;
 const BOT_KEYS = ['under7-dalembert', 'odd-oscars'];
 const MODES = ['target', 'double', 'recover', 'none'];
 
@@ -90,7 +95,7 @@ export const loadRules = env => {
             MODES.includes(p.mode) &&
             Object.hasOwn(GROUPS, p.group) &&
             typeof p.martingale === 'number' && p.martingale >= 1 && p.martingale <= 5 &&
-            Number.isInteger(p.maxLosses) && p.maxLosses >= 1 && p.maxLosses <= 20;
+            Number.isInteger(p.maxLosses) && p.maxLosses >= 1 && p.maxLosses <= MAX_LOSSES;
         if (!ok) throw new Error(`PREMIUM_RULES: invalid preset ${k}`);
         presets[k] = { mode: p.mode, group: p.group, martingale: p.martingale, maxLosses: p.maxLosses };
     }
@@ -168,7 +173,8 @@ export const validateSettings = (body, presets = DEFAULT_PRESETS) => {
     const stake = num(body.stake, 0.35, 50000);
     const takeProfit = num(body.takeProfit, 0.01, 1e7);
     const stopLoss = num(body.stopLoss, 0.35, 1e7);
-    const maxLosses = int(body.maxLosses ?? (Object.hasOwn(presets, preset) ? presets[preset].maxLosses : 6), 1, 20);
+    // The strategy's own limit unless the user sets one (a preset's default is always accepted)
+    const maxLosses = int(body.maxLosses ?? (Object.hasOwn(presets, preset) ? presets[preset].maxLosses : 6), 1, MAX_LOSSES);
     const maxRuns = int(body.maxRuns ?? 0, 0, 10000);
     // The most of each stake the user accepts Deriv keeping on their connection (default 12%)
     const maxMargin = num(body.maxMargin ?? 12, 1, 50);

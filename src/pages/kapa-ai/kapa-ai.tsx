@@ -801,9 +801,14 @@ const KapaAI = observer(() => {
                 </div>
             </div>
             <button className='kapa-lock__cta' type='button' onClick={() => openSettings(true)}>
-                {plan_?.configured
-                    ? `UNLOCK KAPA PREMIUM · ${plan_.price.toLocaleString()} ${plan_.currency}`
-                    : 'UNLOCK KAPA PREMIUM'}
+                <span className='kapa-lock__cta-label'>UNLOCK KAPA PREMIUM</span>
+                {/* Kapa's real price only, as the server sends it (never a crossed-out "old" price) */}
+                {plan_?.configured && (
+                    <b className='kapa-lock__price'>
+                        <span className='kapa-lock__sep'> · </span>
+                        {plan_.price.toLocaleString()} {plan_.currency}
+                    </b>
+                )}
             </button>
             <button className='kapa-lock__free' type='button' onClick={useFree}>
                 Use the free strategies
@@ -870,67 +875,74 @@ const KapaAI = observer(() => {
                         </div>
                     )}
 
-                    <label className='kapa-field'>
-                        <span>Stake ({currency})</span>
-                        <input
-                            type='number'
-                            inputMode='decimal'
-                            min={0.35}
-                            step={0.01}
-                            value={s.stake}
-                            onChange={num('stake')}
-                            disabled={running}
-                        />
-                        {(s.strategy === 'pegasus' || s.strategy === 'apex') && (
-                            <small>
-                                {s.strategy === 'apex' ? 'KAPA Apex' : 'Pegasus'} sizes each stake itself: what one win
-                                needs to reach your take-profit, within your stop-loss.
-                            </small>
-                        )}
-                    </label>
-                    <label className='kapa-field'>
-                        <span>Take-profit ({currency})</span>
-                        <input
-                            type='number'
-                            inputMode='decimal'
-                            min={0.01}
-                            step={0.01}
-                            value={s.takeProfit}
-                            onChange={num('takeProfit')}
-                            disabled={running}
-                        />
-                        {tpPct != null && (
-                            <small>
-                                = {fmt(tpPct, tpPct < 10 ? 1 : 0)}% of your balance ({fmt(balance)} {currency})
-                            </small>
-                        )}
-                        {(s.strategy === 'pegasus' || s.strategy === 'apex') && boldNeed > Math.min(s.stopLoss, s.maxStake) && (
-                            <small className='kapa-warn'>
-                                One win needs a stake of {fmt(boldNeed)} to reach this take-profit, more than your
-                                stop-loss allows: each session will be a single trade of {fmt(Math.min(s.stopLoss, s.maxStake))},
-                                won or lost at once (about {Math.round(bestHalfChance * 100)}% chance). Lower the take-profit
-                                (for example to {fmt(Math.max(1, Math.floor(s.stopLoss / 5)), 0)}) to reach it far more often.
-                            </small>
-                        )}
-                    </label>
-                    {error && <div className='kapa-error'>{error}</div>}
+                    {/* Wide screens: the two fields on the left, the Activate ring on the right */}
+                    <div className='kapa-main'>
+                        <div className='kapa-main__form'>
+                            <label className='kapa-field'>
+                                <span>Stake ({currency})</span>
+                                <input
+                                    type='number'
+                                    inputMode='decimal'
+                                    min={0.35}
+                                    step={0.01}
+                                    value={s.stake}
+                                    onChange={num('stake')}
+                                    disabled={running}
+                                />
+                                {(s.strategy === 'pegasus' || s.strategy === 'apex') && (
+                                    <small>
+                                        {s.strategy === 'apex' ? 'KAPA Apex' : 'Pegasus'} sizes each stake itself: what one win
+                                        needs to reach your take-profit, within your stop-loss.
+                                    </small>
+                                )}
+                            </label>
+                            <label className='kapa-field'>
+                                <span>Take-profit ({currency})</span>
+                                <input
+                                    type='number'
+                                    inputMode='decimal'
+                                    min={0.01}
+                                    step={0.01}
+                                    value={s.takeProfit}
+                                    onChange={num('takeProfit')}
+                                    disabled={running}
+                                />
+                                {tpPct != null && (
+                                    <small>
+                                        = {fmt(tpPct, tpPct < 10 ? 1 : 0)}% of your balance ({fmt(balance)} {currency})
+                                    </small>
+                                )}
+                                {(s.strategy === 'pegasus' || s.strategy === 'apex') && boldNeed > Math.min(s.stopLoss, s.maxStake) && (
+                                    <small className='kapa-warn'>
+                                        One win needs a stake of {fmt(boldNeed)} to reach this take-profit, more than your
+                                        stop-loss allows: each session will be a single trade of {fmt(Math.min(s.stopLoss, s.maxStake))},
+                                        won or lost at once (about {Math.round(bestHalfChance * 100)}% chance). Lower the take-profit
+                                        (for example to {fmt(Math.max(1, Math.floor(s.stopLoss / 5)), 0)}) to reach it far more often.
+                                    </small>
+                                )}
+                            </label>
+                            {error && <div className='kapa-error'>{error}</div>}
+                        </div>
 
-                    <Ring
-                        busy={scanning}
-                        label={
-                            <>
-                                Activate
-                                <br />
-                                Kapa
-                            </>
-                        }
-                        sub={!isPremium ? '🔒 Premium' : scanning ? 'Scanning live markets' : 'Ready to scan'}
-                        onClick={scan}
-                        disabled={!logged_in || running}
-                    />
-                    <div className='kapa-scanmsg'>
-                        {scanMsg ||
-                            `${MARKETS[s.symbol]} · ${strategyName(s.strategy)}${isPremium ? '' : ' · Premium locked'}`}
+                        <div className='kapa-main__scan'>
+                            <Ring
+                                busy={scanning}
+                                label={
+                                    <>
+                                        Activate
+                                        <br />
+                                        Kapa
+                                    </>
+                                }
+                                sub={!isPremium ? '🔒 Premium' : scanning ? 'Scanning live markets' : 'Ready to scan'}
+                                onClick={scan}
+                                disabled={!logged_in || running}
+                            />
+                            <div className='kapa-scanmsg'>
+                                {scanMsg ||
+                                    `${MARKETS[s.symbol]} · ${strategyName(s.strategy)}${isPremium ? '' : ' · Premium locked'}`}
+                            </div>
+                        </div>
                     </div>
 
                     {cards.map((c, i) => (
@@ -1047,413 +1059,419 @@ const KapaAI = observer(() => {
                             <KapaClose onClick={() => setSettingsOpen(false)} label='Close settings' />
                         </div>
                         <div className='kapa-settings__body' ref={settingsBodyRef}>
-                            {
-                                <div
-                                    className={classNames('kapa-premium', { 'kapa-premium--on': isPremium })}
-                                    ref={premiumRef}
-                                >
-                                    {isPremium ? (
-                                        <div className='kapa-premium__activebar'>
-                                            <p className='kapa-premium__active'>✓ KAPA AI Premium unlocked</p>
-                                            <button
-                                                className='kapa-link'
-                                                type='button'
-                                                onClick={relock}
-                                                disabled={running}
-                                            >
-                                                Lock on this device
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div className='kapa-premium__tag'>PREMIUM LOCKED</div>
-                                            <h3>KAPA AI Premium</h3>
-                                            <ul>
-                                                <li>
-                                                    <b>Recovery strategies</b> · Pegasus, Steady and Exact recovery, run
-                                                    by the KAPA AI server
-                                                </li>
-                                                <li>
-                                                    <b>Live market scanner</b> · compares Deriv&apos;s live prices
-                                                    across Volatility indices
-                                                </li>
-                                                <li>
-                                                    <b>Advanced settings</b> · predictions, multiplier, maximum stake,
-                                                    loss limits, pauses
-                                                </li>
-                                                <li>
-                                                    <b>Premium bots</b> in the Free Bot library
-                                                </li>
-                                            </ul>
-                                            {
+                            {/* Wide screens: Premium and the settings on the left, the plan and the lab on the right */}
+                            <div className='kapa-settings__cols'>
+                                <div className='kapa-settings__main'>
+                                    {
+                                        <div
+                                            className={classNames('kapa-premium', { 'kapa-premium--on': isPremium })}
+                                            ref={premiumRef}
+                                        >
+                                            {isPremium ? (
+                                                <div className='kapa-premium__activebar'>
+                                                    <p className='kapa-premium__active'>✓ KAPA AI Premium unlocked</p>
+                                                    <button
+                                                        className='kapa-link'
+                                                        type='button'
+                                                        onClick={relock}
+                                                        disabled={running}
+                                                    >
+                                                        Lock on this device
+                                                    </button>
+                                                </div>
+                                            ) : (
                                                 <>
-                                                    <form className='kapa-premium__code' onSubmit={unlock}>
-                                                        <label htmlFor='kapa-premium-code'>Premium code</label>
-                                                        <div>
-                                                            <input
-                                                                id='kapa-premium-code'
-                                                                type='password'
-                                                                value={code}
-                                                                onChange={e => setCode(e.target.value)}
-                                                                placeholder='Enter your secret code'
-                                                                autoComplete='off'
-                                                                autoCapitalize='characters'
-                                                                spellCheck={false}
-                                                                maxLength={80}
-                                                            />
-                                                            <button
-                                                                className='kapa-btn kapa-btn--gold'
-                                                                type='submit'
-                                                                disabled={!code.trim() || unlocking}
-                                                            >
-                                                                {unlocking ? 'Checking…' : 'Unlock'}
-                                                            </button>
-                                                        </div>
-                                                    </form>
-                                                    {premium.status !== 'off' && (
-                                                        <div className='kapa-premium__buy'>
-                                                            <b>No code yet?</b>
-                                                            <span>
-                                                                Pay for Premium, then Kapa sends you the code.
-                                                                {plan_?.configured
-                                                                    ? ` ${plan_.price.toLocaleString()} ${plan_.currency} for ${plan_.days} days, by mobile money (Orange, MTN, Moov, Wave) or bank card.`
-                                                                    : ''}
-                                                            </span>
-                                                            {plan_?.configured && (
-                                                                <button
-                                                                    className='kapa-btn kapa-btn--line'
-                                                                    type='button'
-                                                                    onClick={pay}
-                                                                    disabled={!logged_in || paying}
-                                                                >
-                                                                    {paying ? 'Opening CinetPay…' : 'Pay with CinetPay'}
-                                                                </button>
+                                                    <div className='kapa-premium__tag'>PREMIUM LOCKED</div>
+                                                    <h3>KAPA AI Premium</h3>
+                                                    <ul>
+                                                        <li>
+                                                            <b>Recovery strategies</b> · Pegasus, Steady and Exact recovery, run
+                                                            by the KAPA AI server
+                                                        </li>
+                                                        <li>
+                                                            <b>Live market scanner</b> · compares Deriv&apos;s live prices
+                                                            across Volatility indices
+                                                        </li>
+                                                        <li>
+                                                            <b>Advanced settings</b> · predictions, multiplier, maximum stake,
+                                                            loss limits, pauses
+                                                        </li>
+                                                        <li>
+                                                            <b>Premium bots</b> in the Free Bot library
+                                                        </li>
+                                                    </ul>
+                                                    {
+                                                        <>
+                                                            <form className='kapa-premium__code' onSubmit={unlock}>
+                                                                <label htmlFor='kapa-premium-code'>Premium code</label>
+                                                                <div>
+                                                                    <input
+                                                                        id='kapa-premium-code'
+                                                                        type='password'
+                                                                        value={code}
+                                                                        onChange={e => setCode(e.target.value)}
+                                                                        placeholder='Enter your secret code'
+                                                                        autoComplete='off'
+                                                                        autoCapitalize='characters'
+                                                                        spellCheck={false}
+                                                                        maxLength={80}
+                                                                    />
+                                                                    <button
+                                                                        className='kapa-btn kapa-btn--gold'
+                                                                        type='submit'
+                                                                        disabled={!code.trim() || unlocking}
+                                                                    >
+                                                                        {unlocking ? 'Checking…' : 'Unlock'}
+                                                                    </button>
+                                                                </div>
+                                                            </form>
+                                                            {premium.status !== 'off' && (
+                                                                <div className='kapa-premium__buy'>
+                                                                    <b>No code yet?</b>
+                                                                    <span>
+                                                                        Pay for Premium, then Kapa sends you the code.
+                                                                        {plan_?.configured
+                                                                            ? ` ${plan_.price.toLocaleString()} ${plan_.currency} for ${plan_.days} days, by mobile money (Orange, MTN, Moov, Wave) or bank card.`
+                                                                            : ''}
+                                                                    </span>
+                                                                    {plan_?.configured && (
+                                                                        <button
+                                                                            className='kapa-btn kapa-btn--line'
+                                                                            type='button'
+                                                                            onClick={pay}
+                                                                            disabled={!logged_in || paying}
+                                                                        >
+                                                                            {paying ? 'Opening CinetPay…' : 'Pay with CinetPay'}
+                                                                        </button>
+                                                                    )}
+                                                                    {plan_?.configured && !logged_in && (
+                                                                        <small>Log in with Deriv first to pay.</small>
+                                                                    )}
+                                                                    {contact && (
+                                                                        <a
+                                                                            className='kapa-btn kapa-btn--line'
+                                                                            href={contact}
+                                                                            target='_blank'
+                                                                            rel='noopener noreferrer'
+                                                                        >
+                                                                            Contact Kapa
+                                                                        </a>
+                                                                    )}
+                                                                </div>
                                                             )}
-                                                            {plan_?.configured && !logged_in && (
-                                                                <small>Log in with Deriv first to pay.</small>
-                                                            )}
-                                                            {contact && (
-                                                                <a
-                                                                    className='kapa-btn kapa-btn--line'
-                                                                    href={contact}
-                                                                    target='_blank'
-                                                                    rel='noopener noreferrer'
-                                                                >
-                                                                    Contact Kapa
-                                                                </a>
-                                                            )}
-                                                        </div>
+                                                        </>
+                                                    }
+                                                    <p className='kapa-premium__note'>
+                                                        The session plan stays free for everyone. Premium adds tools; it does
+                                                        not change the odds: every Deriv contract still pays less than its true
+                                                        chance.
+                                                    </p>
+                                                    {premium.status === 'unavailable' && (
+                                                        <button
+                                                            className='kapa-link'
+                                                            type='button'
+                                                            onClick={() => refreshEntitlement()}
+                                                        >
+                                                            Couldn&apos;t reach the Premium server. Try again
+                                                        </button>
                                                     )}
                                                 </>
-                                            }
-                                            <p className='kapa-premium__note'>
-                                                The session plan stays free for everyone. Premium adds tools; it does
-                                                not change the odds: every Deriv contract still pays less than its true
-                                                chance.
-                                            </p>
-                                            {premium.status === 'unavailable' && (
-                                                <button
-                                                    className='kapa-link'
-                                                    type='button'
-                                                    onClick={() => refreshEntitlement()}
-                                                >
-                                                    Couldn&apos;t reach the Premium server. Try again
-                                                </button>
                                             )}
-                                        </>
-                                    )}
-                                    {premiumMsg && <p className='kapa-premium__msg'>{premiumMsg}</p>}
-                                    {!isPremium && diag.some(d => d.kind === 'premium') && (
-                                        <details className='kapa-diag'>
-                                            <summary>Premium server details</summary>
-                                            <ul>
-                                                {diag
-                                                    .filter(d => d.kind === 'premium')
-                                                    .slice(-4)
-                                                    .map((d, i) => (
-                                                        <li key={`${d.at}-${i}`} className='kapa-diag__login'>
-                                                            <time>{new Date(d.at).toLocaleTimeString()}</time> {d.text}
-                                                        </li>
-                                                    ))}
-                                            </ul>
-                                        </details>
-                                    )}
-                                </div>
-                            }
-
-                            <label className='kapa-field'>
-                                <span>Stop-loss ({currency})</span>
-                                <input
-                                    type='number'
-                                    inputMode='decimal'
-                                    min={0.01}
-                                    step={0.01}
-                                    value={s.stopLoss}
-                                    onChange={e =>
-                                        update({
-                                            stopLoss: +e.target.value,
-                                            ...(s.strategy !== 'fixed'
-                                                ? { maxStake: Math.max(+e.target.value, s.stake) }
-                                                : {}),
-                                        })
+                                            {premiumMsg && <p className='kapa-premium__msg'>{premiumMsg}</p>}
+                                            {!isPremium && diag.some(d => d.kind === 'premium') && (
+                                                <details className='kapa-diag'>
+                                                    <summary>Premium server details</summary>
+                                                    <ul>
+                                                        {diag
+                                                            .filter(d => d.kind === 'premium')
+                                                            .slice(-4)
+                                                            .map((d, i) => (
+                                                                <li key={`${d.at}-${i}`} className='kapa-diag__login'>
+                                                                    <time>{new Date(d.at).toLocaleTimeString()}</time> {d.text}
+                                                                </li>
+                                                            ))}
+                                                    </ul>
+                                                </details>
+                                            )}
+                                        </div>
                                     }
-                                    disabled={running}
-                                />
-                            </label>
-                            <label className='kapa-field'>
-                                <span>Strategy</span>
-                                <select
-                                    value={s.strategy}
-                                    onChange={e => chooseStrategy(e.target.value as TStrategy)}
-                                    disabled={running}
-                                >
-                                    {(Object.keys(STRATEGIES) as TPresetKey[]).map(k => (
-                                        <option key={k} value={k}>
-                                            {!isPremium && STRATEGIES[k].premium ? '🔒 ' : ''}
-                                            {STRATEGIES[k].label}
-                                        </option>
-                                    ))}
-                                    {(isPremium || s.strategy === 'custom') && (
-                                        <option value='custom'>Custom · my own rules (advanced settings)</option>
-                                    )}
-                                </select>
-                            </label>
-                            <label className='kapa-field'>
-                                <span>Market</span>
-                                <select
-                                    value={s.symbol}
-                                    onChange={e => update({ symbol: e.target.value })}
-                                    disabled={running}
-                                >
-                                    {Object.entries(MARKETS).map(([k, v]) => (
-                                        <option key={k} value={k}>
-                                            {v}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
 
-                            <button
-                                className='kapa-link'
-                                type='button'
-                                onClick={() => (isPremium ? setShowAdvanced(v => !v) : openPremium())}
-                            >
-                                {!isPremium
-                                    ? '🔒 Advanced settings (Premium)'
-                                    : `${showAdvanced ? 'Hide' : 'Show'} advanced settings`}
-                            </button>
-                            {showAdvanced && isPremium && (
-                                <div className='kapa-grid2'>
-                                    {s.strategy === 'custom' ? (
-                                        <>
-                                            <label className='kapa-field'>
-                                                <span>Prediction (Over)</span>
-                                                <select
-                                                    value={s.custom.barrier}
-                                                    onChange={e => setCustom({ barrier: +e.target.value })}
-                                                    disabled={running}
-                                                >
-                                                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(d => (
-                                                        <option key={d} value={d}>
-                                                            Over {d} · {fmt(overChance(d) * 100, 0)}%
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </label>
-                                            <label className='kapa-field'>
-                                                <span>Recovery prediction</span>
-                                                <select
-                                                    value={s.custom.recovery}
-                                                    onChange={e => setCustom({ recovery: +e.target.value })}
-                                                    disabled={running}
-                                                >
-                                                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(d => (
-                                                        <option key={d} value={d}>
-                                                            Over {d}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </label>
-                                            <label className='kapa-field'>
-                                                <span>Recovery mode</span>
-                                                <select
-                                                    value={s.custom.recMode}
-                                                    onChange={e =>
-                                                        setCustom({
-                                                            recMode: e.target.value as TSettings['custom']['recMode'],
-                                                        })
-                                                    }
-                                                    disabled={running}
-                                                >
-                                                    <option value='none'>None</option>
-                                                    <option value='mult'>Multiply stake</option>
-                                                    <option value='recover'>Win back losses</option>
-                                                    <option value='target'>Bold play to the target</option>
-                                                </select>
-                                            </label>
-                                            <label className='kapa-field'>
-                                                <span>Multiplier</span>
-                                                <input
-                                                    type='number'
-                                                    min={1}
-                                                    max={5}
-                                                    step={0.1}
-                                                    value={s.custom.martingale}
-                                                    onChange={e => setCustom({ martingale: +e.target.value })}
-                                                    disabled={running}
-                                                />
-                                            </label>
-                                        </>
-                                    ) : (
-                                        <p className='kapa-dim kapa-grid2__full'>
-                                            Choose “Custom” in Strategy to set your own prediction and recovery rules.
-                                        </p>
-                                    )}
                                     <label className='kapa-field'>
-                                        <span>Maximum stake</span>
+                                        <span>Stop-loss ({currency})</span>
                                         <input
                                             type='number'
-                                            min={0.35}
+                                            inputMode='decimal'
+                                            min={0.01}
                                             step={0.01}
-                                            value={s.maxStake}
-                                            onChange={num('maxStake')}
-                                            disabled={running}
-                                        />
-                                    </label>
-                                    <label className='kapa-field'>
-                                        <span>Stop after N losses in a row</span>
-                                        <input
-                                            type='number'
-                                            min={1}
-                                            max={20}
-                                            step={1}
-                                            placeholder='Strategy default'
-                                            value={s.maxLosses ?? ''}
+                                            value={s.stopLoss}
                                             onChange={e =>
                                                 update({
-                                                    maxLosses:
-                                                        e.target.value === ''
-                                                            ? null
-                                                            : Math.max(1, Math.floor(+e.target.value)),
+                                                    stopLoss: +e.target.value,
+                                                    ...(s.strategy !== 'fixed'
+                                                        ? { maxStake: Math.max(+e.target.value, s.stake) }
+                                                        : {}),
                                                 })
                                             }
                                             disabled={running}
                                         />
                                     </label>
                                     <label className='kapa-field'>
-                                        <span>Max trades (0 = no limit)</span>
-                                        <input
-                                            type='number'
-                                            min={0}
-                                            step={1}
-                                            value={s.maxRuns}
-                                            onChange={num('maxRuns')}
+                                        <span>Strategy</span>
+                                        <select
+                                            value={s.strategy}
+                                            onChange={e => chooseStrategy(e.target.value as TStrategy)}
                                             disabled={running}
-                                        />
+                                        >
+                                            {(Object.keys(STRATEGIES) as TPresetKey[]).map(k => (
+                                                <option key={k} value={k}>
+                                                    {!isPremium && STRATEGIES[k].premium ? '🔒 ' : ''}
+                                                    {STRATEGIES[k].label}
+                                                </option>
+                                            ))}
+                                            {(isPremium || s.strategy === 'custom') && (
+                                                <option value='custom'>Custom · my own rules (advanced settings)</option>
+                                            )}
+                                        </select>
                                     </label>
                                     <label className='kapa-field'>
-                                        <span>Maximum Deriv margin (%)</span>
-                                        <input
-                                            type='number'
-                                            min={1}
-                                            max={50}
-                                            step={0.5}
-                                            value={s.maxMargin}
-                                            onChange={num('maxMargin')}
+                                        <span>Market</span>
+                                        <select
+                                            value={s.symbol}
+                                            onChange={e => update({ symbol: e.target.value })}
                                             disabled={running}
-                                        />
+                                        >
+                                            {Object.entries(MARKETS).map(([k, v]) => (
+                                                <option key={k} value={k}>
+                                                    {v}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </label>
-                                    <label className='kapa-field'>
-                                        <span>Daily loss limit (% of balance)</span>
-                                        <input
-                                            type='number'
-                                            min={1}
-                                            max={100}
-                                            step={1}
-                                            value={s.dailyLossPct}
-                                            onChange={num('dailyLossPct')}
-                                            disabled={running}
-                                        />
-                                    </label>
-                                    <label className='kapa-field'>
-                                        <span>Pause between trades (s)</span>
-                                        <input
-                                            type='number'
-                                            min={0}
-                                            step={0.5}
-                                            value={s.delay}
-                                            onChange={num('delay')}
-                                            disabled={running}
-                                        />
-                                    </label>
-                                </div>
-                            )}
 
-                            {halfRatios[halfKey] != null && (
-                                <p className={halfMargin > 0.03 ? 'kapa-warnbox' : 'kapa-dim'}>
-                                    On your connection Deriv pays +{fmt(halfRatio * 100, 1)}% on {keyLabel(halfKey)}: it keeps{' '}
-                                    {fmt(halfMargin * 100, 1)}% of each stake
-                                    {halfMargin > 0.03
-                                        ? ` (Deriv's public price keeps 2.35%). Every strategy loses faster at this price; an app markup set on developers.deriv.com is the usual cause.`
-                                        : ", Deriv's normal price."}
-                                </p>
-                            )}
-                            <div className='kapa-plan'>
-                                <div className='kapa-plan__head'>
-                                    <span>Session plan</span>
-                                    <small>{plan ? planNote : ''}</small>
+                                    <button
+                                        className='kapa-link'
+                                        type='button'
+                                        onClick={() => (isPremium ? setShowAdvanced(v => !v) : openPremium())}
+                                    >
+                                        {!isPremium
+                                            ? '🔒 Advanced settings (Premium)'
+                                            : `${showAdvanced ? 'Hide' : 'Show'} advanced settings`}
+                                    </button>
+                                    {showAdvanced && isPremium && (
+                                        <div className='kapa-grid2'>
+                                            {s.strategy === 'custom' ? (
+                                                <>
+                                                    <label className='kapa-field'>
+                                                        <span>Prediction (Over)</span>
+                                                        <select
+                                                            value={s.custom.barrier}
+                                                            onChange={e => setCustom({ barrier: +e.target.value })}
+                                                            disabled={running}
+                                                        >
+                                                            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(d => (
+                                                                <option key={d} value={d}>
+                                                                    Over {d} · {fmt(overChance(d) * 100, 0)}%
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </label>
+                                                    <label className='kapa-field'>
+                                                        <span>Recovery prediction</span>
+                                                        <select
+                                                            value={s.custom.recovery}
+                                                            onChange={e => setCustom({ recovery: +e.target.value })}
+                                                            disabled={running}
+                                                        >
+                                                            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(d => (
+                                                                <option key={d} value={d}>
+                                                                    Over {d}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </label>
+                                                    <label className='kapa-field'>
+                                                        <span>Recovery mode</span>
+                                                        <select
+                                                            value={s.custom.recMode}
+                                                            onChange={e =>
+                                                                setCustom({
+                                                                    recMode: e.target.value as TSettings['custom']['recMode'],
+                                                                })
+                                                            }
+                                                            disabled={running}
+                                                        >
+                                                            <option value='none'>None</option>
+                                                            <option value='mult'>Multiply stake</option>
+                                                            <option value='recover'>Win back losses</option>
+                                                            <option value='target'>Bold play to the target</option>
+                                                        </select>
+                                                    </label>
+                                                    <label className='kapa-field'>
+                                                        <span>Multiplier</span>
+                                                        <input
+                                                            type='number'
+                                                            min={1}
+                                                            max={5}
+                                                            step={0.1}
+                                                            value={s.custom.martingale}
+                                                            onChange={e => setCustom({ martingale: +e.target.value })}
+                                                            disabled={running}
+                                                        />
+                                                    </label>
+                                                </>
+                                            ) : (
+                                                <p className='kapa-dim kapa-grid2__full'>
+                                                    Choose “Custom” in Strategy to set your own prediction and recovery rules.
+                                                </p>
+                                            )}
+                                            <label className='kapa-field'>
+                                                <span>Maximum stake</span>
+                                                <input
+                                                    type='number'
+                                                    min={0.35}
+                                                    step={0.01}
+                                                    value={s.maxStake}
+                                                    onChange={num('maxStake')}
+                                                    disabled={running}
+                                                />
+                                            </label>
+                                            <label className='kapa-field'>
+                                                <span>Stop after N losses in a row</span>
+                                                <input
+                                                    type='number'
+                                                    min={1}
+                                                    max={20}
+                                                    step={1}
+                                                    placeholder='Strategy default'
+                                                    value={s.maxLosses ?? ''}
+                                                    onChange={e =>
+                                                        update({
+                                                            maxLosses:
+                                                                e.target.value === ''
+                                                                    ? null
+                                                                    : Math.max(1, Math.floor(+e.target.value)),
+                                                        })
+                                                    }
+                                                    disabled={running}
+                                                />
+                                            </label>
+                                            <label className='kapa-field'>
+                                                <span>Max trades (0 = no limit)</span>
+                                                <input
+                                                    type='number'
+                                                    min={0}
+                                                    step={1}
+                                                    value={s.maxRuns}
+                                                    onChange={num('maxRuns')}
+                                                    disabled={running}
+                                                />
+                                            </label>
+                                            <label className='kapa-field'>
+                                                <span>Maximum Deriv margin (%)</span>
+                                                <input
+                                                    type='number'
+                                                    min={1}
+                                                    max={50}
+                                                    step={0.5}
+                                                    value={s.maxMargin}
+                                                    onChange={num('maxMargin')}
+                                                    disabled={running}
+                                                />
+                                            </label>
+                                            <label className='kapa-field'>
+                                                <span>Daily loss limit (% of balance)</span>
+                                                <input
+                                                    type='number'
+                                                    min={1}
+                                                    max={100}
+                                                    step={1}
+                                                    value={s.dailyLossPct}
+                                                    onChange={num('dailyLossPct')}
+                                                    disabled={running}
+                                                />
+                                            </label>
+                                            <label className='kapa-field'>
+                                                <span>Pause between trades (s)</span>
+                                                <input
+                                                    type='number'
+                                                    min={0}
+                                                    step={0.5}
+                                                    value={s.delay}
+                                                    onChange={num('delay')}
+                                                    disabled={running}
+                                                />
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
-                                {plan ? (
-                                    <>
-                                        <div className='kapa-plan__grid'>
-                                            <div>
-                                                <small>Reaches take-profit</small>
-                                                <b>{fmt(plan.hit * 100, 0)}%</b>
-                                            </div>
-                                            <div>
-                                                <small>Stops at a loss</small>
-                                                <b className='kapa-down'>{fmt(plan.bust * 100, 0)}%</b>
-                                            </div>
-                                            <div>
-                                                <small>Average result</small>
-                                                <b className={plan.avg >= 0 ? 'kapa-up' : 'kapa-down'}>
-                                                    {signed(plan.avg)}
-                                                </b>
-                                            </div>
-                                            <div>
-                                                <small>Typical trades</small>
-                                                <b>{plan.median}</b>
-                                            </div>
-                                        </div>
-                                        <div className='kapa-plan__bar'>
-                                            <i style={{ width: `${plan.hit * 100}%` }} />
-                                            <i style={{ width: `${plan.bust * 100}%` }} />
-                                        </div>
-                                        <p className='kapa-plan__text'>
-                                            Out of 100 sessions like this, about {Math.round(plan.hit * 100)} reach +
-                                            {fmt(s.takeProfit)} {currency}
-                                            {plan.bust > 0.005
-                                                ? ` and about ${Math.round(plan.bust * 100)} stop at a loss, losing ${fmt(Math.abs(plan.bustAvg))} ${currency} on average.`
-                                                : '.'}{' '}
-                                            Averaged over many sessions, that is {signed(plan.avg)} {currency} per
-                                            session.
-                                            {plan.contract &&
-                                                ` KAPA AI trades ${keyLabel(plan.contract)}, the contract Deriv pays best here.`}
-                                            {plan.avg < 0 &&
-                                                ' Every Deriv contract pays a little under its true odds, so no strategy makes the long-run average positive: KAPA AI keeps it as close to zero as possible and never lets one session lose more than its stop-loss.'}
+                                <div className='kapa-settings__side'>
+                                    {halfRatios[halfKey] != null && (
+                                        <p className={halfMargin > 0.03 ? 'kapa-warnbox' : 'kapa-dim'}>
+                                            On your connection Deriv pays +{fmt(halfRatio * 100, 1)}% on {keyLabel(halfKey)}: it keeps{' '}
+                                            {fmt(halfMargin * 100, 1)}% of each stake
+                                            {halfMargin > 0.03
+                                                ? ` (Deriv's public price keeps 2.35%). Every strategy loses faster at this price; an app markup set on developers.deriv.com is the usual cause.`
+                                                : ", Deriv's normal price."}
                                         </p>
-                                    </>
-                                ) : (
-                                    <p className='kapa-plan__text'>{planNote || 'Computing the plan…'}</p>
-                                )}
+                                    )}
+                                    <div className='kapa-plan'>
+                                        <div className='kapa-plan__head'>
+                                            <span>Session plan</span>
+                                            <small>{plan ? planNote : ''}</small>
+                                        </div>
+                                        {plan ? (
+                                            <>
+                                                <div className='kapa-plan__grid'>
+                                                    <div>
+                                                        <small>Reaches take-profit</small>
+                                                        <b>{fmt(plan.hit * 100, 0)}%</b>
+                                                    </div>
+                                                    <div>
+                                                        <small>Stops at a loss</small>
+                                                        <b className='kapa-down'>{fmt(plan.bust * 100, 0)}%</b>
+                                                    </div>
+                                                    <div>
+                                                        <small>Average result</small>
+                                                        <b className={plan.avg >= 0 ? 'kapa-up' : 'kapa-down'}>
+                                                            {signed(plan.avg)}
+                                                        </b>
+                                                    </div>
+                                                    <div>
+                                                        <small>Typical trades</small>
+                                                        <b>{plan.median}</b>
+                                                    </div>
+                                                </div>
+                                                <div className='kapa-plan__bar'>
+                                                    <i style={{ width: `${plan.hit * 100}%` }} />
+                                                    <i style={{ width: `${plan.bust * 100}%` }} />
+                                                </div>
+                                                <p className='kapa-plan__text'>
+                                                    Out of 100 sessions like this, about {Math.round(plan.hit * 100)} reach +
+                                                    {fmt(s.takeProfit)} {currency}
+                                                    {plan.bust > 0.005
+                                                        ? ` and about ${Math.round(plan.bust * 100)} stop at a loss, losing ${fmt(Math.abs(plan.bustAvg))} ${currency} on average.`
+                                                        : '.'}{' '}
+                                                    Averaged over many sessions, that is {signed(plan.avg)} {currency} per
+                                                    session.
+                                                    {plan.contract &&
+                                                        ` KAPA AI trades ${keyLabel(plan.contract)}, the contract Deriv pays best here.`}
+                                                    {plan.avg < 0 &&
+                                                        ' Every Deriv contract pays a little under its true odds, so no strategy makes the long-run average positive: KAPA AI keeps it as close to zero as possible and never lets one session lose more than its stop-loss.'}
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <p className='kapa-plan__text'>{planNote || 'Computing the plan…'}</p>
+                                        )}
+                                    </div>
+                                    <LabPanel
+                                        api={derivApi}
+                                        s={s}
+                                        balance={balance}
+                                        currency={currency}
+                                        logged_in={logged_in}
+                                    />
+                                </div>
                             </div>
-                            <LabPanel
-                                api={derivApi}
-                                s={s}
-                                balance={balance}
-                                currency={currency}
-                                logged_in={logged_in}
-                            />
                         </div>
                         <div className='kapa-settings__foot'>
                             <button

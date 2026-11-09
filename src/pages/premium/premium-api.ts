@@ -37,9 +37,28 @@ const savePass = (pass: string | null) => {
     }
 };
 
+// A random id for this device, sent with Premium code attempts: the server slows down a device that keeps
+// entering wrong codes without blocking everyone who shares its address (mobile networks). Not personal data.
+const DEVICE_KEY = 'kapa_device_id';
+const deviceId = (): string | null => {
+    try {
+        let id = localStorage.getItem(DEVICE_KEY);
+        if (!id || !/^[\w-]{8,64}$/.test(id)) {
+            const b = new Uint8Array(12);
+            crypto.getRandomValues(b);
+            id = `d-${Array.from(b, x => x.toString(16).padStart(2, '0')).join('')}`;
+            localStorage.setItem(DEVICE_KEY, id);
+        }
+        return id;
+    } catch {
+        return null;
+    }
+};
+
 const callOnce = async (path: string, init: RequestInit = {}, timeoutMs = path === '/scan' ? 30000 : 15000) => {
     const token = accessToken();
     const pass = readPass();
+    const device = path === '/premium/unlock' ? deviceId() : null;
     const where = path.split('?')[0];
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -52,6 +71,7 @@ const callOnce = async (path: string, init: RequestInit = {}, timeoutMs = path =
                 ...(init.headers || {}),
                 ...(token ? { authorization: `Bearer ${token}` } : {}),
                 ...(pass ? { 'x-kapa-pass': pass } : {}),
+                ...(device ? { 'x-kapa-device': device } : {}),
                 ...(init.body ? { 'content-type': 'application/json' } : {}),
             },
         });
@@ -100,6 +120,24 @@ export type TPlan = { price: number; currency: string; days: number; configured:
 
 export const fetchPlan = (): Promise<TPlan> => call('/plan');
 
+// While the Premium server can't be reached, Premium shows as unavailable (never as unlocked) and the
+// check is repeated by itself: after 15 s, 30 s, 1 min... at most every 5 minutes
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryDelay = 15000;
+const retryLater = () => {
+    if (retryTimer) return;
+    retryTimer = setTimeout(() => {
+        retryTimer = null;
+        refreshEntitlement();
+    }, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 5 * 60 * 1000);
+};
+const reachable = () => {
+    retryDelay = 15000;
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = null;
+};
+
 /** Refreshes the shared Premium state: asks the server whether this device's pass is still valid. */
 export const refreshEntitlement = async () => {
     if (!premiumEnabled()) return setPremium({ status: 'off' });
@@ -107,6 +145,7 @@ export const refreshEntitlement = async () => {
     setPremium({ status: 'checking' });
     try {
         const r = await call('/premium/status');
+        reachable();
         if (r?.status === 'active' && typeof r.pass === 'string' && /^[\w-]+\.[\w-]+$/.test(r.pass)) {
             savePass(r.pass);
             setPremium({ status: 'active', plan: 'premium' });
@@ -116,12 +155,14 @@ export const refreshEntitlement = async () => {
         }
     } catch (e: any) {
         if (e?.status === 401 || e?.status === 402 || e?.status === 403) {
+            reachable();
             savePass(null);
             setPremium({ status: 'inactive' });
         } else {
-            // The server didn't answer this time. Keep the pass: the server still checks it on every
-            // Premium request, so this never opens anything by itself.
-            setPremium({ status: 'active', plan: 'premium' });
+            // The server didn't answer. The pass is kept (only the server can say it is no longer valid),
+            // but Premium is not shown as unlocked until the server confirms it.
+            setPremium({ status: 'unavailable' });
+            retryLater();
         }
     }
 };
@@ -206,6 +247,8 @@ const settingsBody = (s: TSettings) => ({
 export const remotePolicy = (s: TSettings, ratios: TPayoutRatios): TPolicy => {
     let session = '';
     return {
+        // The server enforces these too; the page checks them again before every buy
+        limits: { stopLoss: s.stopLoss, maxStake: Math.max(s.maxStake, 0.35) },
         start: async () => {
             const r = await post('/session/start', { ...settingsBody(s), ratios });
             session = r.session;

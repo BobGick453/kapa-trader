@@ -241,7 +241,7 @@ export const classicDecide = (
         // After a loss: the contract and bold stake with the best chance of still reaching the target
         const key = apexPick(s, st.pl, r);
         const need = ceil2(Math.max(0.35, (s.takeProfit - st.pl) / ratioOf(key, r)));
-        const amount = Math.floor(Math.min(need, s.maxStake, room) * 100) / 100;
+        const amount = Math.floor(Math.min(need, s.maxStake, room) * 100 + 1e-9) / 100; // epsilon: 1.15 stays 1.15
         if (amount < 0.35) return { stop: 'sl', reason: 'Not enough room left above the stop-loss for the minimum stake.' };
         const [type, b] = key.split(':');
         return { trade: { contract_type: type as any, barrier: b === undefined ? null : Number(b), amount, symbol: '', duration: 1, recovery: true } };
@@ -296,6 +296,7 @@ export const classicPolicy = (
         return { stop: 'runs', reason: 'No entry signal for two minutes. Session ended.' };
     };
     return {
+        limits: { stopLoss: s.stopLoss, maxStake: s.maxStake },
         start: decide,
         next: async (r: { buy_price: number; profit: number }, live: TPayoutRatios) => {
             Object.assign(ratios, live);

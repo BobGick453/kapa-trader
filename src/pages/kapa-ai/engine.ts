@@ -153,7 +153,11 @@ export const overChance = (b: number) => (9 - b) / 10;
 export const estRatio = (b: number) => estRatioOf(`DIGITOVER:${b}`);
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
-const floor2 = (n: number) => Math.floor(n * 100) / 100;
+/**
+ * Rounds down to the cent. The small epsilon keeps exact cents exact: in floating point 1.15 * 100 is
+ * 114.99999999999999, which a plain floor would turn into 1.14 (same rounding as the server's).
+ */
+export const floor2 = (n: number) => Math.floor(n * 100 + 1e-9) / 100;
 
 /** Reads saved settings, dropping anything from older versions that no longer fits. */
 export const sanitizeSettings = (raw: any): TSettings => {
@@ -319,26 +323,61 @@ export const validate = (s: TSettings, balance: number) => {
 };
 
 // ---------- Daily loss limit (per Deriv account, on this device) ----------
+/** The day of the daily loss limit is Deriv's day: it starts at 00:00 GMT. */
+export const DAY_RESET_NOTE = 'The day resets at 00:00 GMT.';
+export const dailyLimitReachedText = (pct: number) =>
+    `Today's loss limit (${pct}% of your balance) is reached. KAPA AI pauses until 00:00 GMT to protect your capital.`;
+export const dailyLimitLeftText = (room: number, currency: string) =>
+    `Only ${room.toFixed(2)} ${currency} of today's loss limit is left: less than one stake. KAPA AI pauses until 00:00 GMT.`;
+export const dailyLimitLoweredText = (room: number, currency: string) =>
+    `Stop-loss lowered to ${room.toFixed(2)} ${currency} for this session: what today's loss limit still allows (the day resets at 00:00 GMT).`;
+
 type TDay = { date: string; start: number; pl: number };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date().toISOString().slice(0, 10); // GMT date
 const dayKey = (loginid: string) => `kapa_day_${loginid}`;
-export const readDay = (loginid: string, balance: number): TDay => {
+const saveDay = (loginid: string, d: TDay) => {
+    try {
+        localStorage.setItem(dayKey(loginid), JSON.stringify(d));
+    } catch {
+        /* the limit then covers this visit only */
+    }
+};
+const storedDay = (loginid: string): TDay | null => {
     try {
         const d = JSON.parse(localStorage.getItem(dayKey(loginid)) || 'null');
         if (d?.date === today() && d.start > 0 && Number.isFinite(d.pl)) return d;
     } catch {
         /* storage unavailable: today starts now */
     }
-    return { date: today(), start: balance, pl: 0 };
+    return null;
 };
-export const addDayResult = (loginid: string, balance: number, pl: number) => {
+export const readDay = (loginid: string, balance: number): TDay => storedDay(loginid) ?? { date: today(), start: balance, pl: 0 };
+// What each running session has already added trade by trade, per account, so that the session total
+// added when it ends (addDayResult) is not counted twice
+const addedLive = new Map<string, number>();
+/**
+ * At the start of a session: starts today's record with the balance before the day's first trade (if today
+ * has none yet), and starts counting what this session adds trade by trade.
+ */
+export const startDay = (loginid: string, balance: number) => {
+    if (!storedDay(loginid) && balance > 0) saveDay(loginid, { date: today(), start: balance, pl: 0 });
+    addedLive.set(loginid, 0);
+};
+/** Adds one settled trade to today's result, as soon as it settles (a closed tab can't skip it). */
+export const addDayTrade = (loginid: string, balance: number, profit: number) => {
     const d = readDay(loginid, balance);
-    d.pl = round2(d.pl + pl);
-    try {
-        localStorage.setItem(dayKey(loginid), JSON.stringify(d));
-    } catch {
-        /* the limit then covers this visit only */
-    }
+    d.pl = round2(d.pl + profit);
+    saveDay(loginid, d);
+    addedLive.set(loginid, round2((addedLive.get(loginid) ?? 0) + profit));
+};
+/** Adds a finished session's result to today's, minus what its trades already added. */
+export const addDayResult = (loginid: string, balance: number, pl: number) => {
+    const rest = round2(pl - (addedLive.get(loginid) ?? 0));
+    addedLive.delete(loginid);
+    if (!rest) return;
+    const d = readDay(loginid, balance);
+    d.pl = round2(d.pl + rest);
+    saveDay(loginid, d);
 };
 /** What may still be lost today, or 0 when the day's limit is reached. */
 export const dailyRoom = (s: TSettings, loginid: string, balance: number) => {
@@ -365,6 +404,8 @@ export type TPayoutRatios = Record<string, number>;
 
 /** A strategy: says what to trade first, then what to trade after each settled contract. */
 export type TPolicy = {
+    /** The session's limits: KAPA AI never stakes past them, whatever the strategy asks */
+    limits?: { stopLoss: number; maxStake: number };
     start: () => Promise<TDecision>;
     next: (result: TContractResult, ratios: TPayoutRatios) => Promise<TDecision>;
 };
@@ -394,6 +435,7 @@ export const fixedPolicy = (s: TSettings, initial: TPayoutRatios): TPolicy => {
         };
     };
     return {
+        limits: { stopLoss: s.stopLoss, maxStake: s.maxStake },
         start: async () => decide(),
         next: async (r, live) => {
             Object.assign(ratios, live);
@@ -448,18 +490,43 @@ export type TEngineEvents = {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const ALLOWED_TYPES: TContractType[] = ['DIGITOVER', 'DIGITUNDER', 'DIGITEVEN', 'DIGITODD', 'DIGITMATCH', 'DIGITDIFF'];
+/** The Deriv account the app is on (the same id the page keys today's loss record by). */
+const activeAccount = () => {
+    try {
+        return localStorage.getItem('active_loginid') || 'demo';
+    } catch {
+        return 'demo';
+    }
+};
+/** A request that gives up after `ms` (a send on a dropped connection may never answer). */
+const within = <T,>(p: Promise<T>, ms: number): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
+        p,
+        new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('timeout')), ms);
+        }),
+    ]).finally(() => clearTimeout(timer));
+};
+
+/** How long KAPA AI keeps asking Deriv for the result of a contract when the connection drops. */
+export const SETTLE_GIVE_UP_MS = 10 * 60 * 1000;
 
 /** Runs one session: asks the strategy for each trade until it says stop, an error occurs or the user presses Stop. */
 export class KapaEngine {
     running = false;
     private stopRequested = false;
     private sessionPl = 0;
+    /** Shortened in tests */
+    settleCheckMs = 5000;
+    settleGiveUpMs = SETTLE_GIVE_UP_MS;
 
     constructor(
         private api: TApi,
         private currency: () => string,
         private balance: () => number,
-        private ev: TEngineEvents
+        private ev: TEngineEvents,
+        private account: () => string = activeAccount
     ) {}
 
     requestStop() {
@@ -468,10 +535,23 @@ export class KapaEngine {
 
     async run(
         policy: TPolicy,
-        opts: { name: string; delay: number; stake: number; takeProfit: number; stopLoss: number; symbol: string }
+        opts: {
+            name: string;
+            delay: number;
+            stake: number;
+            takeProfit: number;
+            stopLoss: number;
+            symbol: string;
+            maxStake?: number;
+        }
     ) {
         if (this.running) return;
         Object.assign(this, { running: true, stopRequested: false, sessionPl: 0 });
+        const account = this.account();
+        startDay(account, this.balance());
+        // Never past these, whatever the strategy (or the server) asks
+        const stopLoss = Math.min(opts.stopLoss, policy.limits?.stopLoss ?? Infinity);
+        const maxStake = Math.min(opts.maxStake ?? Infinity, policy.limits?.maxStake ?? Infinity, stopLoss);
         this.ev.onStatus('Bot is starting', 'starting');
         this.ev.onLog(
             `KAPA AI started · ${opts.name} on ${opts.symbol} · stake ${opts.stake} · take-profit ${opts.takeProfit} · stop-loss ${opts.stopLoss}`,
@@ -496,15 +576,32 @@ export class KapaEngine {
                 !ALLOWED_TYPES.includes(o.contract_type) ||
                 (needsBarrier(o.contract_type) && !(Number.isInteger(o.barrier) && o.barrier! >= 0 && o.barrier! <= 9)) ||
                 !MARKETS[o.symbol] ||
-                !(o.duration >= 1 && o.duration <= 10)
+                !(o.duration >= 1 && o.duration <= 10) ||
+                !(o.amount > 0)
             )
                 return stop('Unexpected order from the strategy', 'error');
+            // Never more than the balance, the room left above the stop-loss or the maximum stake
+            const room = round2(stopLoss + this.sessionPl);
+            const cap = Math.min(this.balance(), room, maxStake);
+            const amount = floor2(Math.min(o.amount, cap));
+            if (amount < 0.35)
+                return stop(
+                    room < 0.35
+                        ? 'Not enough room left above the stop-loss for the minimum stake.'
+                        : 'Balance too low for the next stake',
+                    'sl'
+                );
+            if (o.amount > cap + 0.005)
+                this.ev.onLog(
+                    `The strategy asked for a stake of ${o.amount.toFixed(2)}: KAPA AI staked ${amount.toFixed(2)}, the most your ${
+                        cap === room ? 'stop-loss' : cap === maxStake ? 'maximum stake' : 'balance'
+                    } allows.`,
+                    'warn'
+                );
+            else if (o.capped)
+                this.ev.onLog(`Recovery stake capped at ${amount} by the maximum stake or the stop-loss`, 'warn');
+            let bought: { id: number; stake: number } | null = null;
             try {
-                // Never stake more than the balance, whatever the strategy asks
-                const amount = floor2(Math.min(o.amount, this.balance()));
-                if (amount < 0.35) return stop('Balance too low for the next stake', 'sl');
-                if (o.capped)
-                    this.ev.onLog(`Recovery stake capped at ${amount} by the maximum stake or the stop-loss`, 'warn');
                 this.ev.onStatus(
                     o.recovery ? `Recovery · ${contractLabel(o.contract_type, o.barrier)}` : 'Buying contract',
                     'buying'
@@ -514,10 +611,12 @@ export class KapaEngine {
                 );
                 if (prop?.error) throw new Error(prop.error.message);
                 const ask = +prop.proposal.ask_price;
+                if (ask > amount + 0.005) throw new Error(`Deriv asked ${ask} for a stake of ${amount}: not bought.`);
                 const ratio = ask > 0 ? (+prop.proposal.payout - ask) / ask : undefined;
                 const buyRes = await this.api.send({ buy: prop.proposal.id, price: prop.proposal.ask_price });
                 if (buyRes?.error) throw new Error(buyRes.error.message);
                 const c = buyRes.buy;
+                bought = { id: c.contract_id, stake: +c.buy_price };
                 this.ev.onLog(`Bought #${c.contract_id} for ${c.buy_price}: ${c.longcode ?? ''}`, 'info');
                 this.ev.onStatus('Contract bought', 'bought');
                 const live: TLiveContract = {
@@ -533,35 +632,65 @@ export class KapaEngine {
                 };
                 this.ev.onContract(live);
                 const poc = await this.settle(c.contract_id, live);
-                const profit = this.record(o, c, poc);
+                const profit = this.record(o, c, poc, account);
+                bought = null;
                 if (this.running && opts.delay) await sleep(opts.delay * 1000);
                 d = await policy.next(
                     { contract_id: c.contract_id, buy_price: +poc.buy_price, profit },
                     ratio ? { [contractKey(o.contract_type, o.barrier)]: ratio } : {}
                 );
             } catch (e: any) {
+                if (bought) {
+                    // Deriv never reported this contract's result: count its stake as lost, so the stop-loss and
+                    // today's loss limit stay on the safe side, and say where to check it
+                    this.sessionPl = round2(this.sessionPl - bought.stake);
+                    addDayTrade(account, this.balance(), -bought.stake);
+                    this.ev.onLog(
+                        `Contract #${bought.id}: no result from Deriv. Its stake (${bought.stake.toFixed(2)}) is counted as lost here until you check it in Reports on Deriv.`,
+                        'error'
+                    );
+                }
                 this.ev.onLog(`Trade error: ${e?.message ?? e}`, 'error');
                 return stop(`Error: ${e?.message ?? e}`, 'error');
             }
         }
     }
 
+    /**
+     * Waits for a contract's result. Follows Deriv's open-contract stream; when it goes quiet (for example
+     * the connection dropped and the app reconnected), asks Deriv again for the contract, then for the
+     * account's recent results, until the result comes or SETTLE_GIVE_UP_MS has passed.
+     */
     private settle(contractId: number, live: TLiveContract): Promise<any> {
         return new Promise((resolve, reject) => {
             let done = false;
+            let sub: { unsubscribe: () => void } | null = null;
             let subId: string | null = null;
+            let lastNews = Date.now();
+            let waitingSaid = false;
+            const started = Date.now();
+            const cleanup = () => {
+                done = true;
+                clearInterval(watch);
+                sub?.unsubscribe();
+                if (subId) this.api.send({ forget: subId }).catch(() => {});
+            };
             const finish = (poc: any) => {
                 if (done) return;
-                done = true;
-                clearTimeout(timer);
-                sub.unsubscribe();
-                if (subId) this.api.send({ forget: subId }).catch(() => {});
+                cleanup();
+                if (waitingSaid) this.ev.onLog(`Deriv reported the result of contract #${contractId}.`, 'success');
                 resolve(poc);
+            };
+            const fail = (e: Error) => {
+                if (done) return;
+                cleanup();
+                reject(e);
             };
             const handle = (raw: any) => {
                 const msg = raw?.data ?? raw;
                 const poc = msg?.proposal_open_contract;
                 if (done || !poc || poc.contract_id !== contractId) return;
+                lastNews = Date.now();
                 if (msg.subscription?.id) subId = msg.subscription.id;
                 if (poc.is_sold) return finish(poc);
                 this.ev.onContract({
@@ -572,44 +701,76 @@ export class KapaEngine {
                     tickNow: (poc.tick_stream || []).length,
                 });
             };
-            const sub = this.api.onMessage().subscribe(handle);
-            // A tick contract settles within seconds; give up after two minutes and point to Deriv's reports
-            const timer = setTimeout(() => {
-                if (done) return;
-                done = true;
-                sub.unsubscribe();
-                reject(new Error('No result for the open contract. Check Reports on Deriv.'));
-            }, 120000);
-            this.api
-                .send({ proposal_open_contract: 1, contract_id: contractId, subscribe: 1 })
-                .then((first: any) => {
-                    if (first?.error) {
-                        if (!done) {
-                            done = true;
-                            clearTimeout(timer);
-                            sub.unsubscribe();
-                            reject(new Error(first.error.message));
+            // (Re)subscribes on the app's current connection (a reconnection replaces it)
+            const follow = () => {
+                sub?.unsubscribe();
+                sub = this.api.onMessage().subscribe(handle);
+                this.api
+                    .send({ proposal_open_contract: 1, contract_id: contractId, subscribe: 1 })
+                    .then((first: any) => {
+                        if (first?.error) {
+                            if (first.error.code !== 'AlreadySubscribed' && Date.now() - started < 1000)
+                                fail(new Error(first.error.message));
+                            return;
                         }
-                        return;
-                    }
-                    handle(first);
-                })
-                .catch((e: any) => {
-                    if (!done) {
-                        done = true;
-                        clearTimeout(timer);
-                        sub.unsubscribe();
-                        reject(e);
-                    }
-                });
+                        handle(first);
+                    })
+                    .catch(() => {
+                        /* the watch below asks again */
+                    });
+            };
+            // The account's recent results, when Deriv no longer answers for the contract itself
+            const fromProfitTable = async () => {
+                const pt = await within(this.api.send({ profit_table: 1, description: 1, limit: 50, sort: 'DESC' }), 8000);
+                const row = (pt?.profit_table?.transactions || []).find((t: any) => +t.contract_id === contractId);
+                if (!row) return null;
+                const buy = +row.buy_price;
+                const sell = +row.sell_price;
+                return { contract_id: contractId, is_sold: 1, buy_price: buy, sell_price: sell, payout: +(row.payout ?? sell), profit: round2(sell - buy), sell_time: row.sell_time };
+            };
+            const check = async () => {
+                if (done) return;
+                const quiet = Date.now() - lastNews;
+                if (quiet < this.settleCheckMs + live.ticks * 2000) return;
+                if (Date.now() - started > this.settleGiveUpMs)
+                    return fail(
+                        new Error(
+                            `Deriv hasn't reported the result of contract #${contractId} for ${Math.max(1, Math.round(this.settleGiveUpMs / 60000))} minutes. Check Reports on Deriv.`
+                        )
+                    );
+                if (!waitingSaid) {
+                    waitingSaid = true;
+                    this.ev.onStatus(`Waiting for Deriv: result of contract #${contractId}`, 'bought');
+                    this.ev.onLog(
+                        `No news of contract #${contractId} from Deriv (connection lost?). The contract runs on Deriv anyway: KAPA AI keeps asking for its result.`,
+                        'warn'
+                    );
+                }
+                try {
+                    const r = await within(this.api.send({ proposal_open_contract: 1, contract_id: contractId }), 8000);
+                    if (done) return;
+                    const poc = r?.proposal_open_contract;
+                    if (poc?.is_sold) return finish(poc);
+                    if (r?.error) {
+                        const row = await fromProfitTable();
+                        if (row) return finish(row);
+                    } else follow(); // still open: follow it on the current connection
+                    lastNews = Date.now() - this.settleCheckMs / 2; // ask again soon
+                } catch {
+                    /* not connected yet: next check */
+                }
+            };
+            const watch = setInterval(check, 1000);
+            follow();
         });
     }
 
-    private record(o: TOrder, c: any, poc: any) {
+    private record(o: TOrder, c: any, poc: any, account: string) {
         const profit = +poc.profit;
         const won = profit > 0;
         const stake = +poc.buy_price;
         this.sessionPl = round2(this.sessionPl + profit);
+        addDayTrade(account, this.balance(), profit); // counts towards today's loss limit at once
         const t: TTrade = {
             id: c.contract_id,
             time: (poc.sell_time || Date.now() / 1000) * 1000,

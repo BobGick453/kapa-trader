@@ -71,6 +71,11 @@ const DEFAULT_BOTS = {
 };
 
 const PRESET_KEYS = ['apex', 'pegasus', 'martingale', 'recover'];
+/**
+ * Most losses in a row a session may take. Apex's default (30) is the value its real-tick backtests use;
+ * a run that long is rare, and every stake still fits under the stop-loss whatever this limit is.
+ */
+const MAX_LOSSES = 30;
 const BOT_KEYS = ['under7-dalembert', 'odd-oscars'];
 const MODES = ['target', 'double', 'recover', 'none'];
 
@@ -92,7 +97,7 @@ const loadRules = env => {
             MODES.includes(p.mode) &&
             Object.hasOwn(GROUPS, p.group) &&
             typeof p.martingale === 'number' && p.martingale >= 1 && p.martingale <= 5 &&
-            Number.isInteger(p.maxLosses) && p.maxLosses >= 1 && p.maxLosses <= 20;
+            Number.isInteger(p.maxLosses) && p.maxLosses >= 1 && p.maxLosses <= MAX_LOSSES;
         if (!ok) throw new Error(`PREMIUM_RULES: invalid preset ${k}`);
         presets[k] = { mode: p.mode, group: p.group, martingale: p.martingale, maxLosses: p.maxLosses };
     }
@@ -170,7 +175,8 @@ const validateSettings = (body, presets = DEFAULT_PRESETS) => {
     const stake = num(body.stake, 0.35, 50000);
     const takeProfit = num(body.takeProfit, 0.01, 1e7);
     const stopLoss = num(body.stopLoss, 0.35, 1e7);
-    const maxLosses = int(body.maxLosses ?? (Object.hasOwn(presets, preset) ? presets[preset].maxLosses : 6), 1, 20);
+    // The strategy's own limit unless the user sets one (a preset's default is always accepted)
+    const maxLosses = int(body.maxLosses ?? (Object.hasOwn(presets, preset) ? presets[preset].maxLosses : 6), 1, MAX_LOSSES);
     const maxRuns = int(body.maxRuns ?? 0, 0, 10000);
     // The most of each stake the user accepts Deriv keeping on their connection (default 12%)
     const maxMargin = num(body.maxMargin ?? 12, 1, 50);
@@ -559,7 +565,7 @@ const labStrategies = (presets, { stake, takeProfit, stopLoss, capital }) => {
  *
  * - Premium is unlocked with a secret code that the owner chooses and can change at any time
  *   (Admin page). The code is checked here, never in the website: a correct code returns a
- *   signed Premium pass, valid until the code changes. Repeated wrong codes lock the caller out.
+ *   signed Premium pass, valid until the code changes. Repeated wrong codes slow the caller down.
  * - Identifies traders by asking Deriv which accounts their OAuth access token belongs to.
  *   The token is used for that check only; it is never stored.
  * - Runs the Premium strategies: the website sends each settled contract and receives the
@@ -615,7 +621,7 @@ const corsHeaders = (req, env) => {
     if (!allowed.includes(origin)) return {};
     return {
         'access-control-allow-origin': origin,
-        'access-control-allow-headers': 'authorization, content-type, x-admin-secret, x-kapa-pass',
+        'access-control-allow-headers': 'authorization, content-type, x-admin-secret, x-kapa-pass, x-kapa-device',
         'access-control-allow-methods': 'GET, POST, OPTIONS',
         'access-control-max-age': '600',
         vary: 'Origin',
@@ -752,6 +758,51 @@ const currentCode = async env => {
         return { h, ver: `secret-${h.slice(0, 12)}`, source: 'secret' };
     }
     return null;
+};
+
+// ---------- Wrong-code throttle ----------
+// Mobile networks put many people behind one address, so a whole address is never locked for long:
+// - each device (address + the random id the website keeps on that device) gets 5 free wrong codes, then
+//   waits before each new try: 30 s, 1 min, 2 min... at most 15 min;
+// - an address only pauses when wrong codes flood in from it (30 within an hour): 15 min for everyone there.
+// With codes of 8+ characters that leaves far too few tries to guess one.
+const CODE_FREE_TRIES = 5;
+const CODE_MAX_WAIT = 15 * 60 * 1000;
+const CODE_FLOOD = 30;
+const DEVICE_ID = /^[\w-]{8,64}$/;
+const codeThrottleKeys = async (req, ip) => {
+    const device = req.headers.get('x-kapa-device') || '';
+    return {
+        ip: `codefail:${await sha256(ip)}`,
+        device: `codefail:${await sha256(`${ip}|${DEVICE_ID.test(device) ? device : '-'}`)}`,
+    };
+};
+/** Milliseconds this caller must still wait before trying a code, or 0. */
+const codeWait = async (env, keys) => {
+    const now = Date.now();
+    const [a, d] = await Promise.all([env.KAPA_KV.get(keys.ip, 'json'), env.KAPA_KV.get(keys.device, 'json')]);
+    return Math.max(0, (a?.until || 0) - now, (d?.until || 0) - now);
+};
+const codeFailed = async (env, keys) => {
+    const now = Date.now();
+    const [a, d] = await Promise.all([env.KAPA_KV.get(keys.ip, 'json'), env.KAPA_KV.get(keys.device, 'json')]);
+    const dn = (d?.n || 0) + 1;
+    const dev = { n: dn, until: dn > CODE_FREE_TRIES ? now + Math.min(CODE_MAX_WAIT, 30000 * 2 ** (dn - CODE_FREE_TRIES - 1)) : 0 };
+    const fresh = a && now - a.start < 3600000;
+    const an = fresh ? a.n + 1 : 1;
+    const addr = { n: an, start: fresh ? a.start : now, until: an >= CODE_FLOOD ? now + CODE_MAX_WAIT : 0 };
+    if (an >= CODE_FLOOD) Object.assign(addr, { n: 0, start: now }); // a new hour starts after the pause
+    await Promise.all([
+        env.KAPA_KV.put(keys.device, JSON.stringify(dev), { expirationTtl: 3600 }),
+        env.KAPA_KV.put(keys.ip, JSON.stringify(addr), { expirationTtl: 3600 }),
+    ]);
+};
+const tooManyCodes = ms => {
+    const s = Math.ceil(ms / 1000);
+    const when = s < 90 ? `${s} seconds` : `${Math.ceil(s / 60)} minutes`;
+    const res = fail(429, `Too many wrong codes. Check the code, then try again in ${when}.`);
+    res.headers.set('retry-after', String(s));
+    return res;
 };
 
 const issuePass = (env, ver) => signSession(env, { v: 1, typ: 'pass', ver, exp: Date.now() + PASS_TTL });
@@ -1086,19 +1137,20 @@ const handle = async (req, env) => {
 
     // ----- Premium code: unlock and check (no Deriv login needed) -----
     if (req.method === 'POST' && path === '/premium/unlock') {
-        if (rateLimited(`unlock:${ip}`, 10)) return fail(429, 'Too many attempts. Wait a minute.');
-        const lockKey = `codefail:${await sha256(ip)}`;
-        const fails = Number((await env.KAPA_KV.get(lockKey)) || 0);
-        if (fails >= 10) return fail(429, 'Too many wrong codes. Try again in an hour.');
+        if (rateLimited(`unlock:${ip}`, 40)) return fail(429, 'Too many attempts. Wait a minute.');
+        const keys = await codeThrottleKeys(req, ip);
+        const wait = await codeWait(env, keys);
+        if (wait) return tooManyCodes(wait);
         if (!env.SESSION_KEY || env.SESSION_KEY.length < 32) return fail(503, 'Premium is not set up yet');
         const code = await currentCode(env);
         if (!code) return fail(503, 'Premium is not set up yet');
         const body = await readJson(req);
         const given = normalizeCode(body?.code);
         if (!CODE_OK.test(given) || !(await safeEqual(await codeHash(env, given), code.h))) {
-            await env.KAPA_KV.put(lockKey, String(fails + 1), { expirationTtl: 3600 });
+            await codeFailed(env, keys);
             return fail(401, 'Wrong code. Check it and try again.');
         }
+        await env.KAPA_KV.delete(keys.device).catch(() => {});
         return json({ status: 'active', pass: await issuePass(env, code.ver), expiresAt: Date.now() + PASS_TTL });
     }
 

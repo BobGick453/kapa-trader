@@ -17,8 +17,8 @@ globalThis.fetch = async (url, init = {}) => {
   throw new Error('unexpected fetch ' + url);
 };
 let ipN = 1;
-const call = (method, path, { token, body, form, admin, pass, ip = '1.1.1.1', origin = 'https://bobgick453.github.io' } = {}) => {
-  const headers = { origin, 'cf-connecting-ip': ip }; if (token) headers.authorization = 'Bearer ' + token; if (admin) headers['x-admin-secret'] = admin; if (pass) headers['x-kapa-pass'] = pass;
+const call = (method, path, { token, body, form, admin, pass, device, ip = '1.1.1.1', origin = 'https://bobgick453.github.io' } = {}) => {
+  const headers = { origin, 'cf-connecting-ip': ip }; if (device) headers['x-kapa-device'] = device; if (token) headers.authorization = 'Bearer ' + token; if (admin) headers['x-admin-secret'] = admin; if (pass) headers['x-kapa-pass'] = pass;
   let b; if (body) { b = JSON.stringify(body); headers['content-type'] = 'application/json'; } if (form) b = new URLSearchParams(form);
   return worker.fetch(new Request('https://kapa-premium.example.workers.dev' + path, { method, headers, body: b }), env);
 };
@@ -62,10 +62,23 @@ r = await j(await call('GET', '/premium/status', { pass: pass1 })); ok(r.body.st
 r = await j(await call('POST', '/session/next', { token: 'alice-token-1234', pass: pass1, body: { session: sess, result: { contract_id: 7, buy_price: 2.2, profit: 2 } } })); ok(r.status === 402, 'a running session stops getting trades with the old pass');
 r = await j(await call('POST', '/premium/unlock', { body: { code: 'Kapa-2026-Gold' } })); ok(r.status === 401, 'the old code no longer works');
 r = await j(await call('POST', '/premium/unlock', { body: { code: 'new-code-0099' } })); ok(r.status === 200, 'the new code works');
-// --- brute force lockout ---
-for (let i = 0; i < 10; i++) await call('POST', '/premium/unlock', { ip: '9.9.9.9', body: { code: 'guess-' + i + '-xxxx' } });
-r = await j(await call('POST', '/premium/unlock', { ip: '9.9.9.9', body: { code: 'NEW-CODE-0099' } })); ok(r.status === 429, 'after 10 wrong codes, that address is locked for an hour (even with the right code)');
-r = await j(await call('POST', '/premium/unlock', { ip: '8.8.8.8', body: { code: 'NEW-CODE-0099' } })); ok(r.status === 200, 'other people are not affected');
+// --- wrong codes: a device slows down, a shared address (mobile network) stays open ---
+const guess = (i, o) => call('POST', '/premium/unlock', { ip: '9.9.9.9', ...o, body: { code: 'guess-' + i + '-xxxx' } });
+for (let i = 0; i < 5; i++) { r = await j(await guess(i, { device: 'phone-aaaa-1111' })); if (r.status !== 401) break; }
+ok(r.status === 401, 'the first 5 wrong codes from a device are answered normally');
+r = await j(await guess(5, { device: 'phone-aaaa-1111' })); ok(r.status === 401, 'the 6th wrong code is checked, then that device must wait');
+r = await j(await call('POST', '/premium/unlock', { ip: '9.9.9.9', device: 'phone-aaaa-1111', body: { code: 'NEW-CODE-0099' } }));
+ok(r.status === 429 && /30 seconds/.test(r.body.error) && r.headers.get('retry-after') === '30', 'then it waits 30 s, even with the right code: ' + r.body.error);
+r = await j(await call('POST', '/premium/unlock', { ip: '9.9.9.9', device: 'phone-bbbb-2222', body: { code: 'NEW-CODE-0099' } })); ok(r.status === 200, 'another phone on the same mobile network (same address) still unlocks at once');
+{ const k = [...store.keys()].find((x) => x.startsWith('codefail:') && JSON.parse(store.get(x)).until > 0); const v = JSON.parse(store.get(k)); v.until = Date.now() - 1; store.set(k, JSON.stringify(v)); }
+r = await j(await guess(6, { device: 'phone-aaaa-1111' })); ok(r.status === 401, 'after the wait the device may try again');
+r = await j(await call('POST', '/premium/unlock', { ip: '9.9.9.9', device: 'phone-aaaa-1111', body: { code: 'NEW-CODE-0099' } })); ok(r.status === 429 && /1 minutes|60 seconds/.test(r.body.error), 'each further wrong code doubles the wait: ' + r.body.error);
+// a flood from one address (brute force with changing device ids) pauses that address for 15 minutes
+let flood = 0; for (let i = 0; i < 40; i++) { r = await j(await guess(100 + i, { ip: '3.3.3.3', device: 'bot-device-' + String(i).padStart(4, '0') })); if (r.status === 429) { flood = i; break; } }
+ok(flood > 0 && flood <= 30 && /15 minutes/.test(r.body.error), `brute force from one address is stopped after ${flood} wrong codes: ${r.body?.error}`);
+r = await j(await call('POST', '/premium/unlock', { ip: '8.8.8.8', body: { code: 'NEW-CODE-0099' } })); ok(r.status === 200, 'other addresses are not affected');
+r = await j(await call('POST', '/premium/unlock', { ip: '9.9.9.9', device: 'phone-cccc-3333', body: { code: 'NEW-CODE-0099' } })); ok(r.status === 200, 'old-format lock entries and other devices on that address are fine');
+const corsDev = await call('OPTIONS', '/premium/unlock'); ok(/x-kapa-device/.test(corsDev.headers.get('access-control-allow-headers')), 'CORS allows the device header');
 // --- PREMIUM_CODE secret as first code ---
 store.delete('premium:code'); env.PREMIUM_CODE = 'first-code-777';
 r = await j(await call('POST', '/premium/unlock', { ip: '7.7.7.7', body: { code: 'FIRST-CODE-777' } })); ok(r.status === 200, 'PREMIUM_CODE secret works as the first code');
@@ -92,6 +105,33 @@ r = await j(await call('POST', '/session/start', { token: 'alice-token-1234', pa
 while (d.trade && cid < 330) { r = await j(await call('POST', '/session/next', { token: 'alice-token-1234', pass: P, body: { session: ss, result: { contract_id: cid++, buy_price: d.trade.amount, profit: -d.trade.amount } } })); ss = r.body.session; d = r.body.decision; }
 ok(d.stop && r.body.state.pl >= -5, `losing streak stops within the stop-loss (${r.body.state.pl})`);
 r = await j(await call('POST', '/session/next', { token: 'bob-token-12345', pass: P, body: { session: ss, result: { contract_id: 999, buy_price: 1, profit: -1 } } })); ok(r.status === 400, "Bob can't use Alice's session even with a valid pass");
+// --- KAPA Apex end to end, with the page's default settings (no "stop after N losses") ---
+{
+  const K = await import('../../server/strategy.js');
+  const R = Object.fromEntries(K.GROUPS.all.map((x) => [x, K.estRatio(x)])); // Deriv's public prices
+  const apexBody = { preset: 'apex', symbol: 'R_100', stake: 1, takeProfit: 10, stopLoss: 50, maxStake: 50, maxRuns: 0, maxMargin: 12, ratios: R };
+  r = await j(await call('POST', '/plan/simulate', { body: { ...apexBody, capital: 1000 } })); ok(r.status === 200 && r.body.hit > 0.7, `Apex plan works with default settings (target ${(r.body.hit * 100).toFixed(0)}%)`);
+  let seed = 7; const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const tally = { sessions: 0, tp: 0, sl: 0, other: 0, trades: 0, worst: 0, over: [] }; let cidA = 5000;
+  for (let n = 0; n < 16; n++) {
+    const allLose = n % 5 === 0; // some sessions lose every trade
+    r = await j(await call('POST', '/session/start', { token: 'alice-token-1234', pass: P, body: apexBody }));
+    if (r.status !== 200) { ok(false, 'Apex session starts with default settings: ' + JSON.stringify(r.body)); break; }
+    let sA = r.body.session; let dA = r.body.decision; let pl = 0;
+    while (dA.trade) {
+      const t = dA.trade; const key = t.barrier === null ? t.contract_type : `${t.contract_type}:${t.barrier}`;
+      if (t.amount > apexBody.maxStake + 1e-9 || t.amount > apexBody.stopLoss + pl + 1e-9) tally.over.push({ amount: t.amount, pl });
+      const won = !allLose && rnd() < K.winProb(key); const profit = won ? Math.round(t.amount * R[key] * 100) / 100 : -t.amount;
+      pl = Math.round((pl + profit) * 100) / 100; tally.trades++;
+      r = await j(await call('POST', '/session/next', { token: 'alice-token-1234', pass: P, body: { session: sA, result: { contract_id: cidA++, buy_price: t.amount, profit }, ratios: { [key]: R[key] } } }));
+      if (r.status !== 200) { tally.other++; ok(false, 'Apex /session/next answered ' + r.status + ' ' + JSON.stringify(r.body)); break; }
+      sA = r.body.session; dA = r.body.decision;
+    }
+    if (!dA) break; tally.sessions++; tally.worst = Math.min(tally.worst, pl); tally[dA.stop === 'tp' ? 'tp' : dA.stop === 'sl' ? 'sl' : 'other']++;
+  }
+  ok(tally.sessions === 16 && tally.over.length === 0 && tally.worst >= -50, `Apex: 16 sessions over /session/start and /session/next, ${tally.trades} trades, no stake past the stop-loss or max stake, worst ${tally.worst} (${tally.tp} take-profit, ${tally.sl} stop-loss, ${tally.other} other)`);
+  r = await j(await call('POST', '/session/start', { token: 'alice-token-1234', pass: P, body: { ...apexBody, maxLosses: 31 } })); ok(r.status === 400, 'more than 30 losses in a row is refused');
+}
 env.OPEN_SOCKET = () => { const ls = []; return { addEventListener: (t, f) => ls.push(f), close() {}, send(raw) { const m = JSON.parse(raw); setTimeout(() => {
   const out = m.ticks_history ? { req_id: m.req_id, pip_size: 2, history: { prices: Array.from({ length: 100 }, (_, i) => 100 + i / 100) } } : { req_id: m.req_id, proposal: { ask_price: 10, payout: m.underlying_symbol === 'R_10' ? 11.2 : 11.0 } };
   ls.forEach((f) => f({ data: JSON.stringify(out) })); }, 1); } }; };

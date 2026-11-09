@@ -55,6 +55,7 @@ exports.install = async (page, opts = {}) => {
       st.unknown.add(type);
       send({ msg_type: type, req_id: r, echo_req: m, error: { code: 'MockUnhandled', message: `mock: ${type}` } });
     });
+    (st.sockets ||= []).push(ws); // tests close them to simulate a lost connection
     ws.onClose(() => timers.forEach(clearInterval));
   });
   return st;
