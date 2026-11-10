@@ -206,35 +206,58 @@ body .dc-progress-bar-tracker-rectangle {
         inset 0 -2px 0 #2563eb;
 }
 
-// Stat tiles: each value in its own bordered tile; values fade in
+// Stat tiles: each value in its own bordered tile (like the reference: 4.8rem rows, a 0.3rem gutter, a soft drop
+// shadow, bold label, plain muted value); values fade in
 .run-panel__stat--tiles {
-    gap: 0.5rem;
-    padding: 0 0.8rem 0.6rem;
+    gap: 0;
+    padding: 0;
     box-sizing: border-box;
-    grid-template: 5.2rem 5.2rem / 1fr 1fr 1fr !important;
+    grid-template: 4.8rem 4.8rem / 1fr 1fr 1fr !important;
 
     .run-panel__tile {
-        border: 1px solid var(--kapa-line);
+        height: auto;
+        margin: 0.3rem;
+        border: 1px solid rgb(96 165 250 / 16%);
         border-radius: 1rem;
         background: var(--kapa-surface);
-        box-shadow: inset 0 1px 0 rgb(148 197 255 / 10%);
+        box-shadow:
+            3px 3px 8px rgb(0 5 14 / 36%),
+            inset 0 1px 0 rgb(96 165 250 / 12%);
         justify-content: center;
-        padding: 0.4rem;
+        padding: 0;
 
         &-title {
             color: var(--kapa-text-2);
-            font-size: 1.15rem;
-            font-weight: 600;
+            font-size: 1.2rem;
+            font-weight: 700;
             text-align: center;
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.4rem;
         }
 
         &-content {
-            color: var(--kapa-text-1);
-            font-weight: 700;
+            height: auto;
+            color: var(--kapa-text-2);
+            font-weight: 400;
+            line-height: 1.5rem;
             animation: kapa-fade 0.3s k.$ease both;
+
+            // total profit/loss keeps its green/red
+            &.run-panel__stat-amount--positive {
+                color: var(--text-profit-success);
+            }
+
+            &.run-panel__stat-amount--negative {
+                color: var(--text-loss-danger);
+            }
         }
     }
+}
+
+.theme--light .run-panel__stat--tiles .run-panel__tile {
+    border-color: rgb(255 255 255 / 72%);
+    box-shadow:
+        3px 3px 8px rgb(148 163 184 / 18%),
+        inset 0 1px 0 rgb(255 255 255 / 88%);
 }
 
 .run-panel__stat {

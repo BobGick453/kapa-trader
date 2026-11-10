@@ -732,6 +732,15 @@ $ease: cubic-bezier(0.22, 1, 0.36, 1);
         .main--drawer-open ~ & {
             right: calc(36.6rem + 1.6rem);
         }
+
+        // Bot Builder: left of the workspace's trash can (bottom-right of the workspace), never over it
+        .bot-dashboard:has(> .bot-builder--active) & {
+            right: calc(1.6rem + 7.2rem);
+        }
+
+        .bot-dashboard:has(> .bot-builder--active):has(> .main--drawer-open) & {
+            right: calc(36.6rem + 1.6rem + 7.2rem);
+        }
     }
 
     &__label {

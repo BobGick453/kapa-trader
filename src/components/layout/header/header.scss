@@ -417,20 +417,21 @@ body .app-header--mobile .kapa-transfer {
     }
 }
 
-// Account switcher list, like the reference bot: a square dark panel as wide as the header's left half, the
-// selected row lighter; the open switcher is shaded too
+// Account switcher list, like the reference bot: a 16rem dark panel under the switcher (right-aligned with it, so it
+// starts just left of the switcher's left edge); on phones a 28rem panel from the switcher's left edge. Rounded
+// corners, a deep shadow, the selected row lighter; the open switcher is shaded too
 .acc-dropdown {
-    width: min(28rem, calc(100vw - 1.6rem));
-    min-width: min(28rem, calc(100vw - 1.6rem));
+    width: 16rem;
+    min-width: 16rem;
     max-width: calc(100vw - 1.6rem);
     border: 0;
-    border-radius: 0;
+    border-radius: 0.4rem;
     background: #151717;
-    box-shadow: 0 4px 6px rgb(0 0 0 / 24%);
+    box-shadow: 0 8px 16px rgb(0 0 0 / 84%);
 
     &__account {
         background: transparent;
-        padding: 1rem 1.6rem;
+        padding: 0.8rem 1.6rem;
 
         &--selected {
             background: #323738;
@@ -445,7 +446,7 @@ body .app-header--mobile .kapa-transfer {
 .theme--light {
     .acc-dropdown {
         background: #fff;
-        box-shadow: 0 4px 6px rgb(15 39 66 / 18%);
+        box-shadow: 0 8px 16px rgb(15 39 66 / 18%);
 
         &__account--selected {
             background: #e4ebf4;
@@ -457,7 +458,10 @@ body .app-header--mobile .kapa-transfer {
     }
 }
 
-.app-header--mobile .acc-dropdown {
-    left: 0;
-    right: auto;
+@include mobile-screen {
+    .app-header--mobile .acc-dropdown {
+        left: 0;
+        right: auto;
+        width: min(28rem, calc(100vw - 1.6rem));
+    }
 }

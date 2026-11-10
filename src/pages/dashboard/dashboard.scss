@@ -25,6 +25,13 @@
         transition: all 0.4s;
         margin-top: 1rem;
 
+        // wide screens: straight under the 5.6rem Run row (11.2rem from the top) down to the footer, like the
+        // reference. The drawer sits in the Run row's flow under the 4rem Run bar: 0.8rem padding above + 0.8rem here
+        @include desktop-screen {
+            margin-top: 0.8rem;
+            height: calc(100vh - 14.8rem) !important;
+        }
+
         @include is-RTL {
             transform: translateX(var(--translate-panel-rtl));
         }
