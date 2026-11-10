@@ -460,15 +460,53 @@
     }
 }
 
-// ---- Kapa: dashboard styled like the reference bot (hero card, social icons, accent-topped carousel) ----
-.theme--dark .tab__dashboard {
-    .tab__dashboard__header {
-        background: linear-gradient(180deg, rgba(17, 33, 74, 0.85), rgba(10, 21, 48, 0.92));
-        border: 1px solid #1d2e5c;
-        border-radius: 2.4rem;
-        padding: 2.4rem 2rem;
-        margin: 0 1.6rem 1.6rem;
-        text-align: center;
+// ============================================================================
+// Kapa Dashboard: hero card, five accent cards, "Not logged in" notice. Values follow the reference bot's
+// dashboard (authorised reuse of its look); Kapa's own markup, names and texts.
+// ============================================================================
+.tab__dashboard .kapa-dash {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    padding: 3.2rem 2rem 4rem;
+    background: var(--kapa-bg);
+    color: var(--kapa-text-1);
+    overflow: hidden auto;
+    animation: kapa-page-enter 0.48s k.$ease both;
+
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
+
+    @media (width <= 768px) {
+        padding: 1.6rem 0 3rem;
+    }
+}
+
+.kapa-dash__container {
+    width: 100%;
+    max-width: 112rem;
+    margin: 0 auto;
+}
+
+.kapa-dash__header {
+    @include k.surface;
+
+    text-align: center;
+    margin-bottom: 2.8rem;
+    padding: 2.8rem max(1.8rem, min(4vw, 4.8rem));
+    animation: kapa-page-enter 0.48s k.$ease both;
+
+    &--listed {
+        margin-bottom: 1.6rem;
+    }
+
+    @media (width <= 768px) {
+        margin: 0 1.6rem 2.4rem;
+        padding: 2rem 1.6rem;
     }
 }
 
@@ -476,392 +514,350 @@
     display: flex;
     justify-content: center;
     gap: 1.2rem;
-    margin-bottom: 1.2rem;
+    margin-bottom: 1.8rem;
 
     a {
-        width: 4.4rem;
-        height: 4.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 4.2rem;
+        height: 4.2rem;
         border-radius: 50%;
-        display: grid;
-        place-items: center;
-        background: #0b1631;
-        border: 1px solid #1d2e5c;
-        cursor: pointer;
+        border: 1px solid var(--kapa-line);
+        background: var(--kapa-surface-flat);
+        box-shadow: var(--kapa-shadow);
+        transition:
+            transform 0.18s,
+            box-shadow 0.18s;
 
-        &:not([href]) {
-            opacity: 0.85;
-            cursor: default;
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--kapa-lift);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--kapa-blue-soft);
+            outline-offset: 3px;
+        }
+
+        svg {
+            width: 2.4rem;
+            height: 2.4rem;
         }
     }
+
     &__wa {
         color: #25d366;
     }
+
     &__tg {
-        color: #2aabee;
+        color: #229ed9;
     }
-}
 
-.tab__dashboard__table__tiles:has(.kapa-tile) {
-    display: flex !important;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 1.4rem;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    padding: 0.4rem 1.6rem 1.6rem;
-    scrollbar-width: none;
+    @media (width <= 768px) {
+        margin-bottom: 1.6rem;
 
-    &::-webkit-scrollbar {
-        display: none;
-    }
-}
+        a {
+            width: 3.8rem;
+            height: 3.8rem;
+        }
 
-.kapa-tile {
-    position: relative;
-    flex: 0 0 auto;
-    width: 17rem !important;
-    scroll-snap-align: start;
-    display: flex !important;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.8rem;
-    padding: 2rem 1.2rem 1.6rem !important;
-    border-radius: 2rem;
-    border: 1px solid #1d2e5c;
-    background: linear-gradient(180deg, #0f1d42, #0a1532);
-    text-align: center;
-
-    &::before {
-        content: '';
-        position: absolute;
-        top: 0.9rem;
-        left: 50%;
-        width: 4.4rem;
-        height: 0.3rem;
-        border-radius: 2px;
-        transform: translateX(-50%);
-        background: var(--kapa-accent, #3b82f6);
-    }
-    .tab__dashboard__table__images {
-        width: 8rem !important;
-        height: 8rem !important;
-        border-radius: 1.8rem !important;
-        background: #0b1631 !important;
-        border: 1px solid #22356a !important;
-    }
-    &__sub {
-        color: #93a3cc;
-        font-size: 1.2rem;
-        line-height: 1.3;
-    }
-    &__open {
-        margin-top: auto;
-        border: 1px solid #2a3f78;
-        border-radius: 99rem;
-        padding: 0.8rem 2rem;
-        background: #071029;
-        color: #eef2ff;
-        font-weight: 700;
-        font-size: 1.3rem;
-        letter-spacing: 0.05rem;
-        cursor: pointer;
-
-        &:disabled {
-            color: #93a3cc;
-            cursor: default;
+        svg {
+            width: 2rem;
+            height: 2rem;
         }
     }
-    &--disabled .tab__dashboard__table__images {
-        cursor: default;
+}
+
+.kapa-dash__title {
+    margin: 0 0 0.8rem;
+    color: var(--kapa-text-1);
+    font-size: max(2.2rem, min(3vw, 3rem));
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.04rem;
+
+    @media (width <= 768px) {
+        font-size: 2.2rem;
+    }
+
+    @media (width <= 480px) {
+        font-size: 2rem;
     }
 }
 
-.kapa-speedbot-icon {
-    font-size: 3.6rem;
-    line-height: 1;
-    filter: hue-rotate(290deg) saturate(1.4);
-}
+.kapa-dash__subtitle {
+    max-width: 68rem;
+    margin: 0 auto;
+    color: var(--kapa-text-2);
+    font-size: 1.4rem;
+    line-height: 1.6;
 
-// Sizing and responsive finish: the five cards fit side by side from tablet width up,
-// and become a swipeable row on phones
-.tab__dashboard__table__tiles:has(.kapa-tile) {
-    gap: clamp(1rem, 1.6vw, 1.4rem);
-    justify-content: safe center;
-    scroll-padding-inline: 1.6rem;
-    -webkit-overflow-scrolling: touch;
+    @media (width <= 768px) {
+        font-size: 1.3rem;
+    }
 
-    @media (max-width: 599px) {
-        justify-content: flex-start;
-        padding-inline: 1.2rem;
+    @media (width <= 480px) {
+        font-size: 1.2rem;
     }
 }
+
+// Cards: a grid (five in a row from 1280px), a swipeable row on phones
+.kapa-dash__cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1.8rem;
+    margin-bottom: 2.8rem;
+
+    @media (width >= 1280px) {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    @media (width <= 768px) {
+        display: flex;
+        gap: 1.4rem;
+        margin-bottom: 2.4rem;
+        padding: 0.6rem 1.6rem 1.8rem;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+    }
+}
+
 .kapa-tile {
-    width: clamp(13.6rem, 17vw, 17rem) !important;
+    @include k.surface;
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 18rem;
+    padding: 0.5rem 1.4rem 1.4rem;
+    overflow: hidden;
+    animation: kapa-card-in 0.48s k.$ease both;
+    transition:
+        border-color 0.3s ease,
+        transform 0.3s k.$ease,
+        box-shadow 0.3s ease;
+
+    @for $i from 1 through 5 {
+        &:nth-child(#{$i}) {
+            animation-delay: 0.1s + ($i - 1) * 0.09s;
+
+            .kapa-tile__icon {
+                animation-delay: -0.62s * ($i - 1);
+            }
+        }
+    }
+
+    &:hover {
+        border-color: color-mix(in srgb, var(--kapa-accent) 44%, var(--kapa-line));
+        box-shadow: var(--kapa-lift);
+        transform: translateY(-7px);
+
+        .kapa-tile__bar {
+            filter: saturate(1.12);
+            transform: scaleX(1.9);
+        }
+
+        .kapa-tile__arrow {
+            transform: translateX(3px);
+        }
+    }
+
+    &__bar {
+        display: block;
+        flex: 0 0 0.3rem;
+        width: 3.2rem;
+        height: 0.3rem;
+        margin: 0 auto 1rem;
+        border-radius: 999px;
+        background: var(--kapa-accent);
+        transform-origin: 50%;
+        transition:
+            transform 0.3s k.$ease,
+            filter 0.3s ease;
+    }
+
+    &__icon {
+        @include k.inset(2rem);
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 6.4rem;
+        height: 6.4rem;
+        margin: 0 auto 1.3rem;
+        padding: 1rem;
+        border: 1px solid var(--kapa-line);
+        color: var(--kapa-accent);
+        cursor: pointer;
+        will-change: transform;
+        animation: kapa-icon-float 4.2s ease-in-out infinite;
+
+        @media (width <= 768px), (update: slow) {
+            animation-duration: 7s;
+        }
+
+        svg {
+            width: 4rem;
+            height: 4rem;
+            filter: drop-shadow(0 0 0.6rem color-mix(in srgb, var(--kapa-accent) 55%, transparent));
+
+            @media (width <= 480px) {
+                width: 3.6rem;
+                height: 3.6rem;
+            }
+        }
+    }
+
+    &__content {
+        flex: 1;
+        padding: 0 0 1.4rem;
+        text-align: center;
+    }
+
+    &__title {
+        margin: 0 0 0.4rem;
+        color: var(--kapa-text-1);
+        font-size: 1.4rem;
+        font-weight: 750;
+        line-height: 1.35;
+
+        @media (width <= 480px) {
+            font-size: 1.3rem;
+        }
+    }
+
+    &__sub {
+        margin: 0;
+        color: var(--kapa-text-2);
+        font-size: 1.15rem;
+        line-height: 1.45;
+
+        @media (width <= 480px) {
+            font-size: 1.05rem;
+        }
+    }
 
     &__open {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 3.8rem;
-        transition:
-            border-color 0.15s,
-            background 0.15s;
-
-        &:hover:not(:disabled) {
-            border-color: #4a64b0;
-            background: #0d1a3a;
-        }
-        &:focus-visible {
-            outline: 2px solid #f5c542;
-            outline-offset: 2px;
-        }
-    }
-}
-
-// Reference-bot layout: four tiles per row (the fifth below), neon icon in a rounded square,
-// a short accent bar on the tile's top edge, OPEN → pill
-.tab__dashboard__table__tiles:has(.kapa-tile) {
-    display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 2rem;
-    overflow: visible;
-    padding: 0.4rem 1.2rem 2rem;
-    justify-content: stretch;
-}
-.kapa-tile {
-    width: auto !important;
-    min-width: 0;
-    gap: 0.6rem;
-    padding: 2.4rem 1.2rem 1.8rem !important;
-    border-radius: 1.6rem;
-    border: 1px solid #1c2b52;
-    background: linear-gradient(180deg, #0d1a3a, #091330);
-    box-shadow: 0 1rem 2.4rem rgb(0 0 0 / 30%);
-    transition:
-        transform 0.15s ease,
-        border-color 0.15s ease;
-
-    &:hover {
-        transform: translateY(-2px);
-        border-color: color-mix(in srgb, var(--kapa-accent) 45%, #1c2b52);
-    }
-    &::before {
-        top: 0.7rem;
-        width: 3.4rem;
-        height: 0.35rem;
-        box-shadow: 0 0 1rem var(--kapa-accent);
-    }
-    .tab__dashboard__table__images {
-        width: 6.6rem !important;
-        height: 6.6rem !important;
-        margin-bottom: 0.6rem;
-        display: grid !important;
-        place-items: center;
-        border-radius: 1.6rem !important;
-        background: #08112a !important;
-        border: 1px solid #1f2f5c !important;
-        color: var(--kapa-accent);
-        cursor: pointer;
-    }
-    &__svg {
-        filter: drop-shadow(0 0 0.6rem var(--kapa-accent));
-    }
-    .dc-text {
-        font-size: 1.5rem !important;
-        font-weight: 700 !important;
-    }
-    &__sub {
-        font-size: 1.15rem;
-        color: #9aa9cf;
-    }
-    &__open {
-        margin-top: 1rem;
+        align-self: center;
+        gap: 0.5rem;
+        min-width: 9.2rem;
         min-height: 3.4rem;
-        padding: 0 2.2rem;
-        font-size: 1.2rem;
-        background: #060e24;
-        border-color: #253a72;
-    }
-}
-.kapa-tile .dc-text {
-    white-space: nowrap;
-}
-.kapa-tile__sub {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-}
-.kapa-tile__sub {
-    font-size: 1.05rem;
-    text-overflow: clip;
-}
-.kapa-tile__sub {
-    white-space: normal;
-    overflow: visible;
-    line-height: 1.3;
-}
-
-// Phones: the tiles become a swipeable row, like the reference bot on a phone
-@media (max-width: 699px) {
-    .tab__dashboard__table__tiles:has(.kapa-tile) {
-        display: flex !important;
-        grid-template-columns: none;
-        gap: 1.2rem;
-        overflow-x: auto;
-        scroll-snap-type: x mandatory;
-        padding: 0.4rem 1.2rem 1.6rem;
-    }
-    .kapa-tile {
-        flex: 0 0 15.6rem;
-        width: 15.6rem !important;
-        scroll-snap-align: start;
-    }
-}
-
-// ============================================================================
-// Kapa tokens on the Dashboard (surfaces, inset icon tiles, OPEN pills), plus two fixes:
-// the tile text column (it inherited a 9.1rem width from the template) and the desktop column next to
-// the Summary drawer.
-// ============================================================================
-.tab__dashboard .tab__dashboard__header,
-.theme--dark .tab__dashboard .tab__dashboard__header,
-.theme--light .tab__dashboard .tab__dashboard__header {
-    @include k.surface;
-
-    color: var(--kapa-text-1);
-    animation: kapa-rise 0.48s k.$ease both;
-
-    .subtitle {
-        color: var(--kapa-text-2) !important;
-    }
-}
-
-.kapa-social a {
-    @include k.surface(50%);
-
-    width: 4.2rem;
-    height: 4.2rem;
-    transition: transform 0.22s k.$ease;
-
-    &:not([href]) {
-        opacity: 1;
-    }
-
-    &:hover {
-        transform: translateY(-1px);
-    }
-}
-
-.kapa-tile {
-    @include k.surface;
-
-    padding: 2.2rem 1.4rem 1.6rem !important;
-    animation: kapa-rise 0.48s k.$ease both;
-    transition:
-        transform 0.3s k.$ease,
-        border-color 0.3s k.$ease,
-        box-shadow 0.3s k.$ease;
-
-    @for $i from 1 through 5 {
-        &:nth-child(#{$i}) {
-            animation-delay: #{0.06s + ($i - 1) * 0.1s};
-        }
-    }
-
-    &:hover {
-        transform: translateY(-2px);
-        border-color: var(--kapa-line-strong);
-        box-shadow: var(--kapa-shadow-deep);
-    }
-
-    // the title and subtitle span the tile (the template gave every span a 9.1rem width)
-    > span,
-    > .dc-text {
-        width: auto !important;
-        max-width: 100%;
-    }
-
-    .dc-text {
-        color: var(--kapa-text-1) !important;
-    }
-
-    .tab__dashboard__table__images {
-        @include k.inset(2rem);
-
-        border: 0 !important;
-        background: var(--kapa-inset-bg) !important;
-        border-radius: 2rem !important;
-        width: 6.4rem !important;
-        height: 6.4rem !important;
-    }
-
-    &__sub {
-        color: var(--kapa-text-2);
-        font-size: 1.15rem;
-    }
-
-    &__open {
-        @include k.surface(999px);
-
-        min-height: 3.4rem;
-        padding: 0 2rem;
+        padding: 0.8rem 1.5rem;
+        border: 1px solid var(--kapa-line);
+        border-radius: 999px;
+        background: var(--kapa-surface-flat);
+        box-shadow: var(--kapa-shadow);
         color: var(--kapa-link);
+        font: inherit;
         font-size: 1.1rem;
         font-weight: 750;
+        line-height: 1.2;
         letter-spacing: 0.04rem;
+        text-align: center;
+        cursor: pointer;
         transition:
-            transform 0.16s k.$ease,
-            box-shadow 0.16s k.$ease,
-            color 0.16s k.$ease,
-            background 0.16s k.$ease;
+            color 0.16s,
+            background 0.16s,
+            box-shadow 0.16s,
+            transform 0.16s;
 
         &:hover:not(:disabled) {
-            background: var(--kapa-primary);
-            border-color: transparent;
             color: #fff;
-            transform: translateY(-1px);
+            background: var(--kapa-primary);
             box-shadow: var(--kapa-lift);
+            transform: translateY(-1px);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--kapa-blue-soft);
+            outline-offset: 2px;
         }
 
         &:disabled {
             color: var(--kapa-text-3);
+            cursor: default;
         }
+
+        @media (width <= 480px) {
+            padding: 0.8rem 1rem;
+            font-size: 1.05rem;
+        }
+    }
+
+    &__arrow {
+        display: inline-block;
+        transition: transform 0.22s k.$ease;
+    }
+
+    @media (width <= 768px) {
+        flex: 0 0 17rem;
+        min-height: 18rem;
+        scroll-snap-align: start;
+    }
+
+    @media (width <= 480px) {
+        flex-basis: 16rem;
+        min-height: 17rem;
     }
 }
 
-// Desktop: the page sits in a centred column; with the Summary drawer open, it stays left of it
-@include desktop-screen {
-    .tab__dashboard__content {
-        padding: 3.2rem 2.4rem 0 !important;
-        overflow-y: auto !important;
-
-        .quick-panel {
-            max-width: 96rem;
-            margin: 0 auto;
-        }
+@keyframes kapa-card-in {
+    from {
+        opacity: 0;
+        transform: translateY(24px) scale(0.975);
+    }
+    to {
+        opacity: 1;
+        transform: none;
     }
 }
 
-// Visitors: a short "Not logged in" card under the tiles
+@keyframes kapa-icon-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-5px) rotate(0.45deg);
+    }
+}
+
+// Visitors: "Not logged in" notice under the cards (inset surface), with Kapa's Log in button
 .kapa-notice.kapa-login {
-    @include k.surface;
+    @include k.inset(var(--kapa-radius-btn));
 
-    max-width: 45rem;
-    margin: 0.8rem auto 2.4rem;
-    padding: 1.8rem 2rem;
-    text-align: center;
-    color: var(--kapa-text-2);
-    font-size: 1.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem 1.6rem;
+    max-width: 62rem;
+    margin: 0 auto 2.8rem;
+    padding: 1.4rem 2rem;
+    border: 1px solid var(--kapa-line);
+    color: var(--kapa-text-1);
+    font-size: 1.3rem;
     line-height: 1.5;
-    animation: kapa-rise 0.36s k.$ease both;
+    text-align: center;
+    animation: kapa-notice-enter 0.36s k.$ease both;
 
     p {
-        margin: 0 0 1.2rem;
+        margin: 0;
     }
 
     b {
-        color: var(--kapa-text-1);
+        color: var(--kapa-link);
+        font-weight: 700;
     }
 
     .kapa-notice__btn {
@@ -870,12 +866,11 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: auto;
-        min-height: 4rem;
+        min-height: 3.2rem;
         margin: 0;
-        padding: 0 2.8rem;
+        padding: 0 1.8rem;
         font: inherit;
-        font-size: 1.4rem;
+        font-size: 1.3rem;
         font-weight: 700;
         cursor: pointer;
         transition:
@@ -888,55 +883,36 @@
         }
 
         &:focus-visible {
-            outline: 2px solid #f0c85e;
+            outline: 2px solid var(--kapa-gold);
             outline-offset: 2px;
         }
     }
+
+    // Phones (the reference's margins); the orb and the risk button sit in the bottom corners below it
+    @media (width <= 768px) {
+        margin-inline: 1.6rem;
+    }
+
+    // short phones: the card reaches the corners' height, so it keeps clear of them at the sides
+    @media (width <= 768px) and (height < 800px) {
+        margin-inline: var(--kapa-fab-gutter);
+    }
 }
 
-// Desktop: the five tiles in one row in the column next to the drawer (the login card then shows without scrolling)
-@include desktop-screen {
-    .tab__dashboard__table__tiles:has(.kapa-tile) {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 1.6rem;
-        padding-inline: 0;
+@keyframes kapa-notice-enter {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.99);
+    }
+    to {
+        opacity: 1;
+        transform: none;
     }
 }
 
 // Phones and the 980px layout: room under the last card so it can scroll above the floating buttons
 @include mobile-or-tablet-screen {
-    .tab__dashboard .quick-panel {
-        padding-bottom: 16rem;
-    }
-}
-
-// Hero: no empty band under the title (the template gave it a 7.2rem box and a very tall line height)
-.tab__dashboard .tab__dashboard__header .title.kapa-intro-title {
-    height: auto;
-    line-height: 1.2 !important;
-    margin: 0.4rem 0 0;
-}
-
-.tab__dashboard .tab__dashboard__header .subtitle {
-    margin-top: 0.8rem;
-}
-
-// Phones and the 980px layout: the login card keeps clear of the orb and the risk button at the sides
-@include mobile-or-tablet-screen {
-    .kapa-notice.kapa-login {
-        margin-inline: max(var(--kapa-fab-gutter), (100% - 45rem) / 2);
-        padding: 1.4rem 1.4rem;
-        font-size: 1.3rem;
-    }
-}
-
-// Small phones: the title stays on one line, so the login card comes up into the first screen
-@media (max-width: 599px) {
-    body .tab__dashboard .tab__dashboard__header .title.kapa-intro-title {
-        font-size: 2.2rem !important;
-    }
-
-    .tab__dashboard .tab__dashboard__header {
-        padding: 1.8rem 1.6rem !important;
+    .kapa-dash__container {
+        padding-bottom: 12rem;
     }
 }

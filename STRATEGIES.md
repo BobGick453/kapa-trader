@@ -55,25 +55,25 @@ Moteur réel de Kapa, prix réels de Deriv, sessions enchaînées. Objectif +10,
 
 | Stratégie | Atteint l'objectif | Moyenne par session | Pire session |
 |---|---|---|---|
-| **Pegasus (mise audacieuse)** | **82,3 %** | **−0,64** | −50 |
+| **KAPA Target (mise audacieuse)** | **82,3 %** | **−0,64** | −50 |
 | Steady (×2,1, cycles qui tiennent) | 72,2 % | −1,19 | −36 |
 | Exact recovery | 70,5 % | −1,20 | −34 |
 | Gratuite (mise fixe Even) | 18,9 % | −1,14 | −33 |
 | Bot exemplaire (tout le solde sur Over 1) | 80,1 % | −5,17 | **−392 (compte vidé)** |
 
-Avec un objectif +5 et un stop-loss de 50, Pegasus atteint l'objectif dans 90,1 % des sessions, pour −0,42 par session.
+Avec un objectif +5 et un stop-loss de 50, KAPA Target atteint l'objectif dans 90,1 % des sessions, pour −0,42 par session.
 
 ## Ce que cela veut dire
 
 - **Aucune stratégie n'est gagnante à long terme** sur ces contrats : les chiffres sont aléatoires et Deriv garde une marge. Les vraies données le confirment.
-- **Pegasus est la meilleure** : la plus grande chance d'atteindre l'objectif et la plus petite perte moyenne. Elle perd 8 fois moins par session que la méthode du bot exemplaire, et ne vide jamais le compte.
+- **KAPA Target est la meilleure** : la plus grande chance d'atteindre l'objectif et la plus petite perte moyenne. Elle perd 8 fois moins par session que la méthode du bot exemplaire, et ne vide jamais le compte.
 - **Le capital est protégé** : jamais plus de 25 % du solde par session, une limite de perte par jour, et aucun cycle de récupération qui dépasse le stop-loss.
 - **Le laboratoire du bot** (Réglages KAPA AI → « Run the test on real Deriv data ») refait ces mesures sur votre téléphone, à tout moment.
 
 ## Premier test sur un compte démo (5 novembre 2026)
 
-Quatre sessions Pegasus, perdues chacune en un seul trade de 25. Deux constats :
-- **Le prix reçu était moins bon que le prix public.** Deriv a payé 46,13 pour 25 misés sur Even (45,45 sur Volatility 50), alors que son prix public était de 48,83 au même moment. Deriv gardait donc 7,7 % à 9,1 % de chaque mise au lieu de 2,35 %. Cause probable : une majoration (« markup ») réglée sur l'application dans developers.deriv.com. Kapa refuse maintenant de trader quand la marge dépasse 5 %, et explique pourquoi.
+Quatre sessions KAPA Target, perdues chacune en un seul trade de 25. Deux constats :
+- **Le prix reçu était moins bon que le prix public.** Deriv a payé 46,13 pour 25 misés sur Even (45,45 sur Volatility 50), alors que son prix public était de 48,83 au même moment. Deriv gardait donc 7,7 % à 9,1 % de chaque mise au lieu de 2,35 %. Cause probable : une majoration (« markup ») réglée sur l'application dans developers.deriv.com. Kapa affiche cette marge et refuse de trader quand elle dépasse la limite « marge Deriv maximale » (12 % par défaut, voir plus bas), en expliquant pourquoi.
 - **L'objectif demandait plus que le stop-loss.** Chaque session devenait un seul pari, gagné ou perdu d'un coup (environ 46 % de chances de gagner à ce prix). Kapa affiche maintenant un avertissement sous le take-profit dans ce cas. Avec un objectif petit par rapport au stop-loss (par exemple +5 pour 50), l'objectif est atteint environ 9 fois sur 10.
 
 ## Les Free Bots du bot exemplaire (5 novembre 2026)
@@ -93,7 +93,7 @@ Sur les 300 000 vrais ticks, avec les vrais prix de Deriv :
 | Gold Premium | 98,7 % | −2,02 | −1 000 |
 | Profit Maker | 99,1 % | −1,50 | −1 000 |
 
-À objectif et stop-loss égaux, Pegasus fait mieux : 98,8 % et −1,92 par session pour +10 / 1 000, et 99,4 % et −1,02 pour +5 / 1 000. Les règles d'entrée (suivre le dernier chiffre, attendre une série) gagnent à la chance normale du contrat : elles n'aident pas.
+À objectif et stop-loss égaux, KAPA Target fait mieux : 98,8 % et −1,92 par session pour +10 / 1 000, et 99,4 % et −1,02 pour +5 / 1 000. Les règles d'entrée (suivre le dernier chiffre, attendre une série) gagnent à la chance normale du contrat : elles n'aident pas.
 
 **Versions Kapa** (Free Bot → « Run in KAPA AI »), avec un objectif +5 et un stop-loss de 50 :
 
@@ -103,7 +103,7 @@ Sur les 300 000 vrais ticks, avec les vrais prix de Deriv :
 | Dollar Printer (Over 1 au lieu d'Over 0) | 87,1 % | −1,07 | −50 |
 | Gold Odd/Even | 83,8 % | −0,86 | −36 |
 | Profit Maker (récupération sur le 50 % le mieux payé) | 86,8 % | −0,92 | −50 |
-| *Pegasus, pour comparaison* | *90,1 %* | *−0,42* | *−50* |
+| *KAPA Target, pour comparaison* | *90,1 %* | *−0,42* | *−50* |
 
 Tous les cycles de récupération tiennent sous le stop-loss, et la mise après une perte est celle qui récupère tout le cycle en un gain.
 
@@ -141,11 +141,107 @@ Une mise qui dépasserait la marge restante sous le stop-loss n'est jamais plac�
 
 Sur les 300 000 vrais ticks :
 
-| Objectif / stop-loss | Prix | Apex : objectif · moyenne | Pegasus : objectif · moyenne |
+| Objectif / stop-loss | Prix | Apex : objectif · moyenne | KAPA Target : objectif · moyenne |
 |---|---|---|---|
 | +5 / 50 | public | 90,3 % · −0,34 | 90,1 % · −0,42 |
 | +10 / 50 | public | 82,3 % · −0,63 | 82,3 % · −0,64 |
 | +10 / 100 | public | 90,3 % · −0,68 | 90,1 % · −0,83 |
 | +10 / 50 | votre connexion | 79,7 % · −2,19 | 79,2 % · −2,48 |
 
-**Bots classiques :** ils gardent la règle d'entrée de l'original. Après une perte, Apex prend la main jusqu'à l'objectif ou au stop-loss. Avec un objectif +5 et un stop-loss de 50, au prix public, ils atteignent l'objectif dans 89,9 à 90,3 % des sessions, au lieu de 72 à 87 % avec leur propre récupération. Leur perte moyenne passe à −0,34 à −0,54 par session, soit environ deux fois moins.
+**Bots classiques (9 novembre 2026) :** ils gardent la règle d'entrée de l'original.
+- **Version gratuite** : leur propre récupération, planifiée pour tenir sous le stop-loss (calculée dans le navigateur).
+- **Option Premium « récupération KAPA Apex »** : après une perte, le serveur Kapa choisit le contrat et la mise, jusqu'au prochain gain. Les règles d'Apex restent sur le serveur ; le site ne reçoit que le trade suivant.
+
+Objectif +5, stop-loss 50, sur les 300 000 vrais ticks, au prix public (`qa/real/classic-bt2.mjs`) :
+
+| Bot | Gratuit : objectif · moyenne · pire | Premium (Apex) : objectif · moyenne · pire |
+|---|---|---|
+| Digit Switcher | 71,8 % · −0,57 · −19 | 90,0 % · −0,46 · −50 |
+| Dollar Printer | 87,2 % · −1,08 · −50 | 89,9 % · −0,54 · −50 |
+| Gold Odd/Even | 83,8 % · −0,86 · −36 | 90,0 % · −0,47 · −50 |
+| Profit Maker | 86,8 % · −0,92 · −50 | 90,3 % · −0,35 · −50 |
+
+Avec Apex, l'objectif est atteint plus souvent et la perte moyenne est plus petite ; en échange, une mauvaise session peut aller jusqu'au stop-loss (−50) au lieu de −19 à −36 pour trois des versions gratuites.
+
+## La limite de marge (12 % par défaut)
+
+KAPA AI ne trade pas quand Deriv garde plus de 12 % de chaque mise (réglable : tout le monde peut la baisser, seul Premium peut la monter). Au prix public, Deriv garde 1,4 % à 2,35 % sur les contrats tradés, et 10,7 % sur les rares contrats à 10 %. Une majoration de l'application coûte cher même sous la limite : objectif +10, stop-loss 50, KAPA Target atteint l'objectif dans 82,3 % des sessions pour −0,64 par session au prix public, et dans 79,2 % pour −2,48 par session quand Deriv garde 7,6 % (« votre connexion ») : presque quatre fois plus de perte moyenne. Baissez la limite pour refuser ces prix plus tôt.
+
+## Limites de protection
+
+- Stop-loss d'une session : au plus 25 % du solde.
+- Limite de perte par jour : 30 % du solde par défaut, au plus 50 %. Le jour est celui de Deriv : il recommence à 00:00 GMT. Chaque trade compte dès qu'il est réglé.
+- Aucune mise au-delà du stop-loss restant ou de la mise maximale, même si une stratégie (ou le serveur) la demande.
+
+## Les 4 Free Bots en Bot Builder, version Kapa (9 novembre 2026)
+
+La page Free Bot reprend la bibliothèque du bot exemplaire : les mêmes 4 bots, dans le même ordre, avec les mêmes
+noms, les mêmes filtres et les mêmes champs de réglage. Chaque carte charge le bot dans Bot Builder (« Load Bot ») ou
+l'ouvre dans KAPA AI (« Run in KAPA AI »). Les fichiers XML sont refaits par Kapa (`src/pages/free-bot/xml/`,
+générés par `generate.py`) : même marché, même règle d'entrée, mêmes réglages, plus une protection que l'original n'a pas.
+
+**Ce que la version Kapa ajoute à chaque bot :**
+- le bot compte son propre profit : un Run = une session (Profit Maker et Dollar Printer lisaient le total de Bot
+  Builder, qui s'additionne d'un Run à l'autre) ;
+- un stop-loss pour tous (Dollar Printer n'en avait pas), plafonné à 25 % du solde, et un nouveau champ « Max Stake » ;
+- avant chaque trade, une mise au-dessus de Max Stake ou de la marge restante avant le stop-loss n'est jamais placée :
+  la récupération s'arrête, le bot repart de la première mise, et il s'arrête si même celle-ci ne tient plus. Une
+  session ne perd donc jamais plus que le stop-loss (pas « stop-loss + une mise ») ;
+- le niveau de martingale est coupé à la série de pertes dont toutes les mises, additionnées, tiennent sous le
+  stop-loss et sous Max Stake ;
+- réglages par défaut raisonnables : mise 1, stop-loss 50, Max Stake 25, objectif 10 (5 pour Profit Maker), au lieu
+  de 1 000 pour Gold Premium ;
+- Dollar Printer vérifie sa règle d'entrée avant chaque trade (l'original, après le premier signal, achetait à chaque tick).
+
+**Méthode :** `node qa/real/freebots-bt.mjs` rejoue, sur les 300 000 vrais ticks, l'original tel que son XML
+s'exécute et la version Kapa telle que ses blocs s'exécutent. Gain = arrondi au centime de mise × (paiement / mise)
+du vrai prix de Deriv à 10 ; « prix majoré » = 5,5 % de moins, comme sur le compte démo du 5 novembre. Les sessions
+s'enchaînent sur chacune des 10 séries ; une session s'arrête quand le bot s'arrête. Pour l'original de Dollar
+Printer, le compte est de 10 000.
+
+| Bot | Version | Prix | Atteint l'objectif | Moyenne par session | Pire session |
+|---|---|---|---|---|---|
+| Digit Switcher Bot | original (objectif 10, stop-loss 1 000) | public | 99,0 % | −1,41 | −1 517 (78 sessions au-delà du stop-loss) |
+| | | majoré | 98,3 % | −13,37 | −1 574 |
+| | Kapa (objectif 10, stop-loss 50) | public | 78,4 % | −1,39 | −50 |
+| | | majoré | 70,6 % | −6,55 | −50 |
+| Dollar Printer | original (objectif 10, aucun stop-loss) | public | 99,3 % | +2,28 * | **−10 000 : compte vidé 44 fois** |
+| | | majoré | 98,8 % | −48,65 | compte vidé 61 fois |
+| | Kapa (objectif 10, stop-loss 50) | public | 78,5 % | −1,44 | −50 |
+| | | majoré | 61,1 % | −12,20 | −50 |
+| Gold Premium Odd/Even | original (objectif 1 000, stop-loss 1 000) | public | 55,3 % | −224,46 | −2 189 |
+| | | majoré | 34,3 % | −887,07 | −2 207 |
+| | Kapa (objectif 10, stop-loss 50) | public | 79,0 % | −1,91 | −50 |
+| | | majoré | 69,9 % | −7,57 | −50 |
+| Profit Maker Bot | original (objectif 5, stop-loss 1 000) | public | 99,1 % | −1,50 | −1 005 |
+| | | majoré | 98,8 % | −6,71 | −1 005 |
+| | Kapa (objectif 5, stop-loss 50) | public | 87,9 % | −1,09 | −50 |
+| | | majoré | 82,7 % | −4,19 | −50 |
+
+Pour Dollar Printer, ce rejeu suit le XML à la lettre : après le premier signal, l'original achète à chaque tick
+(son drapeau d'achat n'est jamais remis à faux) et garde sa mise de récupération après un gain partiel. Le tableau du
+5 novembre (`exact.py`, −15,87 et 40 comptes vidés) appliquait le filtre à chaque trade : les deux concluent pareil.
+
+\* Moyenne positive par hasard : la martingale de Dollar Printer sur-récupère (mise = 1,25 × la perte), donc 801
+sessions finissent à plus de +100 (jusqu'à +2 616), pendant que 44 autres vident le compte. Au prix majoré, la même
+méthode perd −48,65 par session.
+
+**Ce que cela veut dire :** les originaux atteignent plus souvent leur objectif uniquement parce qu'ils risquent 20 à
+200 fois plus (stop-loss de 1 000, ou aucun). À stop-loss de 50, les versions Kapa perdent en moyenne autant ou
+moins par session, et leur pire session est de −50 au lieu de −1 000 à −10 000. Aucune n'est gagnante à long terme.
+Avec la logique Kapa mais l'objectif et le stop-loss des originaux, on retrouve des taux de 96 à 99 % et des pires
+sessions à −1 000 : le gain de réussite des originaux vient du stop-loss, pas de la règle d'entrée.
+
+Variantes mesurées (prix public, stop-loss 50) : objectif 5 au lieu de 10 → 86 à 88 % et −0,9 à −1,1 par session pour
+Digit Switcher et Gold ; Dollar Printer sur Over 1 (« 1st Over Digit » = 1) → 78,2 % et −1,61, mais −8,56 au lieu de
+−12,20 au prix majoré ; une première mise de 2 ou 3 n'améliore rien. Arrêter la session dès qu'une mise de
+récupération ne tient plus (au lieu de repartir de la première mise) baisse la perte moyenne de 0,05 à 0,6 mais aussi
+la réussite (Dollar Printer : 62,8 %).
+
+Chaque carte propose aussi « Run in KAPA AI » (le bot classique de KAPA AI, récupération gratuite) et « Apex recovery »
+(option Premium, calculée sur le serveur). Leurs chiffres, mesurés à part avec un objectif +5 et un stop-loss de 50, sont
+ceux de la section « KAPA Apex » : ce sont deux moteurs différents, et la carte dit lequel chaque chiffre mesure.
+
+Le test `qa/browser/freebot.js` vérifie, sur le faux Deriv, que chaque XML se charge dans Bot Builder, que Run place
+des trades avec les bons contrats sous Max Stake, et que, quand tous les trades perdent, le bot s'arrête seul sans
+dépasser le stop-loss de 50.

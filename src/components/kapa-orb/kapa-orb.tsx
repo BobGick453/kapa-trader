@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import { keyLabel, MARKETS, PREMIUM_PRESETS, SCAN_MARKETS, STRATEGIES, TPresetKey } from '@/pages/kapa-ai/engine';
+import { kapaRun, useKapaRun } from '@/pages/kapa-ai/run-store';
 import { refreshEntitlement, scanMarkets, TScanRow } from '@/pages/premium/premium-api';
 import { openPremium, usePremium } from '@/pages/premium/use-premium';
 import KapaClose from '@/components/kapa-close/kapa-close';
@@ -12,6 +13,18 @@ import { useFloating } from './use-floating';
 import './kapa-orb.scss';
 
 const isDesktop = () => window.innerWidth >= 1280;
+/** KAPA AI's saved settings (strategy and margin limit), so a scan compares markets for the user's own strategy. */
+const savedKapa = (): { strategy?: string; maxMargin?: number } => {
+    try {
+        return JSON.parse(localStorage.getItem('kapa_ai_settings_v2') || '{}') || {};
+    } catch {
+        return {};
+    }
+};
+const defaultPreset = (): TPresetKey => {
+    const k = savedKapa().strategy === 'pegasus' ? 'target' : savedKapa().strategy;
+    return PREMIUM_PRESETS.includes(k as TPresetKey) ? (k as TPresetKey) : 'apex';
+};
 
 // Words for the connection state shown on the scanner's status pill (the same state as the orb's badge)
 const STATE_LABEL = { live: 'Live', connecting: 'Connecting', reconnecting: 'Reconnecting', offline: 'Offline' } as const;
@@ -25,13 +38,23 @@ const KapaOrb = observer(() => {
     const [wasOpen, setWasOpen] = useState(false);
     const [open, setOpen] = useState(false);
     const [risk, setRisk] = useState(false);
-    const [preset, setPreset] = useState<TPresetKey>('martingale');
+    const [preset, setPreset] = useState<TPresetKey>(defaultPreset);
     const [stake, setStake] = useState(1);
+    // A KAPA AI session keeps running on every tab: its state and Stop button sit next to the orb
+    kapaRun.bindClient(client);
+    const run = useKapaRun();
+    // While a session runs, look again every second whether the KAPA AI page is open (its own bar has Stop)
+    const [, setTick] = useState(0);
+    useEffect(() => {
+        if (!run.running) return;
+        const t = setInterval(() => setTick(n => n + 1), 1000);
+        return () => clearInterval(t);
+    }, [run.running]);
     const [all, setAll] = useState(true);
     const [single, setSingle] = useState('R_100');
     const [busy, setBusy] = useState(false);
     const [rows, setRows] = useState<TScanRow[] | null>(null);
-    const [scanned, setScanned] = useState<TPresetKey>('martingale');
+
     const [error, setError] = useState('');
     // Both buttons float over every page and can be dragged. Until they are moved, CSS keeps them at the
     // bottom corners above the footer and the Run bars (kapa-orb.scss)
@@ -62,9 +85,8 @@ const KapaOrb = observer(() => {
         setBusy(true);
         setRows(null);
         try {
-            const res = await scanMarkets(preset, currency, all ? undefined : [single]);
+            const res = await scanMarkets(preset, currency, all ? undefined : [single], savedKapa().maxMargin);
             setRows(res.rows);
-            setScanned(preset);
             if (!res.rows.length) setError('Deriv returned no prices. Try again in a moment.');
         } catch (e: any) {
             setError(e?.message ?? 'The scan failed. Try again.');
@@ -75,12 +97,8 @@ const KapaOrb = observer(() => {
     };
 
     const sendToKapa = (r: TScanRow) => {
-        const detail = {
-            symbol: r.symbol,
-            preset: scanned,
-            stake,
-            ratios: r.ratios,
-        };
+        // Only the market (and its live prices): the strategy and stake chosen in KAPA AI stay as they are
+        const detail = { symbol: r.symbol, ratios: r.ratios, source: 'scanner' };
         try {
             sessionStorage.setItem('kapa_pending_market', JSON.stringify(detail)); // picked up when KAPA AI mounts
         } catch {
@@ -108,6 +126,32 @@ const KapaOrb = observer(() => {
                 <span className='kapa-fab-orb__dot' aria-hidden />
                 <span className='kapa-fab-orb__badge'>{state.toUpperCase()}</span>
             </button>
+            {/* on the KAPA AI page itself its own run bar has Stop */}
+            {run.running && !document.querySelector('.kapa-ai .kapa-runbar') && (
+                <div className='kapa-runchip' role='status' aria-live='polite'>
+                    <button
+                        type='button'
+                        className='kapa-runchip__info'
+                        onClick={() => window.dispatchEvent(new CustomEvent('kapa:open-ai'))}
+                        title='Open KAPA AI'
+                    >
+                        <i aria-hidden />
+                        KAPA AI running
+                        <b className={run.sessionPl > 0 ? 'up' : run.sessionPl < 0 ? 'down' : undefined}>
+                            {run.sessionPl >= 0 ? '+' : ''}
+                            {run.sessionPl.toFixed(2)}
+                        </b>
+                    </button>
+                    <button
+                        type='button'
+                        className='kapa-runchip__stop'
+                        onClick={() => kapaRun.stop()}
+                        disabled={run.stopping}
+                    >
+                        {run.stopping ? 'Stopping…' : '■ Stop'}
+                    </button>
+                </div>
+            )}
             <button
                 type='button'
                 className={classNames('kapa-fab-risk', { 'kapa-fab--dragging': riskFloat.dragging })}
@@ -228,8 +272,13 @@ const KapaOrb = observer(() => {
                                                         : 'an unusual run, which happens by chance about 1 time in 100'
                                                 } (randomness tests p=${r.randomness.uniform_p.toFixed(2)} and ${r.randomness.serial_p.toFixed(2)}).`}
                                         </p>
-                                        <button type='button' onClick={() => sendToKapa(r)}>
-                                            Use in KAPA AI
+                                        <button
+                                            type='button'
+                                            onClick={() => sendToKapa(r)}
+                                            disabled={run.running}
+                                            title={run.running ? 'KAPA AI is running: stop it first' : undefined}
+                                        >
+                                            Use this market in KAPA AI
                                         </button>
                                     </div>
                                 ))}

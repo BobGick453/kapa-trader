@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { labBacktest, premiumEnabled, TBacktest } from '../premium/premium-api';
 import { MARKETS, TApi, TSettings } from './engine';
 import { collectLab, TLabData } from './lab';
+import SettleCheckPanel from './settle-check-panel';
 
 const fmt = (n: number, d = 2) => Number(n).toFixed(d);
 const pct = (n: number, d = 1) => `${(n * 100).toFixed(d)}%`;
@@ -10,7 +11,8 @@ const time = (t: number) => (t ? new Date(t * 1000).toLocaleString() : '');
 
 const NAMES: Record<string, string> = {
     apex: 'KAPA Apex (computed best)',
-    pegasus: 'Pegasus (bold play)',
+    target: 'KAPA Target (bold play)',
+    pegasus: 'KAPA Target (bold play)', // answers from a server not yet updated
     martingale: 'Steady (×2.1, cycles that fit)',
     recover: 'Exact recovery',
     fixed: 'Even/Odd fixed stake (free)',
@@ -60,6 +62,7 @@ const LabPanel = ({ api, s, balance, currency, logged_in }: TProps) => {
     const anySignal = data?.signals.some(g => g.seen >= 30 && (g.low > g.fair || g.high < g.fair));
 
     return (
+        <>
         <div className='kapa-lab'>
             <div className='kapa-plan__head'>
                 <span>Strategy lab · real Deriv data</span>
@@ -193,6 +196,8 @@ const LabPanel = ({ api, s, balance, currency, logged_in }: TProps) => {
                 </>
             )}
         </div>
+        {logged_in && <SettleCheckPanel api={api} currency={currency} />}
+        </>
     );
 };
 

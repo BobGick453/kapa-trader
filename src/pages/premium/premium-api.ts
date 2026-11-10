@@ -6,6 +6,9 @@ import { setPremium } from './use-premium';
  * Kapa Premium server (server/worker.js). It runs the Premium strategies, the scanner and the
  * Premium session plans, and sells Premium. Empty until the server is deployed: Premium tools
  * are then unavailable and only the free tools work.
+ *
+ * Premium belongs to the Deriv account: the server reads which accounts the visitor's Deriv login
+ * belongs to and checks their Premium on every request. The page only shows what the server answers.
  */
 export const PREMIUM_API = (process.env.KAPA_API_URL || '').replace(/\/+$/, '');
 export const premiumEnabled = () => Boolean(PREMIUM_API);
@@ -18,8 +21,8 @@ const accessToken = (): string | null => {
     }
 };
 
-// The Premium pass the server returns for a correct code. It proves nothing by itself: the server
-// checks its signature, and that it was made for the current code, on every Premium request.
+// A pass from the old shared code (before Premium belonged to accounts). It is sent once with the status
+// check so the server can move this device's Premium to the Deriv account, then deleted.
 const PASS_KEY = 'kapa_premium_pass';
 const readPass = (): string | null => {
     try {
@@ -28,16 +31,15 @@ const readPass = (): string | null => {
         return null;
     }
 };
-const savePass = (pass: string | null) => {
+const dropPass = () => {
     try {
-        if (pass) localStorage.setItem(PASS_KEY, pass);
-        else localStorage.removeItem(PASS_KEY);
+        localStorage.removeItem(PASS_KEY);
     } catch {
-        /* the pass then lasts for this visit only */
+        /* nothing to delete */
     }
 };
 
-// A random id for this device, sent with Premium code attempts: the server slows down a device that keeps
+// A random id for this device, sent with gift-code attempts: the server slows down a device that keeps
 // entering wrong codes without blocking everyone who shares its address (mobile networks). Not personal data.
 const DEVICE_KEY = 'kapa_device_id';
 const deviceId = (): string | null => {
@@ -57,8 +59,8 @@ const deviceId = (): string | null => {
 
 const callOnce = async (path: string, init: RequestInit = {}, timeoutMs = path === '/scan' ? 30000 : 15000) => {
     const token = accessToken();
-    const pass = readPass();
-    const device = path === '/premium/unlock' ? deviceId() : null;
+    const pass = path === '/premium/status' ? readPass() : null;
+    const device = path === '/premium/redeem' ? deviceId() : null;
     const where = path.split('?')[0];
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -99,8 +101,8 @@ const callOnce = async (path: string, init: RequestInit = {}, timeoutMs = path =
 };
 
 // Requests that are safe to send again. A brief server or network hiccup is then retried quietly
-// instead of showing "Server error". Payments are never retried automatically.
-const RETRYABLE = /^\/(premium\/(status|unlock)|scan|bots\/|plan|session\/start)/;
+// instead of showing "Server error". Payments and codes are never retried automatically.
+const RETRYABLE = /^\/(premium\/status|scan|plan|session\/start|classic\/recover)/;
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const call = async (path: string, init: RequestInit = {}, timeoutMs?: number) => {
@@ -116,7 +118,8 @@ const call = async (path: string, init: RequestInit = {}, timeoutMs?: number) =>
     }
 };
 
-export type TPlan = { price: number; currency: string; days: number; configured: boolean };
+export type TContact = { whatsapp: string | null; telegram: string | null };
+export type TPlan = { price: number; currency: string; days: number; configured: boolean; contact?: TContact };
 
 export const fetchPlan = (): Promise<TPlan> => call('/plan');
 
@@ -138,53 +141,46 @@ const reachable = () => {
     retryTimer = null;
 };
 
-/** Refreshes the shared Premium state: asks the server whether this device's pass is still valid. */
+/** Shows what the server says about the logged-in Deriv account's Premium. */
+const applyStatus = (r: any) => {
+    const accounts = Array.isArray(r?.accounts) ? r.accounts.filter((a: unknown) => typeof a === 'string') : [];
+    const until = typeof r?.until === 'number' ? r.until : undefined;
+    if (r?.status === 'active') setPremium({ status: 'active', plan: 'premium', expiresAt: until, accounts });
+    else if (r?.status === 'expired') setPremium({ status: 'expired', expiresAt: until, accounts });
+    else setPremium({ status: 'inactive', accounts, needsLogin: r?.reason === 'login' });
+};
+
+/** Refreshes the shared Premium state: asks the server about the logged-in Deriv account. */
 export const refreshEntitlement = async () => {
     if (!premiumEnabled()) return setPremium({ status: 'off' });
-    if (!readPass()) return setPremium({ status: 'inactive' });
+    if (!accessToken()) return setPremium({ status: 'inactive', needsLogin: true });
     setPremium({ status: 'checking' });
     try {
         const r = await call('/premium/status');
         reachable();
-        if (r?.status === 'active' && typeof r.pass === 'string' && /^[\w-]+\.[\w-]+$/.test(r.pass)) {
-            savePass(r.pass);
-            setPremium({ status: 'active', plan: 'premium' });
-        } else {
-            savePass(null); // the code was changed: the new code is needed
-            setPremium({ status: 'inactive' });
-        }
+        if (readPass() && r?.status) dropPass(); // the old shared code's pass was used (or is no longer needed)
+        applyStatus(r);
     } catch (e: any) {
-        if (e?.status === 401 || e?.status === 402 || e?.status === 403) {
+        if (e?.status === 401 || e?.status === 403) {
             reachable();
-            savePass(null);
-            setPremium({ status: 'inactive' });
+            setPremium({ status: 'inactive', needsLogin: e.status === 401 });
         } else {
-            // The server didn't answer. The pass is kept (only the server can say it is no longer valid),
-            // but Premium is not shown as unlocked until the server confirms it.
+            // The server didn't answer: Premium is not shown as unlocked until the server confirms it
             setPremium({ status: 'unavailable' });
             retryLater();
         }
     }
 };
 
-/** Unlocks Premium on this device with the secret code. Only the server can tell whether the code is right. */
-export const unlockPremium = async (code: string) => {
+/** Uses a gift code: the server adds its days of Premium to the logged-in Deriv account. */
+export const redeemGift = async (code: string) => {
     if (!premiumEnabled())
-        throw new Error(
-            "The Kapa Premium server isn't connected to this site yet, so the code can't be checked. Premium opens as soon as it is."
-        );
-    const r = await call('/premium/unlock', { method: 'POST', body: JSON.stringify({ code }) });
-    // Only a real Kapa server answer counts: anything else leaves Premium locked
-    if (r?.status !== 'active' || typeof r.pass !== 'string' || !/^[\w-]+\.[\w-]+$/.test(r.pass))
-        throw new Error("The Kapa Premium server isn't answering correctly yet. Try again in a moment.");
-    savePass(r.pass);
-    setPremium({ status: 'active', plan: 'premium' });
-};
-
-/** Locks Premium again on this device. */
-export const lockPremium = () => {
-    savePass(null);
-    setPremium({ status: premiumEnabled() ? 'inactive' : 'off' });
+        throw new Error("The Kapa Premium server isn't connected to this site yet, so the code can't be checked.");
+    if (!accessToken()) throw new Error('Log in with Deriv first: the code gives Premium to your Deriv account.');
+    const r = await call('/premium/redeem', { method: 'POST', body: JSON.stringify({ code }) });
+    if (r?.status !== 'active') throw new Error("The Kapa Premium server isn't answering correctly yet. Try again in a moment.");
+    applyStatus(r);
+    return r as { until: number; days: number; accounts: string[] };
 };
 
 /** Starts a CinetPay payment (mobile money or card) and leaves for CinetPay's checkout page. */
@@ -194,7 +190,9 @@ export const startCheckout = async () => {
 };
 
 /** After CinetPay sends the buyer back (?premium_tx=…), waits for the server to confirm the payment. */
-export const resumeCheckout = async (onUpdate: (text: string) => void) => {
+export const resumeCheckout = async (
+    onUpdate: (text: string, state: 'checking' | 'paid' | 'failed' | 'pending') => void
+) => {
     const params = new URLSearchParams(window.location.search);
     const tx = params.get('premium_tx');
     if (!tx || !premiumEnabled()) return;
@@ -204,28 +202,31 @@ export const resumeCheckout = async (onUpdate: (text: string) => void) => {
         '',
         `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`
     );
-    onUpdate('Checking your payment with CinetPay…');
+    onUpdate('Checking your payment with CinetPay…', 'checking');
     for (let i = 0; i < 40; i++) {
         try {
             const s = await call(`/checkout/status?tx=${encodeURIComponent(tx)}`);
             if (s.status === 'paid') {
+                await refreshEntitlement();
                 return onUpdate(
-                    `Payment confirmed. Send this reference to Kapa on WhatsApp or Telegram to receive your Premium code: ${tx}`
+                    `Payment confirmed: KAPA AI Premium is active on your Deriv account${s.until ? ` until ${new Date(s.until).toLocaleDateString()}` : ''}. Payment reference: ${tx}`,
+                    'paid'
                 );
             }
             if (s.status === 'failed')
-                return onUpdate('The payment was refused or cancelled. No money was taken for Premium.');
+                return onUpdate('The payment was refused or cancelled. No money was taken for Premium.', 'failed');
         } catch (e: any) {
-            if (e?.status === 401) return onUpdate('Log in with Deriv to check your payment.');
+            if (e?.status === 401) return onUpdate('Log in with Deriv to check your payment.', 'pending');
         }
         await new Promise(r => setTimeout(r, 3000));
     }
     onUpdate(
-        `Your payment is still being processed. Once CinetPay confirms it, send this reference to Kapa to receive your Premium code: ${tx}`
+        `Your payment is still being processed. Premium starts on your Deriv account as soon as CinetPay confirms it. Payment reference: ${tx}`,
+        'pending'
     );
 };
 
-// ---- Premium tools: everything below is decided by the server, which checks the membership each time ----
+// ---- Premium tools: everything below is decided by the server, which checks Premium each time ----
 
 const post = (path: string, body: unknown) => call(path, { method: 'POST', body: JSON.stringify(body) });
 
@@ -270,6 +271,29 @@ export const remotePolicy = (s: TSettings, ratios: TPayoutRatios): TPolicy => {
     };
 };
 
+/**
+ * A classic bot's settings, as the server needs them for KAPA Apex recovery (Premium).
+ * bot: 'switcher' | 'printer' | 'goldoe' | 'profitmaker'.
+ */
+export type TClassicServerSettings = {
+    bot: string;
+    symbol: string;
+    stake: number;
+    takeProfit: number;
+    stopLoss: number;
+    maxStake: number;
+    maxMargin: number;
+};
+/**
+ * KAPA Apex recovery for a classic bot (Premium): after a loss, the server answers with the next trade
+ * (the contract and stake with the best chance of still reaching the take-profit) or a reason to stop.
+ */
+export const classicRecover = async (
+    s: TClassicServerSettings,
+    state: { pl: number; streak: number; lost: number; runs: number },
+    ratios: TPayoutRatios
+): Promise<TDecision> => (await post('/classic/recover', { ...s, state, ratios })).decision as TDecision;
+
 export type TPlanResult = {
     hit: number;
     bust: number;
@@ -284,6 +308,12 @@ export type TPlanResult = {
 /** Session plan for a Premium strategy, simulated by the server (free for everyone). */
 export const simulatePlan = (s: TSettings, capital: number, ratios: TPayoutRatios): Promise<TPlanResult> =>
     post('/plan/simulate', { ...settingsBody(s), capital, ratios });
+/** Session plan for a classic bot with KAPA Apex recovery, simulated by the server (free for everyone). */
+export const simulateClassicPlan = (
+    s: TClassicServerSettings,
+    capital: number,
+    ratios: TPayoutRatios
+): Promise<TPlanResult> => post('/plan/simulate', { ...s, preset: 'classic', capital, ratios });
 
 export type TRandomness = {
     ticks: number;
@@ -322,18 +352,18 @@ export const labBacktest = (body: {
     takeProfit: number;
     stopLoss: number;
     capital: number;
-}): Promise<{ ticks: number; results: Record<string, TBacktest> }> => call('/lab/backtest', { method: 'POST', body: JSON.stringify(body) }, 30000);
+}): Promise<{ ticks: number; results: Record<string, TBacktest> }> =>
+    call('/lab/backtest', { method: 'POST', body: JSON.stringify(body) }, 30000);
 
 /** Live market scan, run by the server over Deriv's public prices. Premium only. */
 export const scanMarkets = (
     preset: string,
     currency: string,
-    symbols?: string[]
+    symbols?: string[],
+    maxMargin?: number
 ): Promise<{ preset: string; rows: TScanRow[] }> =>
-    post('/scan', { preset, currency, ...(symbols ? { symbols } : {}) });
+    post('/scan', { preset, currency, ...(symbols ? { symbols } : {}), ...(maxMargin ? { maxMargin } : {}) });
 
-/** Settings of a Premium bot from the Free Bot library. Premium only. */
-export const fetchPremiumBot = async (id: string) => (await call(`/bots/${encodeURIComponent(id)}`)).data;
 
 // ---- Admin (the secret is checked by the server and kept only for this browser tab) ----
 const adminCall = (path: string, secret: string, body?: unknown) =>
@@ -347,8 +377,44 @@ const adminCall = (path: string, secret: string, body?: unknown) =>
         return b;
     });
 
+export type TEntitlementView = {
+    accounts: string[];
+    until: number;
+    since: number;
+    source: 'payment' | 'gift' | 'admin' | 'code';
+    ref: string;
+    active: boolean;
+    revokedAt: number | null;
+};
+export type TGiftView = {
+    id: string;
+    label: string;
+    maxUses: number;
+    uses: number;
+    days: number;
+    createdAt: number;
+    disabled: boolean;
+    hint: string;
+    redeemed: { accounts: string[]; at: number }[];
+};
+export type TAdminOverview = {
+    ready: boolean;
+    days: number;
+    entitlements: TEntitlementView[];
+    gifts: TGiftView[];
+    contact: { whatsapp: string; telegram: string };
+    payments: { configured: boolean; price: number; currency: string };
+};
+
 export const adminApi = {
+    overview: (secret: string): Promise<TAdminOverview> => adminCall('/admin/overview', secret),
     payments: (secret: string) => adminCall('/admin/payments', secret),
-    code: (secret: string) => adminCall('/admin/code', secret),
-    setCode: (secret: string, code: string) => adminCall('/admin/code', secret, { code }),
+    activate: (secret: string, account: string, days?: number) =>
+        adminCall('/admin/entitlements', secret, { account, ...(days ? { days } : {}) }),
+    revoke: (secret: string, account: string) => adminCall('/admin/entitlements/revoke', secret, { account }),
+    createGift: (secret: string, g: { label: string; maxUses: number; days?: number; code?: string }) =>
+        adminCall('/admin/gifts', secret, g) as Promise<{ code: string; gift: TGiftView }>,
+    disableGift: (secret: string, id: string, disabled = true) =>
+        adminCall('/admin/gifts/disable', secret, { id, disabled }),
+    saveContact: (secret: string, c: { whatsapp: string; telegram: string }) => adminCall('/admin/settings', secret, c),
 };

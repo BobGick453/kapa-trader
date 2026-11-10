@@ -3,7 +3,6 @@ import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import brandConfig from '@/../brand.config.json';
 import { generateOAuthURL } from '@/components/shared';
-import Text from '@/components/shared_ui/text';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import { KAPA_NO_SESSION_AT_LOAD } from '@/stores/dashboard-store';
@@ -39,11 +38,11 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
                     'tab__dashboard--tour-active': active_tour,
                 })}
             >
-                <div className='tab__dashboard__content'>
-                    <div className='quick-panel'>
-                        <div
-                            className={classNames('tab__dashboard__header', {
-                                'tab__dashboard__header--listed': isDesktop && has_dashboard_strategies,
+                <div className='tab__dashboard__content kapa-dash'>
+                    <div className='kapa-dash__container'>
+                        <header
+                            className={classNames('kapa-dash__header', {
+                                'kapa-dash__header--listed': isDesktop && has_dashboard_strategies,
                             })}
                         >
                             <div className='kapa-social'>
@@ -77,29 +76,14 @@ const DashboardComponent = observer((_props: TMobileIconGuide) => {
                                 </a>
                             </div>
                             {!has_dashboard_strategies && (
-                                <Text
-                                    className='title kapa-intro-title'
-                                    as='h2'
-                                    color='prominent'
-                                    size={isDesktop ? 'sm' : 's'}
-                                    lineHeight='xxl'
-                                    weight='bold'
-                                >
-                                    {localize('Load or build your bot')}
-                                </Text>
+                                <h2 className='kapa-dash__title'>{localize('Load or build your bot')}</h2>
                             )}
-                            <Text
-                                as='p'
-                                color='prominent'
-                                lineHeight='s'
-                                size={isDesktop ? 's' : 'xxs'}
-                                className={classNames('subtitle', { 'subtitle__has-list': has_dashboard_strategies })}
-                            >
+                            <p className='kapa-dash__subtitle'>
                                 {localize(
                                     'Import a bot from your computer or Google Drive, build it from scratch, or start with a quick strategy.'
                                 )}
-                            </Text>
-                        </div>
+                            </p>
+                        </header>
                         <Cards has_dashboard_strategies={has_dashboard_strategies} is_mobile={!isDesktop} />
                         {show_login_notice && (
                             <div className='kapa-notice kapa-login' role='status'>

@@ -1,106 +1,26 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { DBOT_TABS } from '@/constants/bot-contents';
-import { BOTS, TClassicKey } from '../kapa-ai/classic';
 import { load } from '@/external/bot-skeleton';
 import { save_types } from '@/external/bot-skeleton/constants/save-type';
 import { useStore } from '@/hooks/useStore';
-import { addDynamicBlockToDOM } from '@/utils/xml-dom-quick-strategy';
-import { fetchPremiumBot, refreshEntitlement } from '../premium/premium-api';
-import { openPremium, usePremium } from '../premium/use-premium';
-import { LIBRARY_BOTS, TBotCategory, TBotData, TLibraryBot } from './bots';
+import type { TClassicKey } from '../kapa-ai/classic';
+import { FILTERS, FREE_BOTS, TBotFilter, TFreeBot } from './bots';
 import './free-bot.scss';
-
-const FILTERS: { key: 'all' | TBotCategory; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'digits', label: 'Digits' },
-    { key: 'premium', label: 'Premium' },
-    { key: 'evenodd', label: 'Even/Odd' },
-];
-
-const XML_LOADERS = {
-    martingale: () => import('../../xml/martingale_max-stake.xml'),
-    dalembert: () => import('../../xml/dalembert_max-stake.xml'),
-    oscars_grind: () => import('../../xml/oscars_grind_max-stake.xml'),
-};
-
-const SYMBOLS = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
-const isNum = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
-const optNum = (v: unknown, lo: number, hi: number) => v === undefined || isNum(v, lo, hi);
-
-/** Checks bot settings before they go into the XML, whether they came from this file or from the server. */
-const checkData = (d: any): d is TBotData =>
-    Boolean(d) &&
-    SYMBOLS.includes(d.symbol) &&
-    ['overunder', 'evenodd'].includes(d.tradetype) &&
-    ['DIGITOVER', 'DIGITUNDER', 'DIGITEVEN', 'DIGITODD'].includes(d.type) &&
-    optNum(d.prediction, 0, 9) &&
-    isNum(d.stake, 0.35, 50000) &&
-    optNum(d.size, 1, 10) &&
-    optNum(d.unit, 0.01, 1000) &&
-    isNum(d.profit, 0.01, 1e6) &&
-    isNum(d.loss, 0.01, 1e6) &&
-    optNum(d.maxStake, 0.35, 1e6) &&
-    isNum(d.duration, 1, 10);
-
-/** Fills a template strategy XML with the bot's settings, as Quick strategy does, and loads it into Bot Builder. */
-const loadBot = async (bot: TLibraryBot, d: TBotData) => {
-    const xml = (await XML_LOADERS[bot.xml]()).default as string;
-    const dom = window.Blockly.utils.xml.textToDom(xml);
-    if (d.prediction !== undefined) addDynamicBlockToDOM('PREDICTION', 'last_digit_prediction', 'digits', dom);
-
-    const setNumber = (key: string, value: number) =>
-        dom.querySelectorAll(`value[strategy_value="${key}"]`).forEach((el: Element) => {
-            el.innerHTML = `<shadow type="math_number"><field name="NUM">${value}</field></shadow>`;
-        });
-    const setDropdown = (name: string, value: string) =>
-        dom.querySelectorAll(`field[name="${name.toUpperCase()}_LIST"]`).forEach((el: Element) => {
-            el.innerHTML = value;
-        });
-
-    setDropdown('market', 'synthetic_index');
-    setDropdown('submarket', 'random_index');
-    setDropdown('symbol', d.symbol);
-    setDropdown('tradetypecat', 'digits');
-    setDropdown('tradetype', d.tradetype);
-    setDropdown('type', 'both');
-    setDropdown('purchase', d.type);
-    setDropdown('durationtype', 't');
-    setNumber('duration', d.duration);
-    setNumber('stake', d.stake);
-    setNumber('profit', d.profit);
-    setNumber('loss', d.loss);
-    if (d.size !== undefined) setNumber('size', d.size);
-    if (d.maxStake !== undefined) setNumber('max_stake', d.maxStake);
-    if (d.unit !== undefined)
-        ['alembert_unit', 'dalembert_unit', 'oscar_unit'].forEach(k => setNumber(k, d.unit as number));
-    if (d.prediction !== undefined) setNumber('last_digit_prediction', d.prediction);
-
-    await load({
-        block_string: window.Blockly.Xml.domToText(dom),
-        file_name: bot.name,
-        workspace: window.Blockly.derivWorkspace,
-        from: save_types.UNSAVED,
-        drop_event: null,
-        strategy_id: null,
-        showIncompatibleStrategyDialog: null,
-    });
-};
 
 type TFreeBotProps = { handleTabChange: (tab: number) => void };
 
-// Tested with KAPA AI's engine on 300,000 real ticks, Deriv's real prices, take-profit 5, stop-loss 50
-const CLASSIC_CARDS: { key: TClassicKey; name: string; tested: string }[] = [
-    { key: 'switcher', name: 'Digit Switcher', tested: 'Target reached in 90.0% of sessions · average −0.46 per session · never past the stop-loss' },
-    { key: 'printer', name: 'Dollar Printer', tested: 'Target reached in 89.9% of sessions · average −0.54 per session · never past the stop-loss' },
-    { key: 'goldoe', name: 'Gold Premium Odd/Even', tested: 'Target reached in 90.0% of sessions · average −0.47 per session · never past the stop-loss' },
-    { key: 'profitmaker', name: 'Profit Maker', tested: 'Target reached in 90.3% of sessions · average −0.34 per session · never past the stop-loss' },
-];
+const signed = (x: number) => (x < 0 ? `−${Math.abs(x).toFixed(2)}` : `+${x.toFixed(2)}`);
+const result = ([target, average, worst]: [number, number, number]) =>
+    `target ${target.toFixed(1)}% · average ${signed(average)} · worst −${Math.abs(worst)}`;
 
-/** Loads a classic bot into KAPA AI (the page reads it on opening) and switches to the KAPA AI tab. */
-const runInKapa = (key: TClassicKey) => {
-    const detail = { symbol: 'R_100', preset: key, stake: 1 };
+/**
+ * Loads a classic bot into KAPA AI (the page reads it on opening) and switches to the KAPA AI tab. With
+ * apexRecovery, KAPA AI loads the Premium Apex recovery (computed on the server); without Premium, Start asks for it.
+ */
+const runInKapa = (key: TClassicKey, apexRecovery = false) => {
+    const detail = { symbol: 'R_100', preset: key, stake: 1, ...(apexRecovery ? { apexRecovery: true } : {}) };
     try {
         sessionStorage.setItem('kapa_pending_market', JSON.stringify(detail));
     } catch {
@@ -111,30 +31,35 @@ const runInKapa = (key: TClassicKey) => {
 
 const FreeBot = observer(({ handleTabChange }: TFreeBotProps) => {
     const { run_panel } = useStore();
-    const premium = usePremium();
-    const [filter, setFilter] = useState<'all' | TBotCategory>('all');
+    const [filter, setFilter] = useState<'All' | TBotFilter>('All');
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState('');
 
-    const shown = LIBRARY_BOTS.filter(b => filter === 'all' || b.categories.includes(filter));
+    const shown = filter === 'All' ? FREE_BOTS : FREE_BOTS.filter(b => b.filters.includes(filter));
 
-    const onLoad = async (bot: TLibraryBot) => {
-        if (bot.premium && premium.status !== 'active') return openPremium();
+    /** Puts the bot's XML into Bot Builder, as the reference's "Load Bot" does. */
+    const onLoad = async (bot: TFreeBot) => {
         if (run_panel.is_running) return setError('Stop the running bot before loading another one.');
         setError('');
         setBusy(bot.id);
         let switched = false;
         try {
-            // Premium bot settings come from the server, which checks the membership first
-            const data = bot.premium ? await fetchPremiumBot(bot.id) : bot.data;
-            if (!checkData(data)) throw new Error('its settings are invalid');
+            const xml = (await bot.xml()).default;
             handleTabChange(DBOT_TABS.BOT_BUILDER);
             switched = true;
             await new Promise(r => setTimeout(r, 300)); // let Bot Builder's workspace become visible first
-            await loadBot(bot, data);
+            const res = await load({
+                block_string: xml,
+                file_name: bot.name,
+                workspace: window.Blockly.derivWorkspace,
+                from: save_types.UNSAVED,
+                drop_event: null,
+                strategy_id: null,
+                showIncompatibleStrategyDialog: null,
+            });
+            if (res?.error) throw new Error(res.error);
         } catch (e: any) {
-            if (e?.status === 402) refreshEntitlement();
-            setError(`Couldn't load ${bot.name}: ${e?.message ?? e}`);
+            setError(`Couldn't load ${bot.title}: ${e?.message ?? e}`);
             if (switched) handleTabChange(DBOT_TABS.FREE_BOT);
         } finally {
             setBusy(null);
@@ -142,78 +67,90 @@ const FreeBot = observer(({ handleTabChange }: TFreeBotProps) => {
     };
 
     return (
-        <div className='free-bot'>
-            <section className='free-bot__hero'>
-                <h2>Bot Library</h2>
-                <p>Choose a bot and load it into Bot Builder. Review its settings there, then press Run.</p>
-            </section>
-            <div className='free-bot__filters' role='tablist'>
-                {FILTERS.map(f => (
-                    <button
-                        key={f.key}
-                        type='button'
-                        role='tab'
-                        aria-selected={filter === f.key}
-                        className={classNames({ on: filter === f.key })}
-                        onClick={() => setFilter(f.key)}
-                    >
-                        {f.label}
-                    </button>
-                ))}
-            </div>
-            {error && <div className='free-bot__error'>{error}</div>}
-            <h3 className='free-bot__section'>Classic bots, rebuilt · run in KAPA AI</h3>
-            <p className='free-bot__intro'>
-                Digit Switcher, Dollar Printer, Gold Odd/Even and Profit Maker keep the originals&apos; entry rules;
-                after a loss, KAPA Apex takes over with the contract and stake that give the best chance of still
-                reaching your take-profit, never past your stop-loss. On 300,000 real Deriv ticks, the originals lose up to 1,500 in a
-                session, and Dollar Printer, which has no stop-loss, emptied a 10,000 account 40 times. Results
-                below: same ticks, Deriv&apos;s real prices, take-profit 5 and stop-loss 50.
-            </p>
-            <div className='free-bot__list'>
-                {CLASSIC_CARDS.map(c => (
-                    <article key={c.key} className='free-bot__card'>
-                        <div className='free-bot__title'>
-                            <h3>{c.name}</h3>
-                            <span className='free-bot__badge free-bot__badge--ai'>KAPA AI</span>
-                        </div>
-                        <p>{BOTS[c.key].about}</p>
-                        <small>{c.tested}</small>
-                        <button type='button' className='free-bot__load' onClick={() => runInKapa(c.key)}>
-                            Run in KAPA AI
+        <section className='free-bot'>
+            <div className='free-bot__container'>
+                <header className='free-bot__head'>
+                    <h1>Bot Library</h1>
+                    <p>Choose a bot and load it into Bot Builder.</p>
+                </header>
+                <div className='free-bot__filters' role='group' aria-label='Filter bots'>
+                    {FILTERS.map(f => (
+                        <button
+                            key={f}
+                            type='button'
+                            className={classNames('free-bot__filter', { 'free-bot__filter--active': filter === f })}
+                            aria-pressed={filter === f}
+                            onClick={() => setFilter(f)}
+                        >
+                            {f}
                         </button>
-                    </article>
-                ))}
-            </div>
-            <h3 className='free-bot__section'>Bot Builder bots</h3>
-            <div className='free-bot__list'>
-                {shown.map(bot => {
-                    const locked = bot.premium && premium.status !== 'active';
-                    return (
-                        <article key={bot.id} className='free-bot__card'>
-                            <div className='free-bot__title'>
-                                <h3>{bot.name}</h3>
-                                {bot.premium && <span className='free-bot__badge'>PREMIUM</span>}
+                    ))}
+                </div>
+                {error && <div className='free-bot__error'>{error}</div>}
+                <div className='free-bot__grid'>
+                    {shown.map(bot => (
+                        <article key={bot.id} className='free-bot__card' data-bot={bot.id}>
+                            <div className='free-bot__content'>
+                                <h2>{bot.title}</h2>
+                                <p>{bot.description}</p>
+                                <small className='free-bot__tested'>
+                                    Bot Builder, {bot.defaults}: target reached in {bot.tested.target.toFixed(1)}% of
+                                    sessions · average {signed(bot.tested.average)} · worst session −
+                                    {Math.abs(bot.tested.worst)}
+                                </small>
                             </div>
-                            <p>{bot.description}</p>
-                            <small>
-                                {bot.data
-                                    ? `Stake ${bot.data.stake} · take-profit ${bot.data.profit} · stop-loss ${bot.data.loss} · ${bot.data.symbol}`
-                                    : 'Settings are sent to Premium members when the bot loads.'}
-                            </small>
                             <button
                                 type='button'
-                                className={classNames('free-bot__load', { locked })}
+                                className='free-bot__btn'
                                 onClick={() => onLoad(bot)}
                                 disabled={busy !== null}
                             >
-                                {busy === bot.id ? 'Loading…' : locked ? '🔒 Unlock with Premium' : 'Load Bot'}
+                                {busy === bot.id ? 'Loading…' : 'Load Bot'}
                             </button>
+                            <div className='free-bot__ai'>
+                                <button
+                                    type='button'
+                                    className='free-bot__btn free-bot__btn--ai'
+                                    onClick={() => runInKapa(bot.classic)}
+                                    disabled={busy !== null}
+                                >
+                                    Run in KAPA AI
+                                </button>
+                                <button
+                                    type='button'
+                                    className='free-bot__btn free-bot__btn--apex'
+                                    onClick={() => runInKapa(bot.classic, true)}
+                                    disabled={busy !== null}
+                                    title='KAPA AI with the Apex recovery, a Premium option'
+                                >
+                                    Apex recovery <span className='free-bot__badge'>PREMIUM</span>
+                                </button>
+                            </div>
+                            <small className='free-bot__tested free-bot__tested--ai'>
+                                KAPA AI, take-profit 5 / stop-loss 50 · free recovery: {result(bot.kapa.free)} · Apex
+                                (Premium): {result(bot.kapa.apex)}
+                            </small>
                         </article>
-                    );
-                })}
+                    ))}
+                </div>
+                <details className='free-bot__how'>
+                    <summary>How these numbers were measured</summary>
+                    <p>
+                        Each bot&apos;s rules were replayed on 300,000 real Deriv ticks with Deriv&apos;s real prices
+                        (one Run = one session): the Bot Builder version at the default settings shown, and the KAPA AI
+                        version with take-profit 5 and stop-loss 50, with its free recovery or with KAPA Apex, the
+                        Premium recovery computed on Kapa&apos;s server. The originals reach their target more often
+                        only because they risk far more: up to 1,517 lost in one session for Digit Switcher, and a
+                        10,000 account emptied 44 times for Dollar Printer, which had no stop-loss. Kapa&apos;s versions
+                        never place a stake past the stop-loss or above Max Stake.
+                    </p>
+                    <p>
+                        No bot wins in the long run: the digits are random and every contract pays a little less than
+                        its odds. The average per session is what a session costs on average.
+                    </p>
+                </details>
             </div>
-        </div>
+        </section>
     );
 });
 

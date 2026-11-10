@@ -1,26 +1,24 @@
 /**
- * Kapa Premium server (Cloudflare Worker + KV).
+ * Kapa Premium server (Cloudflare Worker + KV, or Netlify Function + Blobs).
  *
- * - Premium is unlocked with a secret code that the owner chooses and can change at any time
- *   (Admin page). The code is checked here, never in the website: a correct code returns a
- *   signed Premium pass, valid until the code changes. Repeated wrong codes slow the caller down.
- * - Identifies traders by asking Deriv which accounts their OAuth access token belongs to.
- *   The token is used for that check only; it is never stored.
- * - Runs the Premium strategies: the website sends each settled contract and receives the
- *   next trade. Sessions are signed (HMAC) so they need no storage, and the Premium pass is
- *   checked again on every decision.
- * - Scans markets itself over Deriv's public WebSocket, simulates session plans, and gives
- *   Premium bot settings to members only.
- * - Takes Premium payments through CinetPay (mobile money and cards), checked with CinetPay's
- *   verification API. A paid buyer receives the Premium code from the owner.
+ * - Premium belongs to a Deriv account for a number of days (PLAN_DAYS, 30 by default). It starts after a
+ *   payment confirmed by CinetPay, after a gift code made by the owner in Admin, or when the owner activates
+ *   an account from Admin. It ends by itself; the owner can see every account and revoke one.
+ * - Identifies traders by asking Deriv which accounts their OAuth access token belongs to. The token is used
+ *   for that check only; it is never stored or logged. Every Premium request is checked again.
+ * - Runs the Premium strategies: the website sends each settled contract and receives the next trade.
+ *   Sessions are signed (HMAC) so they need no storage.
+ * - Scans markets itself over Deriv's public WebSocket, simulates session plans, and gives Premium bot
+ *   settings to members only.
  * - Admin endpoints need ADMIN_SECRET; repeated wrong attempts lock the caller out.
  *
  * Bindings: KV namespace KAPA_KV.
- * Secrets: CINETPAY_APIKEY, CINETPAY_SITE_ID, ADMIN_SECRET, SESSION_KEY, and optionally
- * PREMIUM_CODE (first code, until one is set from Admin) and PREMIUM_RULES.
+ * Secrets: CINETPAY_APIKEY, CINETPAY_SITE_ID, ADMIN_SECRET, SESSION_KEY, and optionally PREMIUM_RULES
+ * (PREMIUM_CODE, the old shared code, only lets devices that used it move to their account; see migrateLegacy).
  * Vars: PRICE_XOF, PLAN_DAYS, CURRENCY, SITE_URL, ALLOWED_ORIGINS, DERIV_API, DERIV_PUBLIC_WS.
  */
 
+import { classicSettings, cleanState, simulateClassic } from './classic.js';
 import {
     applyResult,
     backtest,
@@ -34,7 +32,7 @@ import {
     GROUPS,
     labStrategies,
     loadRules,
-    MIN_EXPECTED,
+    presetKey,
     randomnessCheck,
     simulate,
     validateSettings,
@@ -44,7 +42,6 @@ import {
 const CINETPAY = 'https://api-checkout.cinetpay.com/v2';
 const DAY = 24 * 60 * 60 * 1000;
 const SESSION_TTL = 6 * 60 * 60 * 1000;
-const PASS_TTL = 30 * DAY; // renewed each time the website checks it, while the code is unchanged
 const MAX_BODY = 16 * 1024;
 const TX_ID = /^kapa_[a-z0-9]+_[a-f0-9]{10}$/;
 const ACCOUNT_ID = /^[A-Za-z0-9]{4,32}$/;
@@ -189,12 +186,12 @@ const derivAccounts = async (req, env) => {
     return ids;
 };
 
-// ---------- Premium code ----------
+// ---------- Codes ----------
 // Codes ignore spaces, dashes and letter case, so a code typed on a phone still matches.
 const normalizeCode = code => (typeof code === 'string' ? code.replace(/[\s-]+/g, '').toUpperCase() : '');
 const CODE_OK = /^[A-Z0-9_.@#!*+=]{8,64}$/;
 
-const codeHash = async (env, code) => {
+const codeHash = async (env, code, purpose = 'premium-code') => {
     const key = await crypto.subtle.importKey(
         'raw',
         enc.encode(env.SESSION_KEY),
@@ -202,17 +199,17 @@ const codeHash = async (env, code) => {
         false,
         ['sign']
     );
-    return b64url(await crypto.subtle.sign('HMAC', key, enc.encode(`premium-code:${code}`)));
+    return b64url(await crypto.subtle.sign('HMAC', key, enc.encode(`${purpose}:${code}`)));
 };
 
-/** The current code: the one set from Admin, otherwise the PREMIUM_CODE secret. Only its hash is kept. */
-const currentCode = async env => {
+/** The old shared code (before Premium belonged to accounts): only used to move its devices to their account. */
+const legacyCode = async env => {
     const saved = await env.KAPA_KV.get('premium:code', 'json');
-    if (saved?.h && saved?.ver) return { ...saved, source: 'admin' };
+    if (saved?.h && saved?.ver) return saved;
     const first = normalizeCode(env.PREMIUM_CODE || '');
     if (CODE_OK.test(first)) {
         const h = await codeHash(env, first);
-        return { h, ver: `secret-${h.slice(0, 12)}`, source: 'secret' };
+        return { h, ver: `secret-${h.slice(0, 12)}` };
     }
     return null;
 };
@@ -262,15 +259,94 @@ const tooManyCodes = ms => {
     return res;
 };
 
-const issuePass = (env, ver) => signSession(env, { v: 1, typ: 'pass', ver, exp: Date.now() + PASS_TTL });
-
-/** A Premium pass is valid while it is signed by this server, not expired, and made for the current code. */
-const readPass = async (env, req) => {
+/** A pass a device received for the old shared code: still valid (it is no longer renewed) and for that code. */
+const legacyPass = async (env, req) => {
     if (!env.SESSION_KEY || env.SESSION_KEY.length < 32) return null;
     const p = await readSession(env, req.headers.get('x-kapa-pass') || '', 'pass');
     if (!p) return null;
-    const code = await currentCode(env);
+    const code = await legacyCode(env);
     return code && p.ver === code.ver ? p : null;
+};
+
+// ---------- Premium entitlements: one record per Deriv account ----------
+// ent:<account> = { until, since, source: payment | gift | admin | code, ref, group: [accounts granted together],
+//                   updatedAt, revokedAt?, history: [{ at, days, source, ref }] }
+const entKey = id => `ent:${id}`;
+const entCache = new Map(); // a few seconds, per instance: one Premium check per trade without a storage read
+const bestEnt = async (env, ids) => {
+    const recs = await Promise.all(ids.map(id => env.KAPA_KV.get(entKey(id), 'json').catch(() => null)));
+    return recs.filter(Boolean).sort((a, b) => b.until - a.until)[0] || null;
+};
+/** Premium state of a Deriv user (all the accounts their token belongs to). */
+const entitlement = async (env, ids) => {
+    const key = ids.join(',');
+    const hit = entCache.get(key);
+    if (hit && hit.exp > Date.now()) return hit.v;
+    const rec = await bestEnt(env, ids);
+    const v = { active: Boolean(rec && rec.until > Date.now()), until: rec?.until ?? null, rec };
+    if (entCache.size > 2000) entCache.clear();
+    entCache.set(key, { v, exp: Date.now() + 15000 });
+    return v;
+};
+/** Adds `days` of Premium to these accounts (counted from the current end date while it is still running). */
+const grant = async (env, ids, days, source, ref) => {
+    const now = Date.now();
+    const cur = await bestEnt(env, ids);
+    const running = cur && cur.until > now;
+    const group = [...new Set([...(cur?.group || []), ...ids])].filter(id => ACCOUNT_ID.test(id)).slice(0, 20);
+    const rec = {
+        until: (running ? cur.until : now) + days * DAY,
+        since: running ? cur.since : now,
+        source,
+        ref: String(ref || '').slice(0, 80),
+        group,
+        updatedAt: now,
+        history: [...(cur?.history || []).slice(-19), { at: now, days, source, ref: String(ref || '').slice(0, 80) }],
+    };
+    await Promise.all(group.map(id => env.KAPA_KV.put(entKey(id), JSON.stringify(rec))));
+    entCache.clear();
+    return rec;
+};
+/** Ends Premium at once for an account and the accounts granted with it. */
+const revoke = async (env, id) => {
+    const cur = await env.KAPA_KV.get(entKey(id), 'json');
+    if (!cur) return null;
+    const now = Date.now();
+    const rec = { ...cur, until: Math.min(cur.until, now), revokedAt: now, updatedAt: now };
+    await Promise.all((cur.group?.length ? cur.group : [id]).map(x => env.KAPA_KV.put(entKey(x), JSON.stringify(rec))));
+    entCache.clear();
+    return rec;
+};
+const entView = rec =>
+    rec && {
+        accounts: rec.group,
+        until: rec.until,
+        since: rec.since,
+        source: rec.source,
+        ref: rec.ref,
+        active: rec.until > Date.now(),
+        revokedAt: rec.revokedAt ?? null,
+        history: rec.history,
+    };
+
+// ---------- Gift codes (made by the owner in Admin; each use gives Premium to one Deriv user) ----------
+// gift:<id> = { id, label, maxUses, uses, days, createdAt, disabled, hint, redeemed: [{ accounts, at }] }
+const GIFT_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I: easy to read aloud
+const newGiftCode = () => {
+    const b = crypto.getRandomValues(new Uint8Array(12));
+    const c = [...b].map(x => GIFT_ALPHABET[x % GIFT_ALPHABET.length]).join('');
+    return `KAPA-${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8, 12)}`;
+};
+const giftId = async (env, code) => (await codeHash(env, normalizeCode(code), 'gift-code')).slice(0, 24);
+const giftView = g => g && { id: g.id, label: g.label, maxUses: g.maxUses, uses: g.uses, days: g.days, createdAt: g.createdAt, disabled: Boolean(g.disabled), hint: g.hint, redeemed: (g.redeemed || []).slice(-50) };
+
+// ---------- Owner settings shown to visitors (contact links) ----------
+const contactLinks = async env => {
+    const c = (await env.KAPA_KV.get('settings:contact', 'json').catch(() => null)) || {};
+    return {
+        whatsapp: c.whatsapp ? `https://wa.me/${c.whatsapp}` : null,
+        telegram: c.telegram ? `https://t.me/${c.telegram}` : null,
+    };
 };
 
 const cinetpayCheck = async (env, transactionId) => {
@@ -287,10 +363,11 @@ const cinetpayCheck = async (env, transactionId) => {
     return res.json().catch(() => ({}));
 };
 
-/** Verifies a payment with CinetPay and records the result. Safe to call repeatedly. The owner then sends the code. */
+/** Verifies a payment with CinetPay, records it and gives the buyer's accounts Premium. Safe to call repeatedly. */
 const settle = async (env, transactionId) => {
     const tx = await env.KAPA_KV.get(`tx:${transactionId}`, 'json');
     if (!tx) return { status: 'unknown' };
+    if (tx.status === 'paid' && !tx.granted) return giveForPayment(env, transactionId, tx); // a grant that failed before
     if (tx.status === 'paid' || tx.status === 'failed') return tx;
     const check = await cinetpayCheck(env, transactionId);
     const status = check?.data?.status;
@@ -311,6 +388,12 @@ const settle = async (env, transactionId) => {
     } else {
         return tx; // still pending: nothing to write
     }
+    await env.KAPA_KV.put(`tx:${transactionId}`, JSON.stringify(tx));
+    return tx.status === 'paid' ? giveForPayment(env, transactionId, tx) : tx;
+};
+const giveForPayment = async (env, transactionId, tx) => {
+    const rec = await grant(env, tx.accounts, Number(tx.days) || 30, 'payment', transactionId);
+    Object.assign(tx, { granted: true, until: rec.until });
     await env.KAPA_KV.put(`tx:${transactionId}`, JSON.stringify(tx));
     return tx;
 };
@@ -419,7 +502,8 @@ const quoteRatio = r =>
  */
 const scan = async (env, body, rules) => {
     const { presets } = rules;
-    const preset = Object.hasOwn(presets, body?.preset) ? body.preset : 'pegasus';
+    const preset = Object.hasOwn(presets, presetKey(body?.preset)) ? presetKey(body.preset) : 'target';
+    const maxMargin = typeof body?.maxMargin === 'number' && body.maxMargin >= 1 && body.maxMargin <= 50 ? body.maxMargin : 12;
     const g = presets[preset].group;
     const keys = GROUPS[g === 'all' ? 'half' : g]; // Apex is compared on the 50% contracts here: fewer requests
     const cur = /^[A-Z]{3}$/.test(body?.currency || '') ? body.currency : 'USD';
@@ -461,7 +545,7 @@ const scan = async (env, body, rules) => {
                 payout: ratios[best],
                 expected,
                 margin: -expected,
-                tradable: expected >= MIN_EXPECTED,
+                tradable: expected >= -maxMargin / 100, // the same limit as KAPA AI's "maximum Deriv margin"
                 ratios,
                 randomness: randomnessCheck(digits),
             };
@@ -483,8 +567,7 @@ const handle = async (req, env) => {
     let loaded;
     const rules = () => (loaded ??= loadRules(env)); // only Premium routes need them; payments keep working if they're misconfigured
 
-    if (req.method === 'GET' && path === '/')
-        return json({ service: 'Kapa Premium server', status: 'online', premium_code: Boolean(await currentCode(env).catch(() => null)) });
+    if (req.method === 'GET' && path === '/') return json({ service: 'Kapa Premium server', status: 'online' });
 
     if (req.method === 'GET' && path === '/plan')
         return json({
@@ -492,6 +575,7 @@ const handle = async (req, env) => {
             currency,
             days,
             configured: Boolean(env.CINETPAY_APIKEY && env.CINETPAY_SITE_ID && price > 0),
+            contact: await contactLinks(env),
         });
 
     // CinetPay calls this after each payment attempt; only the transaction id is used, then verified with CinetPay
@@ -515,7 +599,7 @@ const handle = async (req, env) => {
     }
 
     if (path.startsWith('/admin/')) {
-        if (rateLimited(`admin:${ip}`, 20)) return fail(429, 'Too many attempts. Wait a minute.');
+        if (rateLimited(`admin:${ip}`, 30)) return fail(429, 'Too many attempts. Wait a minute.');
         const lockKey = `adminfail:${await sha256(ip)}`;
         const fails = Number((await env.KAPA_KV.get(lockKey)) || 0);
         if (fails >= 10) return fail(429, 'Too many wrong attempts. Try again in an hour.');
@@ -529,31 +613,70 @@ const handle = async (req, env) => {
             await env.KAPA_KV.put(lockKey, String(fails + 1), { expirationTtl: 3600 });
             return fail(401, 'Wrong admin secret');
         }
+        const ready = Boolean(env.SESSION_KEY && env.SESSION_KEY.length >= 32);
         if (req.method === 'GET' && path === '/admin/payments') return json({ payments: await listPrefix(env, 'tx:') });
-        if (req.method === 'GET' && path === '/admin/code') {
-            const code = env.SESSION_KEY && env.SESSION_KEY.length >= 32 ? await currentCode(env) : null;
+        if (req.method === 'GET' && path === '/admin/overview') {
+            const ents = await listPrefix(env, 'ent:');
+            const groups = new Map();
+            for (const { value } of ents) if (value) groups.set((value.group || []).join(','), entView(value));
+            const gifts = (await listPrefix(env, 'gift:')).map(g => giftView(g.value)).filter(Boolean);
+            const c = (await env.KAPA_KV.get('settings:contact', 'json').catch(() => null)) || {};
             return json({
-                set: Boolean(code),
-                source: code?.source ?? null,
-                updatedAt: code?.updatedAt ?? null,
-                ready: Boolean(env.SESSION_KEY && env.SESSION_KEY.length >= 32),
+                ready,
+                days,
+                entitlements: [...groups.values()].sort((a, b) => b.until - a.until),
+                gifts: gifts.sort((a, b) => b.createdAt - a.createdAt),
+                contact: { whatsapp: c.whatsapp || '', telegram: c.telegram || '' },
+                payments: { configured: Boolean(env.CINETPAY_APIKEY && env.CINETPAY_SITE_ID && price > 0), price, currency },
             });
         }
-        // Setting a new code signs everyone out of Premium; they need the new code
-        if (req.method === 'POST' && path === '/admin/code') {
-            if (!env.SESSION_KEY || env.SESSION_KEY.length < 32)
-                return fail(503, 'Set SESSION_KEY on the server first');
-            const body = await readJson(req);
-            const code = normalizeCode(body?.code);
-            if (!CODE_OK.test(code))
-                return fail(
-                    400,
-                    'The code needs 8 to 64 letters, digits or _ . @ # ! * + = (spaces and dashes are ignored)'
-                );
-            const ver = b64url(crypto.getRandomValues(new Uint8Array(12)));
-            const saved = { h: await codeHash(env, code), ver, updatedAt: Date.now() };
-            await env.KAPA_KV.put('premium:code', JSON.stringify(saved));
-            return json({ set: true, source: 'admin', updatedAt: saved.updatedAt });
+        if (req.method !== 'POST') return fail(404, 'Not found');
+        const body = (await readJson(req)) || {};
+        // Activate (or extend) Premium for one Deriv account
+        if (path === '/admin/entitlements') {
+            const account = String(body.account || '').trim().toUpperCase();
+            const d = Number.isInteger(body.days) && body.days >= 1 && body.days <= 366 ? body.days : days;
+            if (!ACCOUNT_ID.test(account)) return fail(400, 'Enter a Deriv account ID, like CR1234567 or VRTC1234567.');
+            return json({ entitlement: entView(await grant(env, [account], d, 'admin', String(body.note || 'Admin'))) });
+        }
+        if (path === '/admin/entitlements/revoke') {
+            const account = String(body.account || '').trim().toUpperCase();
+            if (!ACCOUNT_ID.test(account)) return fail(400, 'Unknown account.');
+            const rec = await revoke(env, account);
+            return rec ? json({ entitlement: entView(rec) }) : fail(404, 'This account has no Premium.');
+        }
+        // A new gift code; the code itself is shown only in this answer (only its hash is kept)
+        if (path === '/admin/gifts') {
+            if (!ready) return fail(503, 'Set SESSION_KEY on the server first');
+            const custom = body.code ? normalizeCode(body.code) : '';
+            if (custom && !CODE_OK.test(custom))
+                return fail(400, 'A code needs 8 to 64 letters, digits or _ . @ # ! * + = (spaces and dashes are ignored)');
+            const code = custom ? String(body.code).trim().toUpperCase() : newGiftCode();
+            const id = await giftId(env, code);
+            if (await env.KAPA_KV.get(`gift:${id}`)) return fail(409, 'This code already exists.');
+            const maxUses = Number.isInteger(body.maxUses) && body.maxUses >= 1 && body.maxUses <= 10000 ? body.maxUses : 1;
+            const d = Number.isInteger(body.days) && body.days >= 1 && body.days <= 366 ? body.days : days;
+            const label = String(body.label || '').trim().slice(0, 60) || 'Gift';
+            const g = { id, label, maxUses, uses: 0, days: d, createdAt: Date.now(), disabled: false, hint: normalizeCode(code).slice(-4), redeemed: [] };
+            await env.KAPA_KV.put(`gift:${id}`, JSON.stringify(g));
+            return json({ code, gift: giftView(g) });
+        }
+        if (path === '/admin/gifts/disable') {
+            const id = String(body.id || '');
+            const g = /^[\w-]{24}$/.test(id) ? await env.KAPA_KV.get(`gift:${id}`, 'json') : null;
+            if (!g) return fail(404, 'Gift code not found.');
+            g.disabled = body.disabled !== false;
+            await env.KAPA_KV.put(`gift:${id}`, JSON.stringify(g));
+            return json({ gift: giftView(g) });
+        }
+        // Contact links shown to visitors who want Premium (WhatsApp number, Telegram username)
+        if (path === '/admin/settings') {
+            const wa = String(body.whatsapp ?? '').replace(/[\s()+-]/g, '');
+            const tg = String(body.telegram ?? '').trim().replace(/^@/, '');
+            if (wa && !/^[1-9]\d{7,14}$/.test(wa)) return fail(400, 'WhatsApp: the full international number, digits only (for example 2250700000000).');
+            if (tg && !/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(tg)) return fail(400, 'Telegram: a username of 5 to 32 letters, digits or _.');
+            await env.KAPA_KV.put('settings:contact', JSON.stringify({ whatsapp: wa, telegram: tg }));
+            return json({ contact: { whatsapp: wa, telegram: tg } });
         }
         return fail(404, 'Not found');
     }
@@ -562,11 +685,16 @@ const handle = async (req, env) => {
     if (req.method === 'POST' && path === '/plan/simulate') {
         if (rateLimited(`sim:${ip}`, 30)) return fail(429, 'Too many simulations. Wait a minute.');
         const body = await readJson(req);
+        const capital = Number.isFinite(body?.capital) && body.capital > 0 ? Math.min(body.capital, 1e8) : 1000;
+        if (body?.preset === 'classic') {
+            const v = classicSettings(body, rules().presets);
+            if (v.error) return fail(400, v.error);
+            const s = { ...v.settings, stopLoss: Math.min(v.settings.stopLoss, capital) };
+            return json(simulateClassic(s, cleanRatios(body.ratios), estRatio));
+        }
         const v = validateSettings(body, rules().presets);
         if (v.error) return fail(400, v.error);
-        const s = v.settings;
-        const capital = Number.isFinite(body.capital) && body.capital > 0 ? Math.min(body.capital, 1e8) : 1000;
-        return json(simulate(s, capital, cleanRatios(body.ratios)));
+        return json(simulate(v.settings, capital, cleanRatios(body.ratios)));
     }
 
     // Strategy lab: replays real Deriv ticks, fetched by the visitor's own browser, through every
@@ -592,50 +720,54 @@ const handle = async (req, env) => {
         return json({ ticks: digits.length, results });
     }
 
-    // ----- Premium code: unlock and check (no Deriv login needed) -----
-    if (req.method === 'POST' && path === '/premium/unlock') {
+    // Everything below needs a signed-in Deriv user
+    const ids = await derivAccounts(req, env);
+
+    // ----- Premium state of this Deriv user (also moves a device that used the old shared code) -----
+    if (req.method === 'GET' && path === '/premium/status') {
+        if (!ids) return json({ status: 'inactive', reason: 'login' });
+        let ent = await entitlement(env, ids);
+        let migrated = false;
+        if (!ent.rec && (await legacyPass(env, req))) {
+            await grant(env, ids, days, 'code', 'Old shared code');
+            ent = await entitlement(env, ids);
+            migrated = true;
+        }
+        return json({
+            status: ent.active ? 'active' : ent.rec ? 'expired' : 'inactive',
+            until: ent.until,
+            accounts: ids,
+            ...(migrated ? { migrated: true } : {}),
+        });
+    }
+
+    // ----- Gift codes: each use gives Premium to the Deriv user who enters it -----
+    if (req.method === 'POST' && (path === '/premium/redeem' || path === '/premium/unlock')) {
         if (rateLimited(`unlock:${ip}`, 40)) return fail(429, 'Too many attempts. Wait a minute.');
+        if (!ids) return fail(401, 'Log in with Deriv first: the code gives Premium to your Deriv account.');
+        if (!env.SESSION_KEY || env.SESSION_KEY.length < 32) return fail(503, 'Premium is not set up yet');
         const keys = await codeThrottleKeys(req, ip);
         const wait = await codeWait(env, keys);
         if (wait) return tooManyCodes(wait);
-        if (!env.SESSION_KEY || env.SESSION_KEY.length < 32) return fail(503, 'Premium is not set up yet');
-        const code = await currentCode(env);
-        if (!code) return fail(503, 'Premium is not set up yet');
         const body = await readJson(req);
         const given = normalizeCode(body?.code);
-        if (!CODE_OK.test(given) || !(await safeEqual(await codeHash(env, given), code.h))) {
+        const g = CODE_OK.test(given) ? await env.KAPA_KV.get(`gift:${await giftId(env, given)}`, 'json') : null;
+        if (!g) {
             await codeFailed(env, keys);
             return fail(401, 'Wrong code. Check it and try again.');
         }
+        if (g.disabled) return fail(410, 'This code has been switched off by Kapa.');
+        if ((g.redeemed || []).some(r => r.accounts.some(a => ids.includes(a))))
+            return fail(409, 'This code was already used on your Deriv account.');
+        if (g.uses >= g.maxUses) return fail(410, 'This code has already been used as many times as it allows.');
+        g.uses += 1;
+        g.redeemed = [...(g.redeemed || []), { accounts: ids, at: Date.now() }].slice(-500);
+        await env.KAPA_KV.put(`gift:${g.id}`, JSON.stringify(g));
         await env.KAPA_KV.delete(keys.device).catch(() => {});
-        return json({ status: 'active', pass: await issuePass(env, code.ver), expiresAt: Date.now() + PASS_TTL });
+        const rec = await grant(env, ids, g.days, 'gift', g.label);
+        return json({ status: 'active', until: rec.until, accounts: ids, days: g.days });
     }
 
-    if (req.method === 'GET' && path === '/premium/status') {
-        const p = await readPass(env, req);
-        if (!p) return json({ status: 'inactive' });
-        // a pass in use is renewed, so a device stays unlocked until the code changes
-        return json({ status: 'active', pass: await issuePass(env, p.ver), expiresAt: Date.now() + PASS_TTL });
-    }
-
-    const pass = () => readPass(env, req);
-
-    // Premium tools that don't trade: need the pass only
-    if (req.method === 'POST' && path === '/scan') {
-        if (!(await pass())) return fail(402, 'This is part of KAPA AI Premium.');
-        if (rateLimited(`scan:${ip}`, 10)) return fail(429, 'Too many scans. Wait a minute.');
-        return scan(env, await readJson(req), rules());
-    }
-    const bot = path.match(/^\/bots\/([a-z0-9-]{1,40})$/);
-    if (req.method === 'GET' && bot) {
-        if (!(await pass())) return fail(402, 'This is part of KAPA AI Premium.');
-        const { bots } = rules();
-        const data = Object.hasOwn(bots, bot[1]) ? bots[bot[1]] : null;
-        return data ? json({ id: bot[1], data }) : fail(404, 'Bot not found');
-    }
-
-    // Everything below needs a signed-in Deriv user
-    const ids = await derivAccounts(req, env);
     if (!ids) return fail(401, 'Log in with Deriv first');
 
     if (req.method === 'POST' && path === '/checkout') {
@@ -684,12 +816,35 @@ const handle = async (req, env) => {
         const tx = await env.KAPA_KV.get(`tx:${id}`, 'json');
         if (!tx || !tx.accounts.some(a => ids.includes(a))) return fail(404, 'Payment not found');
         const settled = await settle(env, id);
-        return json({ status: settled.status, expiresAt: settled.expiresAt });
+        return json({ status: settled.status, until: settled.until ?? null });
     }
 
-    // ----- Premium strategy sessions: Deriv login and a valid Premium pass -----
-    if (!(await pass())) return fail(402, 'This is part of KAPA AI Premium.');
+    // ----- Premium tools and strategy sessions: checked against the account's Premium on every request -----
+    const ent = await entitlement(env, ids);
+    if (!ent.active)
+        return fail(402, ent.rec ? 'Your KAPA AI Premium has ended. Renew it to use this.' : 'This is part of KAPA AI Premium.');
     if (rateLimited(`premium:${ids[0]}`, 120)) return fail(429, 'Too many requests. Wait a minute.');
+
+    if (req.method === 'POST' && path === '/scan') {
+        if (rateLimited(`scan:${ip}`, 10)) return fail(429, 'Too many scans. Wait a minute.');
+        return scan(env, await readJson(req), rules());
+    }
+    const bot = path.match(/^\/bots\/([a-z0-9-]{1,40})$/);
+    if (req.method === 'GET' && bot) {
+        const { bots } = rules();
+        const data = Object.hasOwn(bots, bot[1]) ? bots[bot[1]] : null;
+        return data ? json({ id: bot[1], data }) : fail(404, 'Bot not found');
+    }
+
+    // Classic bots with KAPA Apex recovery: after a loss, the next trade (the entry trades run in the website)
+    if (req.method === 'POST' && path === '/classic/recover') {
+        const body = await readJson(req);
+        const v = classicSettings(body, rules().presets);
+        if (v.error) return fail(400, v.error);
+        const st = cleanState(body.state);
+        if (!st) return fail(400, 'Invalid session state.');
+        return json({ decision: decide(v.settings, st, cleanRatios(body.ratios)) });
+    }
 
     if (req.method === 'POST' && path === '/session/start') {
         if (!env.SESSION_KEY || env.SESSION_KEY.length < 32) return fail(503, 'Strategy sessions are not set up yet');

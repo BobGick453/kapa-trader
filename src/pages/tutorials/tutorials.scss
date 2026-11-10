@@ -527,3 +527,180 @@
         }
     }
 }
+
+// ============================================================================
+// Kapa Tutorials, after the reference bot: the section list is a blue strip of pills (like the main tab strip),
+// each guide and video sits in a raised card, videos carry a blue play tile, FAQ answers sit in raised rows.
+// ============================================================================
+.tutorials-wrapper {
+    width: 100%;
+    color: var(--kapa-text-1);
+    background: var(--kapa-bg);
+
+    .dc-tabs__wrapper__group__search-input {
+        height: 3.2rem;
+        padding: 0 3.6rem;
+        border: 1px solid var(--kapa-line);
+        border-radius: var(--kapa-radius-btn);
+        background-color: var(--kapa-inset-bg);
+        box-shadow: var(--kapa-inset-shadow);
+        color: var(--kapa-text-1);
+        font-size: 1.4rem;
+        outline: none;
+
+        &::placeholder {
+            color: var(--kapa-text-2);
+            opacity: 1;
+        }
+
+        &:focus {
+            border-color: var(--kapa-blue-soft);
+        }
+    }
+
+    // Desktop: section list (Guide, FAQ, Quick strategy guides)
+    .dc-tabs__list--top {
+        background: var(--kapa-strip) !important;
+        box-shadow:
+            inset 0 1px 0 rgb(195 220 248 / 35%),
+            inset 0 -1px 0 rgb(41 93 146 / 65%);
+
+        .dc-tabs__item {
+            gap: 0.8rem;
+            height: 4.4rem;
+            margin-bottom: 0.9rem;
+            border: 1px solid rgb(191 219 254 / 18%);
+            border-radius: 999px;
+            background: rgb(255 255 255 / 8%);
+            color: #dbeafe !important;
+            font-size: 1.4rem;
+            font-weight: 600;
+            transition:
+                color 0.22s ease,
+                background 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.3s ease,
+                box-shadow 0.3s ease,
+                transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+
+            .dc-text,
+            span {
+                color: inherit !important;
+                font-weight: inherit;
+            }
+
+            &:hover {
+                border-color: rgb(191 219 254 / 36%);
+            }
+        }
+
+        .dc-tabs__active {
+            border-color: rgb(147 197 253 / 58%);
+            border-radius: 1.4rem 1.4rem 0 0;
+            background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+            color: #fff !important;
+            font-weight: 700;
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 38%),
+                0 0.6rem 1.6rem rgb(37 99 235 / 42%);
+        }
+
+        .dc-tabs__active-line {
+            display: none;
+        }
+    }
+}
+
+.tutorials-mobile {
+    color: var(--kapa-text-1);
+    background-color: var(--kapa-bg);
+}
+
+.tutorials-wrap {
+    .no-search,
+    .faq__wrapper__nosearch,
+    .tutorials-wrap__group__nosearch {
+        color: var(--kapa-text-2);
+    }
+
+    &__group__title,
+    &__group__title .dc-text {
+        color: var(--kapa-text-1) !important;
+    }
+
+    &__group__cards {
+        border-radius: var(--kapa-radius-card);
+        background: var(--kapa-surface);
+        box-shadow: var(--kapa-shadow);
+        color: var(--kapa-text-1);
+        text-align: center;
+
+        .dc-text {
+            color: var(--kapa-text-1) !important;
+        }
+    }
+
+    &__placeholder,
+    &__placeholder__tours {
+        border-radius: var(--kapa-radius-card);
+        background-color: var(--kapa-inset-bg);
+        box-shadow:
+            var(--kapa-shadow),
+            inset 0 0 0 1px var(--kapa-line);
+        overflow: hidden;
+    }
+
+    // Videos: a blue play tile on the thumbnail
+    &__placeholder__button-group {
+        border-radius: var(--kapa-radius-btn);
+        background: var(--kapa-primary);
+        box-shadow: var(--kapa-lift);
+        transition:
+            transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+            filter 0.22s ease;
+
+        &:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+        }
+    }
+
+    .dc-dialog__dialog {
+        border-radius: var(--kapa-radius-card);
+        background: var(--kapa-surface);
+        color: var(--kapa-text-1);
+        box-shadow:
+            var(--kapa-lift),
+            inset 0 0 0 1px var(--kapa-line);
+        overflow: hidden;
+    }
+
+    .dc-dialog__content {
+        height: 100%;
+        margin-bottom: 0;
+        background: var(--kapa-surface-flat);
+    }
+}
+
+.faq__wrapper {
+    color: var(--kapa-text-1);
+
+    .dc-accordion__item {
+        border: unset;
+        border-bottom: 0.1rem solid var(--kapa-line);
+        border-radius: var(--kapa-radius-btn);
+        background: var(--kapa-surface);
+        box-shadow:
+            var(--kapa-shadow),
+            inset 0 0 0 1px var(--kapa-line);
+    }
+
+    .dc-accordion__item-header {
+        color: var(--kapa-text-1);
+    }
+
+    .dc-accordion__item-content {
+        background: var(--kapa-inset-bg);
+        box-shadow: var(--kapa-inset-shadow);
+        color: var(--kapa-text-2);
+    }
+}

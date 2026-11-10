@@ -1,57 +1,59 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
 import { generateOAuthURL } from '@/components/shared';
-import brandConfig from '@/../brand.config.json';
 import { api_base } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
 import { onDiag, readDiag, TDiag } from '@/utils/kapa-diagnostics';
 import {
+    classicRecover,
     fetchPlan,
-    lockPremium,
     premiumEnabled,
+    redeemGift,
     refreshEntitlement,
     remotePolicy,
     resumeCheckout,
     scanMarkets,
+    simulateClassicPlan,
     simulatePlan,
     startCheckout,
+    TClassicServerSettings,
     TPlan,
     TPlanResult,
     TRandomness,
-    unlockPremium,
 } from '../premium/premium-api';
 import { openPremium, usePremium } from '../premium/use-premium';
 import {
-    addDayResult,
     APEX_KEYS,
     bestOf,
     chanceOf,
     contractLabel,
-    estRatioOf,
+    DAY_RESET_NOTE,
+    dailyLimitLeftText,
+    dailyLimitLoweredText,
+    dailyLimitReachedText,
     dailyRoom,
     DEFAULT_SETTINGS,
+    estRatioOf,
     fixedPolicy,
     HALF_KEYS,
+    isBold,
     keyLabel,
-    KapaEngine,
     MARKETS,
+    MAX_SESSION_RISK,
     overChance,
+    protectionLimits,
     RatioCache,
     sanitizeSettings,
     simulateFixed,
     STRATEGIES,
-    TApi,
-    TLiveContract,
     TPayoutRatios,
-    TPhase,
     TPresetKey,
     TSettings,
-    TStopKind,
     TStrategy,
-    TTrade,
     validate,
 } from './engine';
+import { derivApi, kapaRun, STOP_TITLES, useKapaRun } from './run-store';
 import KapaClose from '@/components/kapa-close/kapa-close';
 import LabPanel from './lab-panel';
 import { BOTS, classicPolicy, isClassic, simulateClassic } from './classic';
@@ -72,6 +74,7 @@ const loadSettings = (): TSettings => {
 const fmt = (n: number, d = 2) => Number(n).toFixed(d);
 const signed = (n: number) => `${n >= 0 ? '+' : ''}${fmt(n)}`;
 const strategyName = (k: TStrategy) => (k === 'custom' ? 'Custom strategy' : STRATEGIES[k].label);
+const day = (t?: number | null) => (t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '');
 
 type TScanCard = {
     sym: string;
@@ -82,13 +85,6 @@ type TScanCard = {
     tradable: boolean;
     rnd: TRandomness | null;
     preset: TPresetKey;
-};
-type TLog = { at: number; text: string; level: 'info' | 'success' | 'warn' | 'error' };
-
-// The app's authorized connection, shaped for the engine
-const derivApi: TApi = {
-    send: req => (api_base.api as any).send(req),
-    onMessage: () => (api_base.api as any).onMessage(),
 };
 
 /** The market's last 30 last digits, from Deriv (for the classic bots' entry rules). */
@@ -177,15 +173,10 @@ const KapaAI = observer(() => {
     const [cards, setCards] = useState<TScanCard[]>([]);
     const [activation, setActivation] = useState<TScanCard | null>(null);
     const [confirmReal, setConfirmReal] = useState(false);
-    const [result, setResult] = useState<{ kind: TStopKind; pl: number } | null>(null);
-    const [running, setRunning] = useState(false);
-    const [status, setStatus] = useState<{ text: string; phase: TPhase }>({
-        text: 'KAPA AI is not running',
-        phase: 'idle',
-    });
-    const [live, setLive] = useState<TLiveContract | null>(null);
-    const [trades, setTrades] = useState<TTrade[]>([]);
-    const [logs, setLogs] = useState<TLog[]>([]);
+    // The running session lives in the app-wide run store: switching tabs never stops it
+    kapaRun.bindClient(client);
+    const run = useKapaRun();
+    const { running, status, live, trades, logs, result } = run;
     const [panel, setPanel] = useState<'summary' | 'transactions' | 'journal'>('summary');
     const [error, setError] = useState('');
 
@@ -197,12 +188,6 @@ const KapaAI = observer(() => {
         ...(scanRatios.get(sym) || {}),
         ...ratios.knownAll(sym, [...HALF_KEYS, ...APEX_KEYS]),
     });
-    const balanceRef = useRef(balance);
-    balanceRef.current = balance;
-    const clientRef = useRef(client.loginid);
-    clientRef.current = client.loginid;
-    const currencyRef = useRef(currency);
-    currencyRef.current = currency;
 
     const update = (patch: Partial<TSettings>) =>
         setS(prev => {
@@ -219,17 +204,14 @@ const KapaAI = observer(() => {
     const setCustom = (patch: Partial<TSettings['custom']>) =>
         update({ strategy: 'custom', custom: { ...s.custom, ...patch } });
 
-    const needsPremium = (k: TStrategy) => k === 'custom' || STRATEGIES[k].premium;
+    const needsPremium = (k: TStrategy, apex = false) =>
+        k === 'custom' || STRATEGIES[k].premium || (apex && isClassic(k));
     const chooseStrategy = (k: TStrategy) => {
         if (needsPremium(k) && !isPremium) return openPremium();
         update({ strategy: k, ...(k !== 'fixed' ? { maxStake: Math.max(s.stopLoss, s.stake) } : {}) });
     };
 
-    const log = useCallback(
-        (text: string, level: TLog['level'] = 'info') =>
-            setLogs(prev => [{ at: Date.now(), text, level }, ...prev].slice(0, 400)),
-        []
-    );
+    const log = kapaRun.log;
 
     // Premium: check this device's code pass, and finish a payment when CinetPay sends the buyer back
     useEffect(() => {
@@ -240,23 +222,36 @@ const KapaAI = observer(() => {
             .catch(() => setPlan_(null));
     }, []);
     useEffect(() => {
-        if (logged_in)
-            resumeCheckout(text => {
-                setPremiumMsg(text);
-                openSettings(true);
-            });
-    }, [logged_in]);
+        if (!logged_in) return;
+        refreshEntitlement(); // Premium belongs to the Deriv account: check it once logged in
+        resumeCheckout(text => {
+            setPremiumMsg(text);
+            openSettings(true);
+        });
+    }, [logged_in, client.loginid]); // eslint-disable-line react-hooks/exhaustive-deps
     // "Use in KAPA AI" from the Live Scanner
     useEffect(() => {
+        // detail: { symbol, preset?, stake?, ratios?, apexRecovery?, source? }. The Live Scanner sends a market
+        // only (source 'scanner'): the strategy the user chose stays. Free Bot's "Run in KAPA AI" sends a bot.
         const apply = (detail: any) => {
             const { symbol, preset: k, stake } = detail || {};
-            if (!MARKETS[symbol] || !STRATEGIES[k as TPresetKey]) return;
+            const scanner = detail?.source === 'scanner';
+            if (!MARKETS[symbol] || (!scanner && !STRATEGIES[k as TPresetKey])) return;
             try {
                 sessionStorage.removeItem('kapa_pending_market');
             } catch {
                 /* nothing to clear */
             }
+            if (kapaRun.state.running) {
+                setScanMsg('KAPA AI is running: stop it first, then load another market or bot.');
+                return;
+            }
             if (detail.ratios && typeof detail.ratios === 'object') scanRatios.set(symbol, detail.ratios);
+            if (scanner) {
+                update({ symbol });
+                setScanMsg(`${MARKETS[symbol]} loaded from the Live Scanner. Your strategy is unchanged. Review the settings and press Start KAPA AI when ready.`);
+                return;
+            }
             const classic = isClassic(k);
             if (classic) {
                 setFreeMode(true);
@@ -266,16 +261,17 @@ const KapaAI = observer(() => {
                     /* this visit only */
                 }
             }
+            const apex = classic && detail.apexRecovery === true;
             update({
                 symbol,
                 strategy: k,
                 ...(stake >= 0.35 ? { stake } : {}),
-                ...(classic ? { takeProfit: 5, stopLoss: 50, maxStake: 50 } : {}),
+                ...(classic ? { takeProfit: 5, stopLoss: 50, maxStake: 50, apexRecovery: apex } : {}),
             });
             setScanMsg(
                 classic
-                    ? `${STRATEGIES[k as TPresetKey].label} loaded from Free Bot (take-profit 5, stop-loss 50). Review the settings and press Start KAPA AI when ready.`
-                    : `${MARKETS[symbol]} loaded from the Live Scanner. Review the settings and press Start KAPA AI when ready.`
+                    ? `${STRATEGIES[k as TPresetKey].label}${apex ? ' with KAPA Apex recovery' : ''} loaded from Free Bot (take-profit 5, stop-loss 50). Review the settings and press Start KAPA AI when ready.`
+                    : `${MARKETS[symbol]} · ${strategyName(k)} loaded. Review the settings and press Start KAPA AI when ready.`
             );
         };
         const use = (e: Event) => apply((e as CustomEvent).detail);
@@ -292,11 +288,15 @@ const KapaAI = observer(() => {
         window.addEventListener('kapa:open-premium', show);
         return () => window.removeEventListener('kapa:open-premium', show);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    // Without Premium only the free strategies are available
+    // Without Premium only the free strategies are available. Only when the server says so: a server that
+    // can't be reached (unavailable) or a check in progress never changes the user's choice
     useEffect(() => {
-        if (!isPremium && premium.status !== 'unknown' && premium.status !== 'checking' && needsPremium(s.strategy))
-            update({ strategy: 'fixed' });
-    }, [isPremium, premium.status]); // eslint-disable-line react-hooks/exhaustive-deps
+        // (a check without a Deriv login yet, e.g. while the page loads, says nothing about the account)
+        const ended = (premium.status === 'inactive' && !premium.needsLogin) || premium.status === 'expired';
+        if (!ended || running) return;
+        // (a classic bot's "KAPA Apex recovery" option stays as chosen: Start explains that it needs Premium)
+        if (needsPremium(s.strategy)) update({ strategy: 'fixed' });
+    }, [premium.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // What blocked the Deriv connection on this device, if anything (shown under Log in)
     const [diag, setDiag] = useState<TDiag[]>(readDiag);
@@ -321,21 +321,22 @@ const KapaAI = observer(() => {
         setUnlocking(true);
         setPremiumMsg('');
         try {
-            await unlockPremium(code);
+            const r = await redeemGift(code);
             setCode('');
-            setPremiumMsg('Premium unlocked on this device.');
+            setPremiumMsg(`Code accepted: ${r.days} days of KAPA AI Premium on your Deriv account, until ${day(r.until)}.`);
         } catch (err: any) {
             setPremiumMsg(err?.message || "Couldn't reach the Kapa Premium server. Try again in a moment.");
         } finally {
             setUnlocking(false);
         }
     };
-    const relock = () => {
-        if (running) return;
-        lockPremium();
-        setPremiumMsg('Premium locked on this device. Enter the code to unlock it again.');
-    };
-    const contact = brandConfig.platform.social?.whatsapp || brandConfig.platform.social?.telegram || '';
+    // Where to get Premium when there is no gift code: the payment if CinetPay is set up, otherwise the
+    // owner's WhatsApp or Telegram as set in Admin (never a made-up number)
+    const contact = plan_?.contact || { whatsapp: null, telegram: null };
+    const account = client.loginid || premium.accounts?.[0] || '';
+    const whatsappLink = contact.whatsapp
+        ? `${contact.whatsapp}?text=${encodeURIComponent(`Hello Kapa, I would like KAPA AI Premium for my Deriv account ${account || '(my account ID)'}.`)}`
+        : null;
 
     const pay = async () => {
         setPaying(true);
@@ -348,34 +349,19 @@ const KapaAI = observer(() => {
         }
     };
 
-    const engine = useMemo(
-        () =>
-            new KapaEngine(
-                derivApi,
-                () => currencyRef.current,
-                () => balanceRef.current,
-                {
-                    onStatus: (text, phase) => setStatus({ text, phase }),
-                    onContract: c => setLive(c),
-                    onTrade: t => setTrades(prev => [t, ...prev].slice(0, 500)),
-                    onLog: (text, level) => log(text, level),
-                    onStop: (reason, kind, pl) => {
-                        setRunning(false);
-                        addDayResult(clientRef.current || 'demo', balanceRef.current, pl); // counts towards today's loss limit
-                        if (kind === 'edge') setError(reason);
-                        if (kind === 'tp' || kind === 'sl' || kind === 'streak') setResult({ kind, pl });
-                        if (kind === 'error') refreshEntitlement(); // e.g. Premium ended during the session
-                        setStatus(prev =>
-                            prev.phase === 'won' || prev.phase === 'lost' ? prev : { text: reason, phase: 'idle' }
-                        );
-                    },
-                }
-            ),
-        [log]
-    );
-    useEffect(() => () => engine.requestStop(), [engine]);
+    /** A classic bot's settings for the Kapa server (KAPA Apex recovery, Premium). */
+    const classicServer = (x: TSettings): TClassicServerSettings => ({
+        bot: x.strategy,
+        symbol: x.symbol,
+        stake: x.stake,
+        takeProfit: x.takeProfit,
+        stopLoss: x.stopLoss,
+        maxStake: x.maxStake,
+        maxMargin: x.maxMargin,
+    });
 
-    // Session plan. The free strategy is simulated here; Premium strategies are simulated by the server.
+    // Session plan. The free strategies are simulated here; Premium ones (and the classic bots with KAPA Apex
+    // recovery) are simulated by the server.
     useEffect(() => {
         if (!(s.stake >= 0.35 && s.takeProfit > 0 && s.stopLoss > 0)) {
             setPlan(null);
@@ -387,7 +373,7 @@ const KapaAI = observer(() => {
             async () => {
                 const lr = liveRatios(s.symbol);
                 const priced = Object.keys(lr).length > 0;
-                if (isClassic(s.strategy)) {
+                if (isClassic(s.strategy) && !s.apexRecovery) {
                     setPlan(simulateClassic(s.strategy, s, lr));
                     setPlanNote(`Simulated 2,000 times with ${priced ? "Deriv's live payouts" : 'estimated payouts'}`);
                     return;
@@ -405,7 +391,9 @@ const KapaAI = observer(() => {
                     return;
                 }
                 try {
-                    const res = await simulatePlan(s, balance || 1000, lr);
+                    const res = isClassic(s.strategy)
+                        ? await simulateClassicPlan(classicServer(s), balance || 1000, lr)
+                        : await simulatePlan(s, balance || 1000, lr);
                     if (cancelled) return;
                     setPlan(res);
                     setPlanNote(
@@ -463,15 +451,15 @@ const KapaAI = observer(() => {
     const scan = async () => {
         if (scanning || running) return;
         if (!isPremium) return openPremium();
-        const err = validate(s, balance);
+        const err = validate(s, balance, isPremium);
         if (err) return setError(err);
         setError('');
         setScanning(true);
         setCards([]);
         setScanMsg('Scanning fresh synthetic-index ticks…');
-        const preset: TPresetKey = s.strategy !== 'custom' && STRATEGIES[s.strategy].premium ? s.strategy : 'pegasus';
+        const preset: TPresetKey = s.strategy !== 'custom' && STRATEGIES[s.strategy].premium ? s.strategy : 'target';
         try {
-            const { rows } = await scanMarkets(preset, currency);
+            const { rows } = await scanMarkets(preset, currency, undefined, s.maxMargin);
             rows.forEach(r => scanRatios.set(r.symbol, r.ratios));
             const top: TScanCard[] = rows.slice(0, 3).map(r => ({
                 sym: r.symbol,
@@ -505,29 +493,33 @@ const KapaAI = observer(() => {
         setTimeout(() => setActivation(c), 500);
     };
 
+    /** What today's loss limit still allows: the session's stop-loss is lowered to it when it is smaller. */
+    const todayRoom = logged_in && balance > 0 ? dailyRoom(s, client.loginid || 'demo', balance) : null;
     /** Settings for this session: the stop-loss never goes past what today's loss limit still allows. */
     const sessionSettings = (): TSettings | string => {
         const room = dailyRoom(s, client.loginid || 'demo', balance);
-        if (room < 0.35)
-            return `Today's loss limit (${s.dailyLossPct}% of your balance) is reached. KAPA AI pauses until tomorrow to protect your capital.`;
+        if (room < 0.35) return dailyLimitReachedText(s.dailyLossPct);
         if (room >= s.stopLoss) return s;
-        const bold = s.strategy === 'pegasus' || s.strategy === 'apex' || (s.strategy === 'custom' && s.custom.recMode === 'target');
-        if (!bold && room < s.stake)
-            return `Only ${fmt(room)} ${currency} of today's loss limit is left: less than one stake. KAPA AI pauses until tomorrow.`;
-        log(`Stop-loss lowered to ${fmt(room)} ${currency} for this session: what today's loss limit still allows.`, 'warn');
+        if (!isBold(s) && room < s.stake) return dailyLimitLeftText(room, currency);
+        log(dailyLimitLoweredText(room, currency), 'warn');
         return { ...s, stopLoss: room, maxStake: Math.min(s.maxStake, room) };
     };
 
     const start = () => {
-        const err = validate(s, balance);
+        if (running) return;
+        const err = validate(s, balance, isPremium);
         if (err) return setError(err);
         const today = sessionSettings();
         if (typeof today === 'string') return setError(today);
         if (run_panel.is_running)
             return setError('A Bot Builder strategy is running. Stop it before starting KAPA AI.');
-        if (needsPremium(s.strategy) && !isPremium) {
+        if (needsPremium(s.strategy, s.apexRecovery) && !isPremium) {
             openPremium();
-            return setError('This strategy is part of KAPA AI Premium.');
+            return setError(
+                s.apexRecovery && isClassic(s.strategy)
+                    ? 'KAPA Apex recovery is part of KAPA AI Premium. Turn it off in the settings to run the free version.'
+                    : 'This strategy is part of KAPA AI Premium.'
+            );
         }
         setError('');
         if (!client.is_virtual) return setConfirmReal(true);
@@ -538,27 +530,33 @@ const KapaAI = observer(() => {
         const ss = sessionSettings();
         if (typeof ss === 'string') return setError(ss);
         setPanelOpen(true); // show the live contract, like the reference bot's run panel
-        setRunning(true);
-        setResult(null);
         const lr = liveRatios(ss.symbol);
         const policy =
             ss.strategy === 'fixed'
                 ? fixedPolicy(ss, lr)
                 : isClassic(ss.strategy)
-                  ? classicPolicy(ss.strategy, ss, lr, () => lastDigits(ss.symbol))
+                  ? classicPolicy(
+                        ss.strategy,
+                        ss,
+                        lr,
+                        () => lastDigits(ss.symbol),
+                        ss.apexRecovery ? (st, r) => classicRecover(classicServer(ss), st, r) : undefined
+                    )
                   : remotePolicy(ss, lr);
-        engine.run(policy, {
-            name: strategyName(ss.strategy),
+        kapaRun.start(policy, {
+            name: `${strategyName(ss.strategy)}${isClassic(ss.strategy) && ss.apexRecovery ? ' + KAPA Apex recovery' : ''}`,
             delay: ss.delay,
             stake: ss.stake,
             takeProfit: ss.takeProfit,
             stopLoss: ss.stopLoss,
+            maxStake: ss.maxStake,
             symbol: ss.symbol,
         });
     };
     const stop = () => {
-        engine.requestStop();
-        setStatus({ text: 'Stopping after the current contract', phase: 'bought' });
+        // A second tap right after Start is a double tap, not a request to stop
+        if (kapaRun.sinceStart() < 1200) return;
+        kapaRun.stop();
     };
 
     const stats = useMemo(() => {
@@ -574,10 +572,13 @@ const KapaAI = observer(() => {
 
     const recoveryLine = (k: TStrategy = s.strategy) => {
         if (k === 'fixed') return 'Same stake every trade, no recovery';
-        if (isClassic(k)) return BOTS[k].about;
+        if (isClassic(k))
+            return s.apexRecovery && k === s.strategy
+                ? `${BOTS[k].about.split('. ')[0]}. After a loss, KAPA Apex (Premium, on the Kapa server) picks the contract and stake with the best chance of still reaching your take-profit, never past your stop-loss.`
+                : BOTS[k].about;
         if (k === 'apex')
             return "At every trade, the contract and stake with the highest chance of reaching your take-profit, computed from Deriv's live prices";
-        if (k === 'pegasus')
+        if (k === 'target')
             return 'Each stake is what one win needs to reach your take-profit, never more than your stop-loss allows';
         if (k === 'martingale')
             return 'Stake ×2.1 after a loss, only for cycles whose every stake fits under your stop-loss';
@@ -590,7 +591,7 @@ const KapaAI = observer(() => {
         return 'Same stake every trade, no recovery';
     };
     const tpPct = balance ? (s.takeProfit / balance) * 100 : null;
-    // Pegasus: the stake one win needs to reach the take-profit, with the best live 50% payout
+    // KAPA Target: the stake one win needs to reach the take-profit, with the best live 50% payout
     const halfRatios = liveRatios(s.symbol);
     const halfKey = bestOf(HALF_KEYS, halfRatios);
     const halfRatio = halfRatios[halfKey] ?? estRatioOf(halfKey);
@@ -716,6 +717,11 @@ const KapaAI = observer(() => {
                 </div>
             )}
 
+            <small className='kapa-dim kapa-stats__note'>
+                {running
+                    ? `This session: ${signed(run.sessionPl)} ${currency}. Totals below: since you opened KAPA AI.`
+                    : 'Totals since you opened KAPA AI (all sessions).'}
+            </small>
             <div className='kapa-stats'>
                 <div>
                     <small>Total stake</small>
@@ -746,7 +752,7 @@ const KapaAI = observer(() => {
                 className='kapa-link'
                 type='button'
                 disabled={running || !trades.length}
-                onClick={() => (setTrades([]), setLive(null), setLogs([]))}
+                onClick={kapaRun.resetStats}
             >
                 Reset stats
             </button>
@@ -797,7 +803,10 @@ const KapaAI = observer(() => {
                 </div>
                 <div>
                     <b>Capital protection</b>
-                    <span>Recovery cycles that fit your stop-loss, a session cap and a daily loss limit.</span>
+                    <span>
+                        Recovery cycles that fit your stop-loss, checked by the server on every trade. The session cap
+                        and the daily loss limit protect everyone, free or Premium.
+                    </span>
                 </div>
             </div>
             <button className='kapa-lock__cta' type='button' onClick={() => openSettings(true)}>
@@ -849,7 +858,9 @@ const KapaAI = observer(() => {
                     <div className='kapa-eyebrow'>KAPA AI</div>
                     <h2 className='kapa-title'>Activate Kapa</h2>
                     <p className='kapa-lede'>
-                        Set your stake and take-profit, then activate the scanner to find the best live market.
+                        {isPremium
+                            ? 'Set your stake and take-profit, then activate the scanner to compare the live markets.'
+                            : 'Set your stake and take-profit, then press Start KAPA AI. The live scanner is part of Premium.'}
                     </p>
 
                     {!logged_in && (
@@ -889,9 +900,9 @@ const KapaAI = observer(() => {
                                     onChange={num('stake')}
                                     disabled={running}
                                 />
-                                {(s.strategy === 'pegasus' || s.strategy === 'apex') && (
+                                {(s.strategy === 'target' || s.strategy === 'apex') && (
                                     <small>
-                                        {s.strategy === 'apex' ? 'KAPA Apex' : 'Pegasus'} sizes each stake itself: what one win
+                                        {s.strategy === 'apex' ? 'KAPA Apex' : 'KAPA Target'} sizes each stake itself: what one win
                                         needs to reach your take-profit, within your stop-loss.
                                     </small>
                                 )}
@@ -912,16 +923,38 @@ const KapaAI = observer(() => {
                                         = {fmt(tpPct, tpPct < 10 ? 1 : 0)}% of your balance ({fmt(balance)} {currency})
                                     </small>
                                 )}
-                                {(s.strategy === 'pegasus' || s.strategy === 'apex') && boldNeed > Math.min(s.stopLoss, s.maxStake) && (
+                                {(s.strategy === 'target' || s.strategy === 'apex') && boldNeed > Math.min(s.stopLoss, s.maxStake) && (
                                     <small className='kapa-warn'>
                                         One win needs a stake of {fmt(boldNeed)} to reach this take-profit, more than your
                                         stop-loss allows: each session will be a single trade of {fmt(Math.min(s.stopLoss, s.maxStake))},
-                                        won or lost at once (about {Math.round(bestHalfChance * 100)}% chance). Lower the take-profit
+                                        won or lost at once (a little under {Math.round(bestHalfChance * 100)}% chance, because Deriv pays under the odds). Lower the take-profit
                                         (for example to {fmt(Math.max(1, Math.floor(s.stopLoss / 5)), 0)}) to reach it far more often.
                                     </small>
                                 )}
                             </label>
-                            {error && <div className='kapa-error'>{error}</div>}
+                            {!running && todayRoom !== null && todayRoom < s.stopLoss && (
+                                <small className='kapa-warn kapa-today'>
+                                    {todayRoom < 0.35
+                                        ? dailyLimitReachedText(s.dailyLossPct)
+                                        : `Today's loss limit leaves ${fmt(todayRoom)} ${currency}: this session's stop-loss will be ${fmt(todayRoom)} instead of ${fmt(s.stopLoss)}. ${DAY_RESET_NOTE}`}
+                                </small>
+                            )}
+                            {error && (
+                                <div className='kapa-error' role='alert'>
+                                    {error}
+                                </div>
+                            )}
+                            {!isPremium && (
+                                <p className='kapa-summary'>
+                                    <b>{strategyName(s.strategy)}</b>
+                                    {isClassic(s.strategy) && s.apexRecovery ? ' + KAPA Apex recovery (Premium)' : ''} · stop-loss{' '}
+                                    {fmt(s.stopLoss)} {currency}
+                                    {plan ? ` · reaches +${fmt(s.takeProfit)} in about ${Math.round(plan.hit * 100)} of 100 sessions` : ''}.{' '}
+                                    <button type='button' className='kapa-link' onClick={() => openSettings(false)}>
+                                        Change
+                                    </button>
+                                </p>
+                            )}
                         </div>
 
                         <div className='kapa-main__scan'>
@@ -1029,7 +1062,13 @@ const KapaAI = observer(() => {
                     >
                         {running ? '■ Stop' : '▶ Start KAPA AI'}
                     </button>
-                    <div className={classNames('kapa-runstat', `kapa-runstat--${status.phase}`)}>
+                    <div
+                        className={classNames('kapa-runstat', `kapa-runstat--${status.phase}`, {
+                            'kapa-runstat--stopped': !running && run.lastStop,
+                        })}
+                        title={status.text}
+                        role='status'
+                    >
                         <span>
                             {status.text}
                             {status.phase === 'won' && ' ✓'}
@@ -1069,102 +1108,139 @@ const KapaAI = observer(() => {
                                         >
                                             {isPremium ? (
                                                 <div className='kapa-premium__activebar'>
-                                                    <p className='kapa-premium__active'>✓ KAPA AI Premium unlocked</p>
-                                                    <button
-                                                        className='kapa-link'
-                                                        type='button'
-                                                        onClick={relock}
-                                                        disabled={running}
-                                                    >
-                                                        Lock on this device
-                                                    </button>
+                                                    <p className='kapa-premium__active'>
+                                                        ✓ KAPA AI Premium is active on your Deriv account
+                                                        {premium.expiresAt ? ` until ${day(premium.expiresAt)}` : ''}
+                                                    </p>
+                                                    <small className='kapa-dim'>
+                                                        It ends by itself on that date. A gift code or a new payment adds
+                                                        days to it.
+                                                    </small>
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <div className='kapa-premium__tag'>PREMIUM LOCKED</div>
+                                                    <div className='kapa-premium__tag'>
+                                                        {premium.status === 'expired' ? 'PREMIUM ENDED' : 'PREMIUM LOCKED'}
+                                                    </div>
                                                     <h3>KAPA AI Premium</h3>
+                                                    {premium.status === 'expired' && (
+                                                        <p className='kapa-premium__ended'>
+                                                            Your Premium ended{premium.expiresAt ? ` on ${day(premium.expiresAt)}` : ''}.
+                                                            Renew it below.
+                                                        </p>
+                                                    )}
                                                     <ul>
                                                         <li>
-                                                            <b>Recovery strategies</b> · Pegasus, Steady and Exact recovery, run
-                                                            by the KAPA AI server
+                                                            <b>KAPA Apex</b> · at every trade, the contract and stake with
+                                                            the highest chance of reaching your take-profit, computed on the
+                                                            Kapa server
+                                                        </li>
+                                                        <li>
+                                                            <b>Recovery strategies</b> · KAPA Target, Steady and Exact
+                                                            recovery, and KAPA Apex recovery for the classic bots
                                                         </li>
                                                         <li>
                                                             <b>Live market scanner</b> · compares Deriv&apos;s live prices
                                                             across Volatility indices
                                                         </li>
                                                         <li>
-                                                            <b>Advanced settings</b> · predictions, multiplier, maximum stake,
-                                                            loss limits, pauses
-                                                        </li>
-                                                        <li>
-                                                            <b>Premium bots</b> in the Free Bot library
+                                                            <b>Advanced settings</b> · predictions, multiplier, maximum
+                                                            stake, pauses, higher limits
                                                         </li>
                                                     </ul>
-                                                    {
-                                                        <>
-                                                            <form className='kapa-premium__code' onSubmit={unlock}>
-                                                                <label htmlFor='kapa-premium-code'>Premium code</label>
-                                                                <div>
-                                                                    <input
-                                                                        id='kapa-premium-code'
-                                                                        type='password'
-                                                                        value={code}
-                                                                        onChange={e => setCode(e.target.value)}
-                                                                        placeholder='Enter your secret code'
-                                                                        autoComplete='off'
-                                                                        autoCapitalize='characters'
-                                                                        spellCheck={false}
-                                                                        maxLength={80}
-                                                                    />
+                                                    <p className='kapa-dim'>
+                                                        Premium belongs to your Deriv account
+                                                        {plan_?.days ? ` for ${plan_.days} days` : ''} and ends by itself.
+                                                    </p>
+                                                    {premium.status !== 'off' && (
+                                                        <div className='kapa-premium__buy'>
+                                                            {plan_?.configured ? (
+                                                                <>
+                                                                    <b>Get Premium</b>
+                                                                    <span>
+                                                                        {plan_.price.toLocaleString()} {plan_.currency} for{' '}
+                                                                        {plan_.days} days, by mobile money (Orange, MTN,
+                                                                        Moov, Wave) or bank card. Premium starts on your
+                                                                        Deriv account as soon as CinetPay confirms the
+                                                                        payment.
+                                                                    </span>
                                                                     <button
                                                                         className='kapa-btn kapa-btn--gold'
-                                                                        type='submit'
-                                                                        disabled={!code.trim() || unlocking}
+                                                                        type='button'
+                                                                        onClick={pay}
+                                                                        disabled={!logged_in || paying}
                                                                     >
-                                                                        {unlocking ? 'Checking…' : 'Unlock'}
+                                                                        {paying ? 'Opening CinetPay…' : 'Pay with CinetPay'}
                                                                     </button>
-                                                                </div>
-                                                            </form>
-                                                            {premium.status !== 'off' && (
-                                                                <div className='kapa-premium__buy'>
-                                                                    <b>No code yet?</b>
+                                                                    {!logged_in && <small>Log in with Deriv first to pay.</small>}
+                                                                </>
+                                                            ) : whatsappLink ? (
+                                                                <>
+                                                                    <b>Get Premium</b>
                                                                     <span>
-                                                                        Pay for Premium, then Kapa sends you the code.
-                                                                        {plan_?.configured
-                                                                            ? ` ${plan_.price.toLocaleString()} ${plan_.currency} for ${plan_.days} days, by mobile money (Orange, MTN, Moov, Wave) or bank card.`
-                                                                            : ''}
+                                                                        Write to Kapa on WhatsApp. Your Deriv account ID
+                                                                        {account ? ` (${account})` : ''} is in the message, so
+                                                                        Kapa can switch Premium on for it. Nothing else is
+                                                                        shared.
                                                                     </span>
-                                                                    {plan_?.configured && (
-                                                                        <button
-                                                                            className='kapa-btn kapa-btn--line'
-                                                                            type='button'
-                                                                            onClick={pay}
-                                                                            disabled={!logged_in || paying}
-                                                                        >
-                                                                            {paying ? 'Opening CinetPay…' : 'Pay with CinetPay'}
-                                                                        </button>
-                                                                    )}
-                                                                    {plan_?.configured && !logged_in && (
-                                                                        <small>Log in with Deriv first to pay.</small>
-                                                                    )}
-                                                                    {contact && (
-                                                                        <a
-                                                                            className='kapa-btn kapa-btn--line'
-                                                                            href={contact}
-                                                                            target='_blank'
-                                                                            rel='noopener noreferrer'
-                                                                        >
-                                                                            Contact Kapa
-                                                                        </a>
-                                                                    )}
-                                                                </div>
+                                                                    <a
+                                                                        className='kapa-btn kapa-btn--gold'
+                                                                        href={whatsappLink}
+                                                                        target='_blank'
+                                                                        rel='noopener noreferrer'
+                                                                    >
+                                                                        Get Premium on WhatsApp
+                                                                    </a>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <b>Premium purchase opens soon</b>
+                                                                    <span>
+                                                                        Buying Premium on this page isn&apos;t open yet. If
+                                                                        Kapa gave you a gift code, enter it below.
+                                                                    </span>
+                                                                </>
                                                             )}
-                                                        </>
-                                                    }
+                                                            {contact.telegram && (
+                                                                <a
+                                                                    className='kapa-btn kapa-btn--line'
+                                                                    href={contact.telegram}
+                                                                    target='_blank'
+                                                                    rel='noopener noreferrer'
+                                                                >
+                                                                    Contact Kapa on Telegram
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <form className='kapa-premium__code' onSubmit={unlock}>
+                                                        <label htmlFor='kapa-premium-code'>Gift code</label>
+                                                        <div>
+                                                            <input
+                                                                id='kapa-premium-code'
+                                                                type='text'
+                                                                value={code}
+                                                                onChange={e => setCode(e.target.value)}
+                                                                placeholder='KAPA-XXXX-XXXX-XXXX'
+                                                                autoComplete='off'
+                                                                autoCapitalize='characters'
+                                                                spellCheck={false}
+                                                                maxLength={80}
+                                                            />
+                                                            <button
+                                                                className='kapa-btn kapa-btn--gold'
+                                                                type='submit'
+                                                                disabled={!code.trim() || unlocking || !logged_in}
+                                                            >
+                                                                {unlocking ? 'Checking…' : 'Use code'}
+                                                            </button>
+                                                        </div>
+                                                        {!logged_in && <small>Log in with Deriv first: the code goes to your account.</small>}
+                                                    </form>
                                                     <p className='kapa-premium__note'>
-                                                        The session plan stays free for everyone. Premium adds tools; it does
-                                                        not change the odds: every Deriv contract still pays less than its true
-                                                        chance.
+                                                        The session plan, the lab and the protection limits stay free for
+                                                        everyone. Premium adds tools; it does not change the odds: every
+                                                        Deriv contract still pays less than its true chance.
                                                     </p>
                                                     {premium.status === 'unavailable' && (
                                                         <button
@@ -1201,7 +1277,7 @@ const KapaAI = observer(() => {
                                         <input
                                             type='number'
                                             inputMode='decimal'
-                                            min={0.01}
+                                            min={0.35}
                                             step={0.01}
                                             value={s.stopLoss}
                                             onChange={e =>
@@ -1248,6 +1324,65 @@ const KapaAI = observer(() => {
                                         </select>
                                     </label>
 
+                                    {isClassic(s.strategy) && (
+                                        <label className='kapa-check'>
+                                            <input
+                                                type='checkbox'
+                                                checked={s.apexRecovery}
+                                                disabled={running}
+                                                onChange={e =>
+                                                    e.target.checked && !isPremium
+                                                        ? openPremium()
+                                                        : update({ apexRecovery: e.target.checked })
+                                                }
+                                            />
+                                            <span>
+                                                <b>{isPremium ? '' : '🔒 '}KAPA Apex recovery (Premium)</b>
+                                                <small>
+                                                    After a loss, the Kapa server picks the contract and stake with the
+                                                    best chance of still reaching your take-profit, instead of the bot&apos;s
+                                                    own recovery. Never past your stop-loss.
+                                                </small>
+                                            </span>
+                                        </label>
+                                    )}
+                                    {/* Protection: everyone sees these and may lower them; only Premium may raise them */}
+                                    <div className='kapa-grid2'>
+                                        <label className='kapa-field'>
+                                            <span>Daily loss limit (% of balance)</span>
+                                            <input
+                                                type='number'
+                                                min={1}
+                                                max={protectionLimits(isPremium).dailyLossPct}
+                                                step={1}
+                                                value={s.dailyLossPct}
+                                                onChange={num('dailyLossPct')}
+                                                disabled={running}
+                                            />
+                                            <small>
+                                                {DAY_RESET_NOTE} Up to {protectionLimits(isPremium).dailyLossPct}%
+                                                {isPremium ? '' : ' (Premium: up to 50%)'}. Each session also stops at{' '}
+                                                {MAX_SESSION_RISK * 100}% of the balance at most.
+                                            </small>
+                                        </label>
+                                        <label className='kapa-field'>
+                                            <span>Maximum Deriv margin (%)</span>
+                                            <input
+                                                type='number'
+                                                min={1}
+                                                max={protectionLimits(isPremium).maxMargin}
+                                                step={0.5}
+                                                value={s.maxMargin}
+                                                onChange={num('maxMargin')}
+                                                disabled={running}
+                                            />
+                                            <small>
+                                                KAPA AI doesn&apos;t trade when Deriv keeps more than this share of each
+                                                stake (Deriv&apos;s public price keeps 1.4% to 2.35%; an app markup costs
+                                                more). Lower it to refuse poor prices sooner.
+                                            </small>
+                                        </label>
+                                    </div>
                                     <button
                                         className='kapa-link'
                                         type='button'
@@ -1367,30 +1502,6 @@ const KapaAI = observer(() => {
                                                 />
                                             </label>
                                             <label className='kapa-field'>
-                                                <span>Maximum Deriv margin (%)</span>
-                                                <input
-                                                    type='number'
-                                                    min={1}
-                                                    max={50}
-                                                    step={0.5}
-                                                    value={s.maxMargin}
-                                                    onChange={num('maxMargin')}
-                                                    disabled={running}
-                                                />
-                                            </label>
-                                            <label className='kapa-field'>
-                                                <span>Daily loss limit (% of balance)</span>
-                                                <input
-                                                    type='number'
-                                                    min={1}
-                                                    max={100}
-                                                    step={1}
-                                                    value={s.dailyLossPct}
-                                                    onChange={num('dailyLossPct')}
-                                                    disabled={running}
-                                                />
-                                            </label>
-                                            <label className='kapa-field'>
                                                 <span>Pause between trades (s)</span>
                                                 <input
                                                     type='number'
@@ -1449,8 +1560,13 @@ const KapaAI = observer(() => {
                                                     Out of 100 sessions like this, about {Math.round(plan.hit * 100)} reach +
                                                     {fmt(s.takeProfit)} {currency}
                                                     {plan.bust > 0.005
-                                                        ? ` and about ${Math.round(plan.bust * 100)} stop at a loss, losing ${fmt(Math.abs(plan.bustAvg))} ${currency} on average.`
+                                                        ? ` and about ${Math.round(plan.bust * 100)} stop at a loss, losing ${fmt(Math.abs(plan.bustAvg))} ${currency} on average`
+                                                        : ''}
+                                                    {Math.round(plan.hit * 100) + Math.round(plan.bust * 100) < 99
+                                                        ? `; the other ${100 - Math.round(plan.hit * 100) - Math.round(plan.bust * 100)} end in between (a run of losses or the trade limit stops them with a small loss or gain).`
                                                         : '.'}{' '}
+                                                    A session never loses more than its stop-loss ({fmt(s.stopLoss)}{' '}
+                                                    {currency}).{' '}
                                                     Averaged over many sessions, that is {signed(plan.avg)} {currency} per
                                                     session.
                                                     {plan.contract &&
@@ -1512,7 +1628,7 @@ const KapaAI = observer(() => {
                                 setScanMsg('Strategy loaded. Review all settings and press Start KAPA AI when ready.');
                             }}
                         >
-                            Activate Kapa
+                            Load these settings
                         </button>
                         <button className='kapa-btn kapa-btn--line' type='button' onClick={() => setActivation(null)}>
                             Cancel
@@ -1545,32 +1661,34 @@ const KapaAI = observer(() => {
             )}
 
             {result && (
-                <div className='kapa-mask' role='dialog' aria-modal>
+                <div className='kapa-mask' role='dialog' aria-modal aria-label={STOP_TITLES[result.kind]}>
                     <div className={classNames('kapa-modal kapa-modal--result', { 'kapa-modal--loss': result.pl < 0 })}>
                         <div className='kapa-result__media'>
                             <KapaClip win={result.pl >= 0} />
                         </div>
-                        <KapaClose className='kapa-close--corner' onClick={() => setResult(null)} />
+                        <KapaClose className='kapa-close--corner' onClick={kapaRun.closeResult} />
                         <div className='kapa-result'>
                             <span className={classNames('kapa-result__tag', { bad: result.kind !== 'tp' })}>
-                                {result.kind === 'tp'
-                                    ? 'PROFIT TARGET REACHED'
-                                    : result.kind === 'streak'
-                                      ? 'LOSS LIMIT REACHED'
-                                      : 'STOP-LOSS REACHED'}
+                                {STOP_TITLES[result.kind]}
                             </span>
                             <div className='kapa-result__h1'>KAPA AI</div>
                             <div className='kapa-result__h2'>
                                 {result.kind === 'tp'
                                     ? 'hit a profit of'
-                                    : result.pl >= 0
+                                    : result.pl > 0
                                       ? 'stopped with a profit of'
-                                      : 'stopped at a loss of'}
+                                      : result.pl < 0
+                                        ? 'stopped at a loss of'
+                                        : 'stopped with no gain or loss'}
                             </div>
-                            <div className={classNames('kapa-result__amt', { bad: result.pl < 0 })}>
-                                <CountUp value={Math.abs(result.pl)} /> {currency}
-                            </div>
-                            <button className='kapa-btn kapa-btn--lime' type='button' onClick={() => setResult(null)}>
+                            {result.pl !== 0 && (
+                                <div className={classNames('kapa-result__amt', { bad: result.pl < 0 })}>
+                                    <CountUp value={Math.abs(result.pl)} /> {currency}
+                                </div>
+                            )}
+                            {/* Why it stopped, in full (the run bar can only show the beginning) */}
+                            {result.kind !== 'tp' && <p className='kapa-result__why'>{result.reason}</p>}
+                            <button className='kapa-btn kapa-btn--lime' type='button' onClick={kapaRun.closeResult}>
                                 Continue
                             </button>
                         </div>

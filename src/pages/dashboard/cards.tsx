@@ -6,7 +6,6 @@ import { observer } from 'mobx-react-lite';
 import GoogleDrive from '@/components/load-modal/google-drive';
 import Dialog from '@/components/shared_ui/dialog';
 import MobileFullPageModal from '@/components/shared_ui/mobile-full-page-modal';
-import Text from '@/components/shared_ui/text';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { useStore } from '@/hooks/useStore';
 import { Localize, localize } from '@deriv-com/translations';
@@ -150,46 +149,27 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
 
     return React.useMemo(
         () => (
-            <div
-                className={classNames('tab__dashboard__table', {
-                    'tab__dashboard__table--minimized': has_dashboard_strategies && is_mobile,
-                })}
-            >
-                <div
-                    className={classNames('tab__dashboard__table__tiles', {
-                        'tab__dashboard__table__tiles--minimized': has_dashboard_strategies && is_mobile,
-                    })}
-                    id='tab__dashboard__table__tiles'
-                >
+            <div className='kapa-dash__table'>
+                <div className='kapa-dash__cards' id='tab__dashboard__table__tiles'>
                     {actions.map(icons => {
                         const { icon, content, callback, id, subtitle, accent, disabled } = icons;
                         return (
                             <div
                                 key={id}
-                                className={classNames('tab__dashboard__table__block', 'kapa-tile', {
-                                    'tab__dashboard__table__block--minimized': has_dashboard_strategies && is_mobile,
+                                className={classNames('kapa-tile', {
+                                    'kapa-tile--minimized': has_dashboard_strategies && is_mobile,
                                     'kapa-tile--disabled': disabled,
                                 })}
                                 style={{ '--kapa-accent': accent } as React.CSSProperties}
                             >
-                                <div
-                                    className={classNames('tab__dashboard__table__images', {
-                                        'tab__dashboard__table__images--minimized': has_dashboard_strategies,
-                                    })}
-                                    width='8rem'
-                                    height='8rem'
-                                    icon={icon}
-                                    id={id}
-                                    onClick={() => {
-                                        callback();
-                                    }}
-                                >
+                                <span className='kapa-tile__bar' aria-hidden />
+                                <div className='kapa-tile__icon' id={id} onClick={() => callback()} aria-hidden>
                                     {icon}
                                 </div>
-                                <Text color='prominent' size={is_mobile ? 'xxs' : 'xs'} weight='bold'>
-                                    {content}
-                                </Text>
-                                {subtitle && <span className='kapa-tile__sub'>{subtitle}</span>}
+                                <div className='kapa-tile__content'>
+                                    <h3 className='kapa-tile__title'>{content}</h3>
+                                    {subtitle && <p className='kapa-tile__sub'>{subtitle}</p>}
+                                </div>
                                 <button
                                     type='button'
                                     className='kapa-tile__open'
@@ -199,7 +179,12 @@ const Cards = observer(({ is_mobile, has_dashboard_strategies }: TCardProps) => 
                                     {disabled ? (
                                         <Localize i18n_default_text='SOON' />
                                     ) : (
-                                        <Localize i18n_default_text='OPEN →' />
+                                        <>
+                                            <Localize i18n_default_text='OPEN' />
+                                            <span className='kapa-tile__arrow' aria-hidden>
+                                                →
+                                            </span>
+                                        </>
                                     )}
                                 </button>
                             </div>

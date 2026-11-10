@@ -290,6 +290,8 @@
 // ---- Kapa header: navy glass bar with a light hairline. It stays static: the layout never scrolls (each tab
 // scrolls on its own), and the phone menu drawer is positioned against the page, not the header.
 .layout .deriv-header.app-header {
+    position: relative;
+    z-index: 100; // its account list opens over the tab strip and the Run column
     background: var(--kapa-header);
     box-shadow:
         var(--kapa-header-shadow),
@@ -415,21 +417,43 @@ body .app-header--mobile .kapa-transfer {
     }
 }
 
-// Account switcher list: as wide as the header's left half, selected row in a lighter navy
+// Account switcher list, like the reference bot: a square dark panel as wide as the header's left half, the
+// selected row lighter; the open switcher is shaded too
 .acc-dropdown {
-    min-width: min(28rem, calc(100vw - 2.4rem));
-    border-radius: 1.4rem;
-    border: 1px solid var(--kapa-line);
-    background: var(--kapa-surface-flat);
-    box-shadow: var(--kapa-shadow-deep);
+    width: min(28rem, calc(100vw - 1.6rem));
+    min-width: min(28rem, calc(100vw - 1.6rem));
+    max-width: calc(100vw - 1.6rem);
+    border: 0;
+    border-radius: 0;
+    background: #151717;
+    box-shadow: 0 4px 6px rgb(0 0 0 / 24%);
 
     &__account {
         background: transparent;
         padding: 1rem 1.6rem;
 
         &--selected {
-            background: rgb(148 163 184 / 14%);
+            background: #323738;
         }
+    }
+}
+
+.acc-info[aria-expanded='true'] {
+    background: #323738;
+}
+
+.theme--light {
+    .acc-dropdown {
+        background: #fff;
+        box-shadow: 0 4px 6px rgb(15 39 66 / 18%);
+
+        &__account--selected {
+            background: #e4ebf4;
+        }
+    }
+
+    .acc-info[aria-expanded='true'] {
+        background: #e4ebf4;
     }
 }
 

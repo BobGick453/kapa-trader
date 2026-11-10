@@ -1,10 +1,19 @@
-// Opening screen: navy, a thin gold frame that draws itself, a faint gold grid floor, the KA emblem with two
-// counter-rotating rings, and the Kapa words sliding in. Every animation is transform/opacity (plus one tiny
-// SVG stroke), so it runs on the compositor and never slows the app loading underneath.
-$ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+// Opening screen, after the reference bot's intro (authorised reuse of its look and choreography): dark navy with a
+// gold glow, a gold perspective grid, a thin gold frame, the KA emblem drawing itself inside two counter-rotating
+// orbits, the two words sliding in around a "×", a statement, a progress line and a status that turns to "Ready".
+// Kapa's own emblem and words. Every animation is transform/opacity (plus one SVG stroke).
+//
+// $speed plays the reference's timing faster (0.6 = 60% of its durations and delays); keep in step with SPEED in
+// kapa-splash.tsx.
+$speed: 0.6;
+$ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+$ease-emblem: cubic-bezier(0.16, 1, 0.3, 1);
 $ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
-$gold: #e0b757;
-$gold-soft: rgb(224 183 87 / 70%);
+$ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+
+@function t($s) {
+    @return $s * $speed;
+}
 
 .kapa-splash {
     position: fixed;
@@ -12,9 +21,17 @@ $gold-soft: rgb(224 183 87 / 70%);
     z-index: 10000;
     display: grid;
     place-items: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: max(2rem, env(safe-area-inset-top)) max(2rem, env(safe-area-inset-right))
+        max(2rem, env(safe-area-inset-bottom)) max(2rem, env(safe-area-inset-left));
     overflow: hidden;
-    background: radial-gradient(60rem 42rem at 50% 42%, #10264a 0%, #071426 62%, #050e1d 100%);
-    color: $gold;
+    isolation: isolate;
+    color: #f6e7b0;
+    background:
+        radial-gradient(circle at 50% 42%, rgb(189 143 43 / 15%) 0, transparent 31%),
+        radial-gradient(circle at 50% 110%, rgb(32 81 145 / 27%) 0, transparent 41%),
+        linear-gradient(145deg, #02070f 0%, #071426 48%, #02070d 100%);
     font-family:
         'Outfit',
         system-ui,
@@ -23,374 +40,456 @@ $gold-soft: rgb(224 183 87 / 70%);
         Roboto,
         sans-serif;
     cursor: pointer;
-    transition:
-        opacity 0.65s cubic-bezier(0.65, 0, 0.35, 1),
-        transform 0.65s cubic-bezier(0.65, 0, 0.35, 1);
 
     &--out {
-        opacity: 0;
-        transform: scale(1.03);
         pointer-events: none;
+        animation: kapa-splash-exit t(0.7s) $ease-io both;
     }
 
-    // ---- background ----
+    p {
+        margin: 0;
+    }
+
+    &__grid {
+        position: absolute;
+        inset: -15%;
+        opacity: 0;
+        background-image:
+            linear-gradient(rgb(224 183 87 / 4%) 1px, transparent 1px),
+            linear-gradient(90deg, rgb(224 183 87 / 4%) 1px, transparent 1px);
+        background-size: 5.4rem 5.4rem;
+        transform: perspective(70rem) rotateX(62deg) translateY(16%);
+        -webkit-mask-image: radial-gradient(circle, #000 4%, transparent 68%);
+        mask-image: radial-gradient(circle, #000 4%, transparent 68%);
+        animation: kapa-splash-grid t(1.3s) ease-out t(0.15s) both;
+    }
+
     &__glow {
         position: absolute;
-        width: 46rem;
-        height: 46rem;
+        width: min(48rem, 65vw);
+        height: min(48rem, 65vw);
         border-radius: 50%;
-        pointer-events: none;
-        animation: kapa-splash-breathe 3.2s ease-in-out infinite;
-
-        &--a {
-            top: -14rem;
-            left: -12rem;
-            background: radial-gradient(circle, rgb(37 99 235 / 22%), transparent 65%);
-        }
-
-        &--b {
-            right: -14rem;
-            bottom: -16rem;
-            background: radial-gradient(circle, rgb(224 183 87 / 12%), transparent 65%);
-            animation-delay: -1.6s;
-        }
-    }
-
-    // gold perspective grid on the floor, fading towards the horizon
-    &__floor {
-        position: absolute;
-        left: -50%;
-        right: -50%;
-        bottom: -8%;
-        height: 58%;
-        pointer-events: none;
-        background-image:
-            linear-gradient(rgb(224 183 87 / 22%) 1px, transparent 1px),
-            linear-gradient(90deg, rgb(224 183 87 / 22%) 1px, transparent 1px);
-        background-size: 5.6rem 5.6rem;
-        transform: perspective(36rem) rotateX(64deg);
-        transform-origin: 50% 100%;
-        -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 85%);
-        mask-image: linear-gradient(to top, #000 10%, transparent 85%);
         opacity: 0;
-        animation: kapa-splash-fade 1.3s 0.2s ease-out forwards;
+        background: rgb(218 172 65 / 12%);
+        filter: blur(8rem);
+        animation: kapa-splash-breathe 3.2s ease-in-out t(0.4s) both;
+
+        &--top {
+            top: -32rem;
+            left: -16rem;
+        }
+
+        &--bottom {
+            right: -19rem;
+            bottom: -32rem;
+            background: rgb(54 109 184 / 16%);
+            animation-delay: t(0.65s);
+        }
     }
 
-    // ---- frame: four hairlines growing from the corners, plus the corner brackets ----
     &__frame {
         position: absolute;
-        inset: 1.5rem;
-        pointer-events: none;
+        inset: max(1.4rem, min(3.5vw, 4rem));
+        border: 1px solid rgb(223 184 91 / 10%);
+        opacity: 0;
+        transform: scale(0.985);
+        animation: kapa-splash-frame t(0.9s) ease-out t(0.25s) both;
 
-        @media (width >= 768px) {
-            inset: 3.2rem;
-        }
-
-        @media (width >= 1280px) {
-            inset: 5rem;
-        }
-    }
-
-    &__edge {
-        position: absolute;
-        background: rgb(224 183 87 / 28%);
-
-        &--t,
-        &--b {
-            left: 0;
-            right: 0;
-            height: 1px;
-            transform: scaleX(0);
-            animation: kapa-splash-grow-x 0.9s $ease-out forwards;
-        }
-
-        &--l,
-        &--r {
-            top: 0;
-            bottom: 0;
-            width: 1px;
-            transform: scaleY(0);
-            animation: kapa-splash-grow-y 0.9s 0.1s $ease-out forwards;
-        }
-
-        &--t {
-            top: 0;
-            transform-origin: 0 50%;
-        }
-
-        &--b {
-            bottom: 0;
-            transform-origin: 100% 50%;
-        }
-
-        &--l {
-            left: 0;
-            transform-origin: 50% 100%;
-        }
-
-        &--r {
-            right: 0;
-            transform-origin: 50% 0;
+        @media (width <= 680px) {
+            inset: 1.2rem;
         }
     }
 
     &__corner {
         position: absolute;
-        width: 2.8rem;
-        height: 2.8rem;
-        border: 0 solid $gold-soft;
+        width: max(2.4rem, min(5vw, 5rem));
+        height: max(2.4rem, min(5vw, 5rem));
+        border-color: rgb(230 192 100 / 62%);
 
         &--tl {
             top: -1px;
             left: -1px;
-            border-top-width: 2px;
-            border-left-width: 2px;
+            border-top: 1px solid;
+            border-left: 1px solid;
         }
 
         &--tr {
             top: -1px;
             right: -1px;
-            border-top-width: 2px;
-            border-right-width: 2px;
+            border-top: 1px solid;
+            border-right: 1px solid;
         }
 
         &--bl {
             bottom: -1px;
             left: -1px;
-            border-bottom-width: 2px;
-            border-left-width: 2px;
+            border-bottom: 1px solid;
+            border-left: 1px solid;
         }
 
         &--br {
-            bottom: -1px;
             right: -1px;
-            border-bottom-width: 2px;
-            border-right-width: 2px;
+            bottom: -1px;
+            border-right: 1px solid;
+            border-bottom: 1px solid;
         }
     }
 
-    // ---- content ----
-    &__in {
+    &__content {
         position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: min(100%, 90rem);
         text-align: center;
-        padding: 2.4rem;
     }
 
-    &__tag,
-    &__sub {
-        font-size: 1.1rem;
-        font-weight: 500;
-        letter-spacing: 0.65rem;
-        text-transform: uppercase;
-        color: rgb(224 183 87 / 72%);
-
-        @media (width <= 599px) {
-            letter-spacing: 0.4rem;
-            font-size: 1rem;
-        }
-    }
-
-    &__tag {
+    &__edition {
+        margin: 0 0 max(1.6rem, min(3vh, 3rem)) !important;
+        color: rgb(232 204 135 / 70%);
+        font-size: max(0.85rem, min(1vw, 1.1rem));
+        font-weight: 700;
+        letter-spacing: max(0.25rem, min(0.7vw, 0.65rem));
         opacity: 0;
-        animation: kapa-splash-fade 0.8s 0.15s ease-out forwards;
+        transform: translateY(1rem);
+        animation: kapa-splash-copy t(0.7s) $ease-out t(0.5s) both;
     }
 
     &__emblem {
         position: relative;
-        width: 13rem;
-        height: 13rem;
-        margin: 2.4rem auto 2rem;
         display: grid;
         place-items: center;
+        width: max(10.5rem, min(18vw, 15.5rem));
+        aspect-ratio: 1;
         opacity: 0;
-        transform: scale(0.82);
-        animation: kapa-splash-emblem 1.1s 0.1s $ease-out forwards;
+        transform: scale(0.72);
+        animation: kapa-splash-emblem t(1.1s) $ease-emblem t(0.5s) both;
+
+        svg {
+            width: 62%;
+            height: 62%;
+            overflow: visible;
+            filter: drop-shadow(0 0 1.4rem rgb(211 163 53 / 22%));
+        }
     }
 
-    &__ring {
+    &__coin,
+    &__coin-inner {
+        fill: rgb(10 22 39 / 88%);
+        stroke: #d8af52;
+        stroke-width: 1.4px;
+        stroke-dasharray: 420;
+        stroke-dashoffset: 420;
+        animation: kapa-splash-draw t(1.6s) ease-out t(0.7s) both;
+    }
+
+    &__coin-inner {
+        fill: rgb(206 160 55 / 5%);
+        stroke: rgb(232 196 105 / 40%);
+        stroke-width: 0.7px;
+        animation-delay: t(0.95s);
+    }
+
+    &__orbit {
         position: absolute;
+        border: 1px solid rgb(223 181 79 / 24%);
         border-radius: 50%;
-        border: 1px solid rgb(224 183 87 / 30%);
+
+        &::before,
+        &::after {
+            content: '';
+            position: absolute;
+            width: 0.45rem;
+            height: 0.45rem;
+            border-radius: 50%;
+            background: #f1d589;
+            box-shadow: 0 0 1rem rgb(240 197 91 / 80%);
+        }
+
+        &::before {
+            top: -0.25rem;
+            left: 50%;
+        }
+
+        &::after {
+            right: -0.25rem;
+            bottom: 31%;
+        }
 
         &--outer {
             inset: 0;
-            animation: kapa-splash-spin 9s linear infinite;
+            border-right-color: rgb(237 201 111 / 70%);
+            animation: kapa-splash-orbit 9s linear t(0.9s) infinite;
         }
 
         &--inner {
-            inset: 1.4rem;
-            border-color: rgb(96 165 250 / 28%);
-            animation: kapa-splash-spin 6.5s linear infinite reverse;
-        }
-
-        // a spark riding on each ring
-        i {
-            position: absolute;
-            top: -0.3rem;
-            left: 50%;
-            width: 0.6rem;
-            height: 0.6rem;
-            margin-left: -0.3rem;
-            border-radius: 50%;
-            background: #f2d581;
-            box-shadow: 0 0 0.8rem 0.2rem rgb(242 213 129 / 70%);
-        }
-
-        &--inner i {
-            background: #93c5fd;
-            box-shadow: 0 0 0.8rem 0.2rem rgb(147 197 253 / 60%);
+            inset: 12%;
+            border-bottom-color: rgb(92 147 213 / 65%);
+            animation: kapa-splash-orbit-rev 6.5s linear t(0.9s) infinite;
         }
     }
 
-    // a short bright arc sweeping round
     &__sweep {
         position: absolute;
-        inset: 0.7rem;
+        inset: 8%;
         border-radius: 50%;
-        background: conic-gradient(from 0deg, transparent 0 78%, rgb(242 213 129 / 55%) 96%, transparent 100%);
-        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
-        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
-        animation: kapa-splash-spin 2.8s linear infinite;
+        background: conic-gradient(from 0deg, transparent 0 78%, rgb(229 187 87 / 16%) 94%, transparent 100%);
+        animation: kapa-splash-orbit 2.8s linear t(0.9s) infinite;
     }
 
-    // the gold circle round the monogram draws itself once
-    &__draw {
+    &__monogram {
         position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        transform: rotate(-90deg);
-
-        circle {
-            fill: rgb(7 20 38 / 55%);
-            stroke: $gold;
-            stroke-width: 1.2;
-            stroke-dasharray: 100;
-            stroke-dashoffset: 100;
-            animation: kapa-splash-draw 1.6s 0.2s $ease-out forwards;
-        }
-    }
-
-    &__mark {
-        position: relative;
-        font-size: 3.2rem;
-        font-weight: 700;
-        letter-spacing: 0.1rem;
-        color: #f2d581;
-        text-shadow: 0 0 1.8rem rgb(242 213 129 / 35%);
+        color: #f2d887;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: max(1.8rem, min(3.7vw, 3rem));
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-shadow: 0 0 1.6rem rgb(220 174 64 / 36%);
+        opacity: 0;
+        animation: kapa-splash-in t(0.7s) ease-out t(1.5s) both;
     }
 
     &__spark {
         position: absolute;
-        width: 0.4rem;
-        height: 0.4rem;
+        width: 0.35rem;
+        height: 0.35rem;
         border-radius: 50%;
-        background: #fff3c4;
-        box-shadow: 0 0 0.6rem 0.2rem rgb(242 213 129 / 75%);
+        background: #ffe8a8;
+        box-shadow: 0 0 1.2rem #e9b949;
         opacity: 0;
-        animation: kapa-splash-twinkle 1.8s ease-in-out infinite;
+        animation: kapa-splash-spark 1.8s ease-in-out infinite;
 
-        &--1 {
-            top: 8%;
-            right: 6%;
+        &--one {
+            top: 17%;
+            right: 7%;
+            animation-delay: t(1.3s);
         }
 
-        &--2 {
-            bottom: 14%;
+        &--two {
+            bottom: 6%;
+            left: 19%;
+            animation-delay: t(1.75s);
+        }
+
+        &--three {
+            top: 35%;
             left: 2%;
-            animation-delay: 0.6s;
+            animation-delay: t(2.1s);
         }
+    }
 
-        &--3 {
-            top: 46%;
-            right: -6%;
-            animation-delay: 1.2s;
+    &__lockup {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: max(1.1rem, min(3vw, 3.2rem));
+        margin-top: max(1.2rem, min(2.3vh, 2.2rem));
+
+        @media (width <= 680px) {
+            flex-direction: column;
+            gap: 0.8rem;
         }
     }
 
     &__brand {
         display: flex;
+        flex-direction: column;
         align-items: center;
-        justify-content: center;
-        gap: 1.4rem;
-        overflow: hidden;
-        padding: 0.2rem 0;
+        opacity: 0;
+
+        span {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: max(1.8rem, min(4.5vw, 4.8rem));
+            font-weight: 500;
+            line-height: 0.95;
+            letter-spacing: max(0.06rem, min(0.25vw, 0.24rem));
+            white-space: nowrap;
+
+            @media (width <= 680px) {
+                font-size: max(2rem, min(9vw, 3.4rem));
+            }
+        }
+
+        small {
+            margin-top: max(0.7rem, min(1.2vw, 1.1rem));
+            color: rgb(230 204 142 / 74%);
+            font-size: max(0.7rem, min(1vw, 1rem));
+            font-weight: 700;
+            letter-spacing: max(0.3rem, min(0.75vw, 0.75rem));
+
+            @media (width <= 680px) {
+                margin-top: 0.5rem;
+            }
+        }
+
+        &--left {
+            align-items: flex-end;
+            transform: translateX(-2.2rem);
+            animation: kapa-splash-brand t(0.85s) $ease-out t(1.55s) both;
+        }
+
+        &--right {
+            align-items: flex-start;
+            transform: translateX(2.2rem);
+            animation: kapa-splash-brand t(0.85s) $ease-out t(1.65s) both;
+
+            span {
+                color: #f0c861;
+            }
+        }
+
+        @media (width <= 680px) {
+            &--left,
+            &--right {
+                align-items: center;
+            }
+        }
     }
 
-    &__word {
-        font-size: 3.2rem;
+    &__cross {
+        color: rgb(244 216 147 / 82%);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: max(1.7rem, min(3vw, 3.2rem));
+        opacity: 0;
+        transform: rotate(-45deg) scale(0.5);
+        animation: kapa-splash-cross t(0.65s) $ease-pop t(2.15s) both;
+
+        @media (width <= 680px) {
+            font-size: 1.65rem;
+            line-height: 0.7;
+        }
+    }
+
+    &__statement {
+        margin: max(1.7rem, min(3vh, 3rem)) 0 0 !important;
+        color: rgb(214 225 241 / 68%);
+        font-size: max(0.75rem, min(1.2vw, 1.05rem));
         font-weight: 600;
-        letter-spacing: 0.5rem;
-        line-height: 1.1;
-        color: #f5f8fc;
+        letter-spacing: max(0.18rem, min(0.55vw, 0.5rem));
         opacity: 0;
-
-        @media (width <= 599px) {
-            font-size: 2.6rem;
-            letter-spacing: 0.35rem;
-        }
-
-        &--l {
-            transform: translateX(-2.4rem);
-            animation: kapa-splash-slide 0.85s 0.3s $ease-out forwards;
-        }
-
-        &--r {
-            color: $gold;
-            transform: translateX(2.4rem);
-            animation: kapa-splash-slide 0.85s 0.3s $ease-out forwards;
-        }
+        transform: translateY(1rem);
+        animation: kapa-splash-copy t(0.7s) ease-out t(2.45s) both;
     }
 
-    &__gem {
-        width: 0.8rem;
-        height: 0.8rem;
-        background: $gold;
-        transform: rotate(45deg) scale(0);
-        animation: kapa-splash-gem 0.6s 0.7s $ease-pop forwards;
-    }
-
-    &__sub {
-        margin-top: 1.4rem;
-        letter-spacing: 0.3rem;
+    &__progress {
+        position: relative;
+        width: min(72vw, 31rem);
+        min-height: 3.6rem;
+        margin-top: max(1.8rem, min(4vh, 3.8rem));
         opacity: 0;
-        animation: kapa-splash-fade 0.8s 0.8s ease-out forwards;
-
-        @media (width <= 599px) {
-            letter-spacing: 0.2rem;
-        }
+        animation: kapa-splash-in t(0.5s) ease-out t(2.75s) both;
     }
 
-    &__step {
-        margin-top: 2.4rem;
-        font-size: 1.1rem;
-        font-weight: 500;
-        letter-spacing: 0.3rem;
-        text-transform: uppercase;
+    &__track {
+        display: block;
+        height: 1px;
+        overflow: hidden;
+        background: rgb(242 210 130 / 18%);
+    }
+
+    &__fill {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #7c5a16, #f1d47f, #8cb4e5);
+        box-shadow: 0 0 1.4rem rgb(231 187 79 / 55%);
+        transform: scaleX(0);
+        transform-origin: 0;
+        animation: kapa-splash-fill t(1.45s) $ease-io t(2.95s) both;
+    }
+
+    &__status {
+        position: absolute;
+        top: 1.4rem;
+        left: 0;
+        width: 100%;
         color: rgb(220 228 240 / 56%);
-        transition: color 0.3s ease;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.26rem;
+        transition:
+            opacity 0.3s ease,
+            transform 0.4s ease-out;
 
         &--ready {
             color: #f2d581;
+            opacity: 0;
+            transform: translateY(0.5rem);
+        }
+    }
+
+    &--ready &__status--wait {
+        opacity: 0;
+        transform: translateY(-0.4rem);
+    }
+
+    &--ready &__status--ready {
+        opacity: 1;
+        transform: none;
+    }
+
+    // The app is ready before the intro reaches the progress line (fast connection after a tap or a cap):
+    // show the line full
+    &--ready &__progress {
+        opacity: 1;
+    }
+
+    &--ready &__fill {
+        transform: scaleX(1);
+    }
+
+    @media (height <= 660px) {
+        &__edition {
+            margin-bottom: 0.7rem !important;
+        }
+
+        &__emblem {
+            width: 8.2rem;
+        }
+
+        &__lockup {
+            margin-top: 0.5rem;
+        }
+
+        &__statement,
+        &__progress {
+            margin-top: 1.1rem !important;
         }
     }
 }
 
-@keyframes kapa-splash-fade {
+@keyframes kapa-splash-grid {
     to {
         opacity: 1;
+        transform: perspective(70rem) rotateX(62deg) translateY(9%);
     }
 }
 
-@keyframes kapa-splash-grow-x {
-    to {
-        transform: scaleX(1);
+@keyframes kapa-splash-breathe {
+    0% {
+        opacity: 0;
+        transform: scale(0.75);
+    }
+    55% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.6;
+        transform: scale(1.12);
     }
 }
 
-@keyframes kapa-splash-grow-y {
+@keyframes kapa-splash-frame {
     to {
-        transform: scaleY(1);
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes kapa-splash-copy {
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 
@@ -401,88 +500,104 @@ $gold-soft: rgb(224 183 87 / 70%);
     }
 }
 
-@keyframes kapa-splash-spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
 @keyframes kapa-splash-draw {
     to {
         stroke-dashoffset: 0;
     }
 }
 
-@keyframes kapa-splash-twinkle {
+@keyframes kapa-splash-in {
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes kapa-splash-orbit {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes kapa-splash-orbit-rev {
+    to {
+        transform: rotate(-360deg);
+    }
+}
+
+@keyframes kapa-splash-spark {
     0%,
     100% {
         opacity: 0;
-        transform: scale(0.4);
+        transform: scale(0.3);
     }
-    50% {
-        opacity: 1;
+    45% {
+        opacity: 0.85;
         transform: scale(1);
     }
 }
 
-@keyframes kapa-splash-slide {
+@keyframes kapa-splash-brand {
     to {
         opacity: 1;
-        transform: none;
+        transform: translateX(0);
     }
 }
 
-@keyframes kapa-splash-gem {
+@keyframes kapa-splash-cross {
     to {
-        transform: rotate(45deg) scale(1);
+        opacity: 1;
+        transform: rotate(0) scale(1);
     }
 }
 
-@keyframes kapa-splash-breathe {
-    0%,
+@keyframes kapa-splash-fill {
+    to {
+        transform: scaleX(1);
+    }
+}
+
+@keyframes kapa-splash-exit {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
     100% {
-        opacity: 0.7;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 1;
-        transform: scale(1.06);
+        opacity: 0;
+        transform: scale(1.025);
     }
 }
 
-// Reduced motion: everything is shown at once, nothing moves
 @media (prefers-reduced-motion: reduce) {
     .kapa-splash,
-    .kapa-splash * {
+    .kapa-splash *,
+    .kapa-splash *::before,
+    .kapa-splash *::after {
         animation: none !important;
-        transition: none !important;
     }
-    .kapa-splash__floor,
-    .kapa-splash__tag,
+
+    .kapa-splash__grid,
+    .kapa-splash__frame,
+    .kapa-splash__edition,
     .kapa-splash__emblem,
-    .kapa-splash__word,
-    .kapa-splash__sub {
+    .kapa-splash__brand,
+    .kapa-splash__cross,
+    .kapa-splash__statement,
+    .kapa-splash__progress,
+    .kapa-splash__monogram {
         opacity: 1;
         transform: none;
     }
-    .kapa-splash__floor {
-        transform: perspective(36rem) rotateX(64deg);
-    }
-    .kapa-splash__edge {
-        transform: none;
-    }
-    .kapa-splash__gem {
-        transform: rotate(45deg);
-    }
-    .kapa-splash__draw circle {
+
+    .kapa-splash__coin,
+    .kapa-splash__coin-inner {
         stroke-dashoffset: 0;
     }
-    .kapa-splash__spark {
-        opacity: 0.8;
-    }
-}
 
-// While the opening screen is up, the template's "Loading Blockly" bars stay hidden (they would show through it)
-body:has(.kapa-splash) .bot__loading {
-    visibility: hidden;
+    .kapa-splash__fill {
+        transform: scaleX(1);
+    }
+
+    .kapa-splash--out {
+        opacity: 0;
+    }
 }

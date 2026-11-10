@@ -1,36 +1,17 @@
-// KAPA Apex in the fake Deriv with the default settings: unlock Premium with a code, pick Apex, Start.
+// KAPA Apex in the fake Deriv with the default settings: Premium on the account, pick Apex, Start.
 // The server runs every decision; no stake goes past the stop-loss.
 const { chromium } = require('playwright'); const mock = require('./derivmock'); const trade = require('./trademock');
+const P = require('./premium-env');
 let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fails++; };
-const dismiss = async (pg) => { for (let i = 0; i < 3; i++) { for (const t of ['Skip', 'Close']) { const b = pg.getByRole('button', { name: t, exact: true }).first(); if (await b.isVisible().catch(() => false)) await b.click().catch(() => {}); } await pg.keyboard.press('Escape').catch(() => {}); await pg.waitForTimeout(250); } };
 (async () => {
-  const worker = (await import('./worker.mjs')).default;
-  const store = new Map();
-  const KV = { get: async (k, t) => { const v = store.get(k); return v == null ? null : t === 'json' ? JSON.parse(v) : v; }, put: async (k, v) => { store.set(k, v); }, delete: async (k) => { store.delete(k); }, list: async ({ prefix }) => ({ keys: [...store.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })), list_complete: true }) };
-  const ADMIN = 'admin-test-secret-0123456789';
-  const env = { KAPA_KV: KV, ADMIN_SECRET: ADMIN, SESSION_KEY: 's'.repeat(48), ALLOWED_ORIGINS: 'http://localhost:8770', DERIV_API: 'https://api.derivws.com' };
+  const S = await P.setup();
   const b = await chromium.launch(); const pg = await b.newPage({ viewport: { width: +(process.env.W || 400), height: 860 } });
-  const stats = { buys: [] }; const st = await mock.install(pg, { handler: trade(stats) });
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init = {}) => { url = String(url);
-    if (url.endsWith('/trading/v1/options/accounts')) { const t = String(init.headers?.authorization || '').replace('Bearer ', '');
-      return new Response(JSON.stringify(st.tokens.has(t) ? { data: [{ account_id: 'DOT90002' }] } : {}), { status: st.tokens.has(t) ? 200 : 401 }); }
-    return realFetch(url, init); };
-  const calls = [];
-  await pg.route('https://kapa-premium.netlify.app/**', async (route) => {
-    const r = route.request(); const req = new Request(r.url(), { method: r.method(), headers: r.headers(), body: ['GET', 'HEAD'].includes(r.method()) ? undefined : r.postDataBuffer() });
-    const res = await worker.fetch(req, env); const headers = {}; res.headers.forEach((v, k) => { headers[k] = v; });
-    const body = Buffer.from(await res.arrayBuffer()); calls.push({ path: new URL(r.url()).pathname, status: res.status, body: body.toString() });
-    route.fulfill({ status: res.status, headers, body });
-  });
-  await worker.fetch(new Request('https://kapa-premium.netlify.app/admin/code', { method: 'POST', headers: { 'x-admin-secret': ADMIN, 'content-type': 'application/json' }, body: JSON.stringify({ code: 'APEX-TEST-2026' }) }), env);
-  await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(3500);
-  await pg.locator('.kapa-login .kapa-btn, .kapa-lock__login button').first().click(); await pg.waitForTimeout(6000); await dismiss(pg);
-  if (!(await pg.locator('.kapa-lock, .kapa-card--main').first().isVisible().catch(() => false))) { await pg.click('#id-kapa-ai'); await pg.waitForTimeout(1500); await dismiss(pg); }
-  if (await pg.locator('.kapa-lock__free').isVisible().catch(() => false)) await pg.click('.kapa-lock__free');
-  await pg.click('.kapa-gear'); await pg.waitForSelector('#kapa-premium-code', { timeout: 10000 });
-  await pg.fill('#kapa-premium-code', 'apex test 2026'); await pg.click('.kapa-premium__code .kapa-btn'); await pg.waitForTimeout(1500);
-  ok(/Premium unlocked/.test(await pg.textContent('.kapa-premium')), 'Premium unlocked with the code');
+  const stats = { buys: [] }; const st = await mock.install(pg, { handler: trade(stats) }); await S.attach(pg, st);
+  const calls = S.calls;
+  await S.admin('/admin/entitlements', { account: 'DOT90002' }); // owner switches Premium on for this account
+  await P.login(pg);
+  await pg.click('.kapa-gear'); await pg.waitForTimeout(800);
+  ok(/Premium is active on your Deriv account/.test(await pg.textContent('.kapa-premium')), 'Premium switched on from Admin for this Deriv account');
   await pg.selectOption('.kapa-field:has-text("Strategy") select', 'apex');
   await pg.fill('.kapa-field:has-text("Stop-loss") input', '50');
   await pg.click('.kapa-link:has-text("advanced")'); await pg.fill('.kapa-field:has-text("Pause between") input', '0');

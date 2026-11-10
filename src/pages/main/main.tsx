@@ -142,9 +142,11 @@ const AppWrapper = observer(() => {
         const open = () => setActiveTab(DBOT_TABS.KAPA_AI);
         window.addEventListener('kapa:open-premium', open);
         window.addEventListener('kapa:use-market', open);
+        window.addEventListener('kapa:open-ai', open);
         return () => {
             window.removeEventListener('kapa:open-premium', open);
             window.removeEventListener('kapa:use-market', open);
+            window.removeEventListener('kapa:open-ai', open);
         };
     }, [setActiveTab]);
 
@@ -541,8 +543,8 @@ const AppWrapper = observer(() => {
                             <div
                                 label={
                                     <>
-                                        <span className='kapa-tab-icon' aria-hidden>
-                                            ⚡
+                                        <span className='kapa-tab-icon kapa-tab-icon--emoji' aria-hidden>
+                                            🤖
                                         </span>
                                         <Localize i18n_default_text='Free Bot' />
                                     </>

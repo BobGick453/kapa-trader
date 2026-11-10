@@ -8,7 +8,8 @@ and a fake Deriv (`browser/derivmock.js`, `browser/trademock.js`); they never to
   worker) and Netlify adapter tests.
 - `browser/` — end-to-end: Premium code, KAPA Apex with default settings (`apex.js`), lost connection during a
   contract (`conn.js`), capital limits, strategy lab, classic bots, UI, Deriv relink,
-  floating buttons, marked-up prices. Screenshots go to `browser/x/`.
+  floating buttons, marked-up prices, the 4 Free Bots in Bot Builder (`freebot.js`: load, run, stop-loss).
+  Screenshots go to `browser/x/`.
 - `real/` — real Deriv data and backtests:
   - `real-2026-11-04.json`: 300,000 real ticks (10 Volatility indices) and real prices of 32 contracts.
   - `collect.cjs`: downloads fresh ticks and prices from Deriv's public API (needs `api.derivws.com` allowed).
@@ -16,4 +17,6 @@ and a fake Deriv (`browser/derivmock.js`, `browser/trademock.js`); they never to
   - `classic-bt2.mjs`: the classic bots (build `src/pages/kapa-ai/classic.ts` to `real/classic.mjs` with
     `npx esbuild src/pages/kapa-ai/classic.ts --format=esm --outfile=qa/real/classic.mjs`).
   - `exact.py`, `rand.py`: the reference bots replayed exactly; randomness tests.
+  - `freebots-bt.mjs`: the 4 Free Bots, reference XML vs Kapa's XML (`src/pages/free-bot/xml/`), at the public
+    and a marked-up price.
   - `blockly-to-text.py`: turns a Bot Builder XML into readable pseudo-code.

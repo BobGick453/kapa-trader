@@ -16,6 +16,7 @@ import { TStores } from '@deriv/stores/types';
 import { localize } from '@deriv-com/translations';
 import { TDbot } from 'Types';
 import RootStore from './root-store';
+import { isKapaRunning } from '@/pages/kapa-ai/run-store';
 
 export type TContractState = {
     buy?: Buy;
@@ -181,6 +182,13 @@ export default class RunPanelStore {
         this.dbot.unHighlightAllBlocks();
         if (!client.is_logged_in) {
             this.showLoginDialog();
+            return;
+        }
+        // Kapa: never two bots trading at once on the same account
+        if (isKapaRunning()) {
+            this.showErrorMessage(
+                'KAPA AI is running. Stop it first (Stop on the KAPA AI tab or next to the AI button), then run this bot.'
+            );
             return;
         }
 

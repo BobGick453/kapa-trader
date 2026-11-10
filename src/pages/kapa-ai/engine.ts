@@ -10,7 +10,7 @@
 
 export type TContractType = 'DIGITOVER' | 'DIGITUNDER' | 'DIGITEVEN' | 'DIGITODD' | 'DIGITMATCH' | 'DIGITDIFF';
 export type TRecoveryMode = 'none' | 'mult' | 'recover' | 'target';
-export type TPresetKey = 'apex' | 'pegasus' | 'martingale' | 'recover' | 'fixed' | 'switcher' | 'printer' | 'goldoe' | 'profitmaker';
+export type TPresetKey = 'apex' | 'target' | 'martingale' | 'recover' | 'fixed' | 'switcher' | 'printer' | 'goldoe' | 'profitmaker';
 export type TStrategy = TPresetKey | 'custom';
 
 /** Rules the user writes for the "Custom" strategy (Premium). The server checks and runs them. */
@@ -30,21 +30,29 @@ export type TSettings = {
     dailyLossPct: number;
     /** The most of each stake Deriv may keep on this connection before KAPA AI refuses to trade (%) */
     maxMargin: number;
+    /** Classic bots only: recover after a loss with KAPA Apex, run by the Kapa server (Premium) */
+    apexRecovery: boolean;
     custom: TCustomRules;
 };
 
 export const STRATEGIES: Record<TPresetKey, { label: string; premium: boolean }> = {
     apex: { label: 'KAPA Apex · highest possible chance to reach your target', premium: true },
-    pegasus: { label: 'Pegasus · bold play, best chance to reach the take-profit', premium: true },
+    target: { label: 'KAPA Target · bold play, best chance to reach the take-profit', premium: true },
     martingale: { label: 'Steady · ×2.1 recovery cycles that fit the stop-loss', premium: true },
     recover: { label: 'Exact recovery · one win gets the cycle back', premium: true },
     fixed: { label: 'Even/Odd · fixed stake, no recovery', premium: false },
-    // The reference bot's Free Bot strategies, rebuilt and made safer (classic.ts)
-    switcher: { label: 'Digit Switcher · follows the last digit, exact recovery', premium: false },
-    printer: { label: 'Dollar Printer · Over 1, recovery Over 5', premium: false },
+    // The reference bot's Free Bot strategies, rebuilt and made safer (classic.ts). Free: their own recovery,
+    // planned to fit the stop-loss. Premium option: KAPA Apex recovery on the server (TSettings.apexRecovery).
+    switcher: { label: 'Digit Switcher · Under 5 after an even digit, exact recovery', premium: false },
+    printer: { label: 'Dollar Printer · Over 1, exact recovery on Over 5', premium: false },
     goldoe: { label: 'Gold Odd/Even · runs of 5, ×2.1 recovery', premium: false },
-    profitmaker: { label: 'Profit Maker · Over 2, recovery on 50%', premium: false },
+    profitmaker: { label: 'Profit Maker · Over 2, exact recovery on the best-paid 50%', premium: false },
 };
+/** Older strategy names in saved settings ("Pegasus" was renamed KAPA Target). */
+const STRATEGY_ALIASES: Record<string, TPresetKey> = { pegasus: 'target' };
+/** True when a strategy stakes what one win needs to reach the take-profit (its stake field is not used). */
+export const isBold = (s: Pick<TSettings, 'strategy' | 'custom'>) =>
+    s.strategy === 'target' || s.strategy === 'apex' || (s.strategy === 'custom' && s.custom.recMode === 'target');
 export const PREMIUM_PRESETS = (Object.keys(STRATEGIES) as TPresetKey[]).filter(k => STRATEGIES[k].premium);
 
 // ---------- Contracts, keyed 'DIGITEVEN' or 'DIGITOVER:4' ----------
@@ -102,8 +110,14 @@ export const bestOf = (keys: string[], ratios: TPayoutRatios) =>
 
 /** The free strategy: the same stake every time, on the best-paid 50% contract. */
 const FIXED = { maxLosses: 5 };
-/** Below this average result per 1 staked (a margin above 5%), KAPA AI doesn't trade (same rule as the server). */
-export const MIN_EXPECTED = -0.05;
+/**
+ * Below this average result per 1 staked (Deriv keeping more than 12% of each stake, the default "maximum
+ * Deriv margin"), KAPA AI doesn't trade (same rule as the server). Deriv's public price keeps 1.4% to 2.35%
+ * on the contracts KAPA AI trades; a markup set on the app makes every trade cost more.
+ */
+export const MIN_EXPECTED = -0.12;
+/** The daily loss limit can never be set above this share of the balance. */
+export const MAX_DAILY_LOSS_PCT = 50;
 /** A session may risk at most this share of the balance, so one bad session can't empty the account. */
 export const MAX_SESSION_RISK = 0.25;
 
@@ -119,6 +133,7 @@ export const DEFAULT_SETTINGS: TSettings = {
     delay: 1,
     dailyLossPct: 30,
     maxMargin: 12,
+    apexRecovery: false,
     custom: { barrier: 4, recovery: 4, recMode: 'none', martingale: 2.1 },
 };
 
@@ -162,12 +177,14 @@ export const floor2 = (n: number) => Math.floor(n * 100 + 1e-9) / 100;
 /** Reads saved settings, dropping anything from older versions that no longer fits. */
 export const sanitizeSettings = (raw: any): TSettings => {
     const s = { ...DEFAULT_SETTINGS, ...(raw && typeof raw === 'object' ? raw : {}) };
+    if (Object.prototype.hasOwnProperty.call(STRATEGY_ALIASES, s.strategy)) s.strategy = STRATEGY_ALIASES[s.strategy];
     if (!(s.strategy in STRATEGIES) && s.strategy !== 'custom') s.strategy = 'fixed';
     if (!MARKETS[s.symbol]) s.symbol = DEFAULT_SETTINGS.symbol;
     s.custom = { ...DEFAULT_SETTINGS.custom, ...(raw?.custom || {}) };
     if (s.maxLosses !== null && !(Number.isInteger(s.maxLosses) && s.maxLosses >= 1)) s.maxLosses = null;
-    if (!(s.dailyLossPct >= 1 && s.dailyLossPct <= 100)) s.dailyLossPct = DEFAULT_SETTINGS.dailyLossPct;
+    if (!(s.dailyLossPct >= 1 && s.dailyLossPct <= MAX_DAILY_LOSS_PCT)) s.dailyLossPct = DEFAULT_SETTINGS.dailyLossPct;
     if (!(s.maxMargin >= 1 && s.maxMargin <= 50)) s.maxMargin = DEFAULT_SETTINGS.maxMargin;
+    s.apexRecovery = s.apexRecovery === true;
     if (!['none', 'mult', 'recover', 'target'].includes(s.custom.recMode)) s.custom.recMode = 'none';
     return s;
 };
@@ -309,8 +326,26 @@ export const simulateFixed = (
     };
 };
 
-export const validate = (s: TSettings, balance: number) => {
-    const bold = s.strategy === 'pegasus' || s.strategy === 'apex' || (s.strategy === 'custom' && s.custom.recMode === 'target');
+/**
+ * Limits of the two protection settings everyone can see. Everyone may lower them; only Premium may raise them
+ * above the defaults, and the daily loss limit never goes above 50% of the balance.
+ */
+export const protectionLimits = (premium: boolean) => ({
+    dailyLossPct: premium ? MAX_DAILY_LOSS_PCT : DEFAULT_SETTINGS.dailyLossPct,
+    maxMargin: premium ? 50 : DEFAULT_SETTINGS.maxMargin,
+});
+
+export const validate = (s: TSettings, balance: number, premium = false) => {
+    const lim = protectionLimits(premium);
+    if (!(s.dailyLossPct >= 1 && s.dailyLossPct <= lim.dailyLossPct))
+        return premium
+            ? `The daily loss limit can be 1% to ${lim.dailyLossPct}% of your balance.`
+            : `The daily loss limit can be lowered to protect you more, but only Premium can set it above ${lim.dailyLossPct}% (at most ${MAX_DAILY_LOSS_PCT}%).`;
+    if (!(s.maxMargin >= 1 && s.maxMargin <= lim.maxMargin))
+        return premium
+            ? `The maximum Deriv margin can be 1% to ${lim.maxMargin}%.`
+            : `The maximum Deriv margin can be lowered to refuse poor prices sooner, but only Premium can set it above ${lim.maxMargin}%.`;
+    const bold = isBold(s);
     if (!bold && !(s.stake >= 0.35)) return 'Minimum stake is 0.35.';
     if (!(s.takeProfit > 0)) return 'Set a take-profit above 0.';
     if (!(s.stopLoss >= 0.35)) return "Set a stop-loss of at least 0.35. KAPA AI won't run without one.";

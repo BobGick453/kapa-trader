@@ -92,8 +92,8 @@ const scanLabelOneLine = (pg) => pg.locator('.kapa-scan__foot .primary').evaluat
     ok(await pg.evaluate(() => window.scrollY) === 0, 'desktop page is not scrolled');
     for (const t of ['free-bot', 'bot-builder', 'charts']) { await pg.click('#id-' + t); await pg.waitForTimeout(1200); await skip(pg); ok(await pg.locator('.run-panel__container').isVisible(), `desktop ${t}: Summary drawer shows`); }
     await pg.click('#id-free-bot'); await pg.waitForTimeout(1000);
-    const h = await box(pg, '.free-bot__section'), c = await box(pg, '.free-bot__card');
-    ok(h && c && Math.abs(h.x - c.x) < 2, 'Free Bot heading lines up with the cards');
+    const h = await box(pg, '.free-bot__head'), c = await box(pg, '.free-bot__card');
+    ok(h && c && Math.abs(h.x - c.x) < 2, 'Free Bot hero lines up with the cards');
     await pg.click('#id-bot-builder'); await pg.waitForTimeout(1200); await skip(pg);
     await pg.click('#db-toolbar__get-started-button').catch(() => {}); await pg.waitForTimeout(1200);
     const ff = await pg.locator('.qs').first().evaluate((e) => getComputedStyle(e.querySelector('h2, h3, span, p') || e).fontFamily).catch(() => '');
@@ -145,6 +145,64 @@ const scanLabelOneLine = (pg) => pg.locator('.kapa-scan__foot .primary').evaluat
     await pg.click('.kapa-fab-orb'); await pg.waitForTimeout(700);
     ok(await scanLabelOneLine(pg) && await overflow(pg) === 0, `${W}px: scanner fits, "Scan Markets · Premium" on one line`);
     await pg.click('.kapa-scan__x'); await pg.waitForTimeout(300);
+    await ctx.close(); }
+  // ---------- look and motion after the reference bot (third pass) ----------
+  const css = (pg, s, p) => pg.locator(s).first().evaluate((e, p) => getComputedStyle(e)[p], p).catch(() => '');
+  { const { ctx, pg } = await open(b, { width: 1366, height: 800 });
+    await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(700);
+    const splash = (await pg.locator('.kapa-splash').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    ok(/KAPA/.test(splash) && /STOP ON TIME/.test(splash) && !/pegasus|gsm|gold standard/i.test(splash), 'splash: Kapa words only (no reference brand)');
+    ok(await pg.locator('.kapa-splash__coin').count() === 1 && await pg.locator('.kapa-splash__orbit').count() === 2, 'splash: drawn emblem inside two orbits');
+    await pg.waitForTimeout(4300);
+    ok(!/pegasus|gsm market|gold standard/i.test(await pg.evaluate(() => document.body.innerText)), 'no reference brand anywhere on the page');
+    await pg.click('.kapa-login .kapa-btn'); await pg.waitForTimeout(7000); await skip(pg);
+    await pg.click('#id-dbot-dashboard'); await pg.waitForTimeout(150);
+    ok(/kapa-page-enter/.test(await css(pg, '.dc-tabs--main__tabs > .dc-tabs__content > *', 'animationName')), 'tab switch: the page fades and rises in');
+    await pg.waitForTimeout(1400); await skip(pg);
+    const strip = await box(pg, '.dc-tabs__list--main__tabs'), content = await box(pg, '.dc-tabs__content--main__tabs');
+    ok(strip && content && strip.x === 0 && strip.y === 56 && Math.abs(content.y - (strip.y + strip.height)) < 1 && content.x === 0, `desktop: tab strip edge to edge under the header, page right under it (${strip && [strip.x, strip.y]} / ${content && [content.x, Math.round(content.y)]})`);
+    const tiles = await pg.locator('.kapa-tile').evaluateAll((es) => es.map((e) => { const r = e.getBoundingClientRect(), c = getComputedStyle(e); return { y: Math.round(r.y), w: r.width, anim: c.animationName, delay: parseFloat(c.animationDelay) }; }));
+    ok(tiles.length === 5 && tiles.every((t) => t.y === tiles[0].y) && tiles[0].w > 160, 'desktop Dashboard: five cards in one row');
+    ok(tiles.every((t) => t.anim === 'kapa-card-in') && tiles.every((t, i) => !i || t.delay > tiles[i - 1].delay), 'Dashboard cards enter one after another');
+    ok(/kapa-icon-float/.test(await css(pg, '.kapa-tile__icon', 'animationName')), 'Dashboard icon tiles float');
+    const hero = await box(pg, '.kapa-dash__header'); ok(hero && Math.abs(hero.x - 20) < 2 && Math.abs(hero.width - 960) < 4, `desktop Dashboard hero 960px in the left column (${hero && [Math.round(hero.x), Math.round(hero.width)]})`);
+    await pg.locator('.kapa-tile__open').nth(1).hover(); await pg.waitForTimeout(400);
+    ok(/gradient/.test(await css(pg, '.kapa-tile:nth-child(2) .kapa-tile__open', 'backgroundImage')), 'OPEN fills with the blue gradient on hover');
+    ok(/gradient/.test(await css(pg, '.app-footer', 'backgroundImage')), 'footer: frosted gradient bar');
+    await pg.click('#id-tutorials'); await pg.waitForTimeout(1500);
+    ok(/gradient/.test(await css(pg, '.tutorials-wrapper .dc-tabs__list--top', 'backgroundImage')) && /999px/.test(await css(pg, '.tutorials-wrapper .dc-tabs__item:not(.dc-tabs__active)', 'borderRadius')), 'Tutorials: blue section strip with pill items');
+    ok(/gradient/.test(await css(pg, '.tutorials-wrap__placeholder__button-group', 'backgroundImage')), 'Tutorials: blue play tile on the videos');
+    await pg.click('#id-bot-builder'); await pg.waitForTimeout(1200); await skip(pg);
+    await pg.click('#db-toolbar__get-started-button').catch(() => {}); await pg.waitForTimeout(900);
+    ok(await css(pg, '.qs__head__action > span', 'borderTopWidth') === '0px', 'Quick strategy: plain × to close');
+    await pg.keyboard.press('Escape');
+    await ctx.close(); }
+  // phones: orb and risk button in the bottom corners where no Run bar shows, above the bar where it does
+  { const { ctx, pg } = await open(b, { width: 412, height: 839 }, { isMobile: true, hasTouch: true });
+    await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(4500);
+    await pg.click('.kapa-login .kapa-btn'); await pg.waitForTimeout(7000); await skip(pg);
+    for (const t of ['dbot-dashboard', 'tutorials', 'kapa-ai']) { await pg.click('#id-' + t, { force: true }); await pg.waitForTimeout(1200); await skip(pg);
+      const [orb, risk] = [await box(pg, '.kapa-fab-orb'), await box(pg, '.kapa-fab-risk')];
+      ok(orb && risk && 839 - (orb.y + orb.height) <= 24 && Math.abs((risk.y + risk.height / 2) - (orb.y + orb.height / 2)) < 3, `phone ${t}: orb and risk button in the bottom corners (gap ${orb && Math.round(839 - orb.y - orb.height)})`); }
+    { const cta = await box(pg, '.kapa-lock__cta'), orb = await box(pg, '.kapa-fab-orb'), risk = await box(pg, '.kapa-fab-risk'); ok(cta && !hit(orb, cta) && !hit(risk, cta), 'phone locked KAPA AI: corners clear of UNLOCK'); }
+    await pg.click('#id-bot-builder', { force: true }); await pg.waitForTimeout(1500); await skip(pg);
+    { const orb = await box(pg, '.kapa-fab-orb'), bar = await box(pg, '.controls__section'); ok(orb && bar && orb.y + orb.height <= bar.y, 'phone Bot Builder: orb stays above the Run bar'); }
+    await ctx.close(); }
+  // reduced motion: no page or card animation, the opening screen leaves quickly
+  { const { ctx, pg } = await open(b, { width: 412, height: 839 }, { isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+    await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(1600);
+    ok(!(await pg.locator('.kapa-splash').count()), 'reduced motion: the opening screen leaves at once');
+    ok(parseFloat(await css(pg, '.kapa-tile', 'animationDuration')) < 0.001, 'reduced motion: cards do not animate');
+    await ctx.close(); }
+  // visitor on a phone sees the Kapa logo; light theme keeps titles readable; no overflow at any width
+  for (const [W, H, theme] of [[360, 740, 'dark'], [412, 839, 'light'], [768, 1024, 'dark'], [980, 2178, 'light'], [1366, 800, 'light']]) {
+    const { ctx, pg } = await open(b, { width: W, height: H }, W < 1280 ? { isMobile: true, hasTouch: true } : {});
+    await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(800);
+    await pg.evaluate((t) => localStorage.setItem('theme', t), theme); await pg.reload(); await pg.waitForTimeout(4500);
+    if (W < 1280) ok(await pg.locator('.app-header__logo--mobile').isVisible(), `${W}px visitor: Kapa logo in the header`);
+    if (theme === 'light') { const c = await css(pg, '.kapa-tile__title', 'color'); ok(c === 'rgb(15, 39, 66)' && !/rgb\((1[0-9]|[0-9]),/.test(await css(pg, '.kapa-tile', 'backgroundImage')), `${W}px light: dark titles on light cards (${c})`); }
+    if (W === 980) { const ys = await pg.locator('.kapa-tile').evaluateAll((es) => es.map((e) => Math.round(e.getBoundingClientRect().y))); ok(ys.length === 5 && ys.every((y) => y === ys[0]), '980px desktop-site mode: five cards in one row'); }
+    for (const t of ['dbot-dashboard', 'tutorials', 'bot-builder']) { await pg.click('#id-' + t, { force: true }); await pg.waitForTimeout(900); ok(await overflow(pg) === 0, `${W}px ${theme} ${t}: no horizontal overflow`); }
     await ctx.close(); }
   console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); await b.close(); process.exit(0);
 })();

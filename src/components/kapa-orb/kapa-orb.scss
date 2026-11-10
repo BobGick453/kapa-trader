@@ -908,3 +908,90 @@ body:has(.run-panel__container--mobile) {
         pointer-events: none;
     }
 }
+
+// ---- A KAPA AI session running while another tab is open: its state and a Stop button ----
+.kapa-runchip {
+    @include k.tokens-dark;
+
+    position: fixed;
+    z-index: 950;
+    top: calc(12.6rem + env(safe-area-inset-top, 0px));
+    right: 1.2rem;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    border: 1px solid rgb(96 165 250 / 35%);
+    border-radius: 999px;
+    background: linear-gradient(145deg, #102641 0%, #0b1b30 54%, #071322 100%);
+    box-shadow: 0 10px 24px rgb(0 5 14 / 45%);
+    font-size: 1.25rem;
+    animation: kapa-fade 0.22s k.$ease both;
+
+    button {
+        border: 0;
+        background: none;
+        color: var(--kapa-text-1);
+        font: inherit;
+        cursor: pointer;
+    }
+
+    &__info {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        padding: 0.7rem 1.2rem;
+        font-weight: 600;
+
+        i {
+            width: 0.8rem;
+            height: 0.8rem;
+            border-radius: 50%;
+            background: #22c57a;
+            box-shadow: 0 0 0 3px rgb(34 197 122 / 25%);
+        }
+
+        b.up {
+            color: #22c57a;
+        }
+
+        b.down {
+            color: #ef4458;
+        }
+    }
+
+    &__stop {
+        padding: 0.7rem 1.3rem;
+        background: #ef4458 !important;
+        font-weight: 700;
+
+        &:disabled {
+            opacity: 0.6;
+        }
+    }
+
+    @media (width <= 599px) {
+        top: auto;
+        right: 50%;
+        transform: translateX(50%);
+        bottom: calc(22rem + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+// Phones and the 980px layout, on tabs without a Run bar (Dashboard, Free Bot, Tutorials, Admin, the locked KAPA AI
+// card): the orb and the risk button drop to the bottom corners, like the reference bot. Where a Run bar shows they
+// stay above it (the rules above). A browser without :has() keeps them above, the safe place.
+@media (width <= 1279px) {
+    body:not(:has(.controls__section, .kapa-runbar)) {
+        .kapa-fab-orb {
+            bottom: calc(1.6rem + env(safe-area-inset-bottom, 0px));
+        }
+
+        .kapa-fab-risk {
+            bottom: calc(1.6rem + (6rem - var(--risk)) / 2 + env(safe-area-inset-bottom, 0px));
+
+            @media (width <= 599px) {
+                bottom: calc(1.6rem + (5.2rem - var(--risk)) / 2 + env(safe-area-inset-bottom, 0px));
+            }
+        }
+    }
+}

@@ -34,8 +34,11 @@ The app is Deriv's open-source Bot template (React, MobX, rsbuild), rebranded Ka
   past the stop-loss or the maximum stake, recovery cycles that fit the stop-loss.
 - **Premium stays server-side.** Premium rules live in `server/strategy.js`; the website only receives the
   next trade. Never move Premium logic into the browser.
-- **No copying of the reference bot (goldstandardmarket.site).** Its code, files, images, animations and its
-  "Pegasus" brand belong to its owner. Study it, then rebuild the look or the logic in Kapa's own code.
+- **Reference bot (goldstandardmarket.site): reuse allowed, brand excluded.** On 2026-11-09 the owner reported
+  that the reference bot's owner authorised Kapa (on Telegram) to reproduce its look, layout, animations, design
+  assets and bot settings. Kapa may now match it closely and reuse its visual files where useful, but keeps its own
+  name and logo: never show "Pegasus", "GSM" or the reference's logo, and never copy its untrue claims
+  ("machine learning", crossed-out fake prices, profit promises). The honesty rules above still apply.
 - **Secrets:** never ask for, print or commit `ADMIN_SECRET`, `PREMIUM_CODE`, API keys or tokens.
 - Test on the fake Deriv or a demo account; never place trades on a real account.
 - Agents do not push or publish; they hand finished, tested changes to the supervisor.

@@ -1,8 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { adminApi, premiumEnabled } from '../premium/premium-api';
+import { adminApi, premiumEnabled, TAdminOverview } from '../premium/premium-api';
 import './admin.scss';
 
-type TCode = { set: boolean; source: 'admin' | 'secret' | null; updatedAt: number | null; ready: boolean };
 type TPay = {
     key: string;
     value: {
@@ -13,12 +12,15 @@ type TPay = {
         accounts: string[];
         createdAt: number;
         paidAt?: number;
+        until?: number;
         reason?: string;
     };
 };
 
 const SECRET_KEY = 'kapa_admin_secret';
-const fmtDate = (t?: number) => (t ? new Date(t).toLocaleString() : '—');
+const fmtDate = (t?: number | null) => (t ? new Date(t).toLocaleString() : '—');
+const fmtDay = (t?: number | null) => (t ? new Date(t).toLocaleDateString() : '—');
+const SOURCE: Record<string, string> = { payment: 'Payment', gift: 'Gift code', admin: 'Admin', code: 'Old shared code' };
 
 const AdminPage = () => {
     const [secret, setSecret] = useState(() => {
@@ -29,20 +31,26 @@ const AdminPage = () => {
         }
     });
     const [input, setInput] = useState('');
-    const [codeInfo, setCodeInfo] = useState<TCode | null>(null);
+    const [ov, setOv] = useState<TAdminOverview | null>(null);
     const [pays, setPays] = useState<TPay[] | null>(null);
-    const [newCode, setNewCode] = useState('');
-    const [confirmCode, setConfirmCode] = useState('');
-    const [showCode, setShowCode] = useState(false);
-    const [saving, setSaving] = useState(false);
+    const [account, setAccount] = useState('');
+    const [days, setDays] = useState('');
+    const [giftLabel, setGiftLabel] = useState('');
+    const [giftUses, setGiftUses] = useState('1');
+    const [newGift, setNewGift] = useState<{ code: string; label: string } | null>(null);
+    const [wa, setWa] = useState('');
+    const [tg, setTg] = useState('');
+    const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState('');
     const [error, setError] = useState('');
 
     const load = useCallback(async (sec: string) => {
         setError('');
         try {
-            const [c, p] = await Promise.all([adminApi.code(sec), adminApi.payments(sec)]);
-            setCodeInfo(c);
+            const [o, p] = await Promise.all([adminApi.overview(sec), adminApi.payments(sec)]);
+            setOv(o);
+            setWa(o.contact.whatsapp);
+            setTg(o.contact.telegram);
             setPays(p.payments.sort((a: TPay, b: TPay) => b.value.createdAt - a.value.createdAt));
             return true;
         } catch (err: any) {
@@ -73,39 +81,50 @@ const AdminPage = () => {
             /* nothing stored */
         }
         setSecret('');
-        setCodeInfo(null);
+        setOv(null);
         setPays(null);
     };
-    const clean = (c: string) => c.replace(/[\s-]+/g, '').toUpperCase();
-    const codeError = (() => {
-        const c = clean(newCode);
-        if (!c) return '';
-        if (c.length < 8) return 'At least 8 characters (spaces and dashes not counted).';
-        if (!/^[A-Z0-9_.@#!*+=]+$/.test(c)) return 'Use letters, digits or _ . @ # ! * + =';
-        if (confirmCode && clean(confirmCode) !== c) return 'The two codes are different.';
-        return '';
-    })();
-    const saveCode = async () => {
-        if (codeError || !newCode || clean(confirmCode) !== clean(newCode)) return;
-        const warn = codeInfo?.set
-            ? 'Change the Premium code? Everyone using the current code, you included, must enter the new one.'
-            : 'Save this Premium code?';
-        if (!window.confirm(warn)) return;
-        setSaving(true);
+    /** Runs an admin action, shows its message, then reloads the lists. */
+    const act = async (fn: () => Promise<unknown>, done: string) => {
+        setBusy(true);
         setMsg('');
         setError('');
         try {
-            const r = await adminApi.setCode(secret, newCode);
-            setCodeInfo(c => ({ ...(c as TCode), set: true, source: 'admin', updatedAt: r.updatedAt }));
-            setMsg(
-                'New Premium code saved. Enter it in KAPA AI to unlock Premium on your devices, and send it to paying customers.'
-            );
-            setNewCode('');
-            setConfirmCode('');
+            await fn();
+            setMsg(done);
+            await load(secret);
         } catch (e: any) {
             setError(e?.message ?? 'Server error');
         } finally {
-            setSaving(false);
+            setBusy(false);
+        }
+    };
+    const activate = () =>
+        act(
+            () => adminApi.activate(secret, account.trim(), days ? Math.floor(+days) : undefined),
+            `Premium switched on for ${account.trim().toUpperCase()} (${days || ov?.days || 30} days, added to any days left).`
+        ).then(() => {
+            setAccount('');
+            setDays('');
+        });
+    const revoke = (acc: string) => {
+        if (!window.confirm(`End Premium now for ${acc}?`)) return;
+        act(() => adminApi.revoke(secret, acc), `Premium ended for ${acc}.`);
+    };
+    const createGift = async () => {
+        setBusy(true);
+        setMsg('');
+        setError('');
+        try {
+            const r = await adminApi.createGift(secret, { label: giftLabel.trim() || 'Gift', maxUses: Math.max(1, Math.floor(+giftUses || 1)) });
+            setNewGift({ code: r.code, label: r.gift.label });
+            setGiftLabel('');
+            setGiftUses('1');
+            await load(secret);
+        } catch (e: any) {
+            setError(e?.message ?? 'Server error');
+        } finally {
+            setBusy(false);
         }
     };
 
@@ -128,7 +147,7 @@ const AdminPage = () => {
             <div className='kapa-admin'>
                 <section className='kapa-admin__card kapa-admin__card--login'>
                     <h2>Admin Dashboard</h2>
-                    <p>Enter the admin secret to change the Premium code and see payments.</p>
+                    <p>Enter the admin secret to manage Premium accounts, gift codes and payments.</p>
                     <input
                         type='password'
                         placeholder='Admin secret'
@@ -146,6 +165,9 @@ const AdminPage = () => {
         );
     }
 
+    const active = (ov?.entitlements || []).filter(e => e.active);
+    const ended = (ov?.entitlements || []).filter(e => !e.active);
+    const paid = (pays || []).filter(p => p.value.status === 'paid');
     return (
         <div className='kapa-admin'>
             <section className='kapa-admin__card'>
@@ -157,88 +179,218 @@ const AdminPage = () => {
                 </div>
                 <div className='kapa-admin__kpis'>
                     <div>
-                        <small>Premium code</small>
-                        <b>{codeInfo?.set ? 'Set' : 'Not set'}</b>
+                        <small>Premium accounts</small>
+                        <b>{active.length}</b>
                     </div>
                     <div>
                         <small>Paid payments</small>
-                        <b>{(pays || []).filter(p => p.value.status === 'paid').length}</b>
+                        <b>{paid.length}</b>
                     </div>
                     <div>
                         <small>Revenue</small>
                         <b>
-                            {(pays || [])
-                                .filter(p => p.value.status === 'paid')
-                                .reduce((a, p) => a + p.value.amount, 0)
-                                .toLocaleString()}{' '}
-                            {pays?.[0]?.value.currency || 'XOF'}
+                            {paid.reduce((a, p) => a + p.value.amount, 0).toLocaleString()}{' '}
+                            {pays?.[0]?.value.currency || ov?.payments.currency || 'XOF'}
                         </b>
                     </div>
                 </div>
+                {ov && !ov.ready && (
+                    <p className='kapa-admin__error'>The server has no SESSION_KEY yet: gift codes can&apos;t be made.</p>
+                )}
                 {msg && <p className='kapa-admin__msg'>{msg}</p>}
                 {error && <p className='kapa-admin__error'>{error}</p>}
             </section>
 
             <section className='kapa-admin__card'>
-                <h3>Premium code</h3>
+                <h3>Premium accounts</h3>
                 <p className='kapa-admin__help'>
-                    {codeInfo?.set
-                        ? `A code is active${codeInfo.updatedAt ? ` since ${fmtDate(codeInfo.updatedAt)}` : ' (from the PREMIUM_CODE secret)'}. For security the code is never shown again, so keep it somewhere safe.`
-                        : 'No code yet: nobody can unlock Premium. Choose one below.'}
+                    Premium belongs to a Deriv account for {ov?.days ?? 30} days and ends by itself. It starts after a
+                    payment confirmed by CinetPay, a gift code, or here. Switching it on for an account that already
+                    has Premium adds the days to its end date.
                 </p>
-                <p className='kapa-admin__help'>
-                    Changing the code locks Premium for everyone who used the old one, you included, until they enter
-                    the new code. Use it when a subscription ends, then send the new code to customers who paid.
-                </p>
-                {codeInfo && !codeInfo.ready && (
-                    <p className='kapa-admin__error'>
-                        The server has no SESSION_KEY yet, so the code can&apos;t be saved.
-                    </p>
-                )}
                 <div className='kapa-admin__code'>
                     <input
-                        type={showCode ? 'text' : 'password'}
-                        placeholder='New code (8+ characters)'
-                        value={newCode}
-                        onChange={e => setNewCode(e.target.value)}
-                        autoComplete='new-password'
+                        placeholder='Deriv account ID (CR1234567, VRTC1234567…)'
+                        value={account}
+                        onChange={e => setAccount(e.target.value)}
                         spellCheck={false}
-                        aria-label='New Premium code'
+                        aria-label='Deriv account ID'
                     />
                     <input
-                        type={showCode ? 'text' : 'password'}
-                        placeholder='Type it again'
-                        value={confirmCode}
-                        onChange={e => setConfirmCode(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && saveCode()}
-                        autoComplete='new-password'
-                        spellCheck={false}
-                        aria-label='Confirm the new Premium code'
+                        type='number'
+                        min={1}
+                        max={366}
+                        placeholder={`Days (${ov?.days ?? 30})`}
+                        value={days}
+                        onChange={e => setDays(e.target.value)}
+                        aria-label='Days of Premium'
                     />
-                    <label className='kapa-admin__show'>
-                        <input type='checkbox' checked={showCode} onChange={e => setShowCode(e.target.checked)} /> Show
-                    </label>
+                    <button type='button' className='kapa-admin__gold' onClick={activate} disabled={busy || !account.trim()}>
+                        Switch Premium on
+                    </button>
+                </div>
+                <div className='kapa-admin__table'>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Accounts</th>
+                                <th>Until</th>
+                                <th>Since</th>
+                                <th>From</th>
+                                <th>Status</th>
+                                <th />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {[...active, ...ended].map(e => (
+                                <tr key={e.accounts.join(',')}>
+                                    <td className='kapa-admin__ref'>{e.accounts.join(', ')}</td>
+                                    <td>{fmtDay(e.until)}</td>
+                                    <td>{fmtDay(e.since)}</td>
+                                    <td>
+                                        {SOURCE[e.source] || e.source}
+                                        {e.ref ? ` · ${e.ref}` : ''}
+                                    </td>
+                                    <td className={e.active ? 'st-paid' : 'st-failed'}>
+                                        {e.active ? 'active' : e.revokedAt ? 'revoked' : 'ended'}
+                                    </td>
+                                    <td>
+                                        {e.active && (
+                                            <button
+                                                type='button'
+                                                className='kapa-admin__ghost'
+                                                onClick={() => revoke(e.accounts[0])}
+                                                disabled={busy}
+                                            >
+                                                End now
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {!ov?.entitlements.length && <p className='kapa-admin__empty'>No Premium accounts yet.</p>}
+                </div>
+            </section>
+
+            <section className='kapa-admin__card'>
+                <h3>Gift codes</h3>
+                <p className='kapa-admin__help'>
+                    Each use of a gift code gives {ov?.days ?? 30} days of Premium to the Deriv account that enters it
+                    (once per account). The code is shown only once, right after you make it: copy it before leaving
+                    this page.
+                </p>
+                <div className='kapa-admin__code'>
+                    <input
+                        placeholder='Name (for you): e.g. Friends, Promo November'
+                        value={giftLabel}
+                        onChange={e => setGiftLabel(e.target.value)}
+                        aria-label='Gift code name'
+                    />
+                    <input
+                        type='number'
+                        min={1}
+                        max={10000}
+                        value={giftUses}
+                        onChange={e => setGiftUses(e.target.value)}
+                        aria-label='How many uses'
+                        title='How many people can use it'
+                    />
+                    <button type='button' className='kapa-admin__gold' onClick={createGift} disabled={busy || !ov?.ready}>
+                        Make a gift code
+                    </button>
+                </div>
+                {newGift && (
+                    <p className='kapa-admin__msg kapa-admin__newcode'>
+                        New code ({newGift.label}): <b>{newGift.code}</b>{' '}
+                        <button type='button' className='kapa-admin__ghost' onClick={() => navigator.clipboard?.writeText(newGift.code)}>
+                            Copy
+                        </button>
+                    </p>
+                )}
+                <div className='kapa-admin__table'>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Ends with</th>
+                                <th>Used</th>
+                                <th>Days</th>
+                                <th>Made</th>
+                                <th />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {(ov?.gifts || []).map(g => (
+                                <tr key={g.id}>
+                                    <td>{g.label}</td>
+                                    <td className='kapa-admin__ref'>…{g.hint}</td>
+                                    <td>
+                                        {g.uses} / {g.maxUses}
+                                    </td>
+                                    <td>{g.days}</td>
+                                    <td>{fmtDay(g.createdAt)}</td>
+                                    <td>
+                                        <button
+                                            type='button'
+                                            className='kapa-admin__ghost'
+                                            disabled={busy}
+                                            onClick={() =>
+                                                act(
+                                                    () => adminApi.disableGift(secret, g.id, !g.disabled),
+                                                    g.disabled ? `${g.label}: switched on again.` : `${g.label}: switched off.`
+                                                )
+                                            }
+                                        >
+                                            {g.disabled ? 'Switch on' : 'Switch off'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {!ov?.gifts.length && <p className='kapa-admin__empty'>No gift codes yet.</p>}
+                </div>
+            </section>
+
+            <section className='kapa-admin__card'>
+                <h3>Contact for buyers</h3>
+                <p className='kapa-admin__help'>
+                    {ov?.payments.configured
+                        ? `Payments by CinetPay are on (${ov.payments.price.toLocaleString()} ${ov.payments.currency}). These links are shown as well.`
+                        : 'Payments by CinetPay are not set up: visitors who want Premium are sent to this WhatsApp number (with their Deriv account ID in the message). Without a number, they see "Premium purchase opens soon".'}
+                </p>
+                <div className='kapa-admin__code'>
+                    <input
+                        placeholder='WhatsApp number with country code, e.g. 2250700000000'
+                        value={wa}
+                        onChange={e => setWa(e.target.value)}
+                        inputMode='tel'
+                        aria-label='WhatsApp number'
+                    />
+                    <input
+                        placeholder='Telegram username (optional)'
+                        value={tg}
+                        onChange={e => setTg(e.target.value)}
+                        aria-label='Telegram username'
+                    />
                     <button
                         type='button'
                         className='kapa-admin__gold'
-                        onClick={saveCode}
-                        disabled={saving || !newCode || !!codeError || clean(confirmCode) !== clean(newCode)}
+                        disabled={busy}
+                        onClick={() => act(() => adminApi.saveContact(secret, { whatsapp: wa, telegram: tg }), 'Contact saved.')}
                     >
-                        {saving ? 'Saving…' : codeInfo?.set ? 'Change code' : 'Save code'}
+                        Save
                     </button>
                 </div>
-                {codeError && <p className='kapa-admin__error'>{codeError}</p>}
-                <p className='kapa-admin__help'>
-                    Spaces, dashes and letter case don&apos;t matter when the code is typed: &quot;ABCD-1234-XYZ&quot;
-                    and &quot;abcd 1234 xyz&quot; are the same code.
-                </p>
             </section>
 
             <section className='kapa-admin__card'>
                 <h3>Payments</h3>
                 <p className='kapa-admin__help'>
-                    When a payment shows &quot;paid&quot;, send the Premium code to that customer. They give you the
-                    payment reference shown on their screen.
+                    A payment marked &quot;paid&quot; has switched Premium on for the buyer&apos;s Deriv accounts by
+                    itself. Nothing to send.
                 </p>
                 <div className='kapa-admin__table'>
                     <table>
@@ -250,6 +402,7 @@ const AdminPage = () => {
                                 <th>Amount</th>
                                 <th>Method</th>
                                 <th>Status</th>
+                                <th>Premium until</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -263,6 +416,7 @@ const AdminPage = () => {
                                     </td>
                                     <td>{p.value.method || '—'}</td>
                                     <td className={`st-${p.value.status}`}>{p.value.status}</td>
+                                    <td>{fmtDay(p.value.until)}</td>
                                 </tr>
                             ))}
                         </tbody>

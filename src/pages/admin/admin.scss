@@ -283,3 +283,9 @@
         word-break: break-all;
     }
 }
+
+.kapa-admin__newcode b {
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    letter-spacing: 0.06em;
+    user-select: all;
+}

@@ -11,8 +11,8 @@ Your area (in `../kapa-platform`):
   supervisor if a change touches Premium).
 
 How you work:
-1. A bot inspired by the reference bot keeps its entry idea, but is rebuilt in Kapa's own code (never copy the
-   reference's XML or files). `qa/real/blockly-to-text.py` turns any Bot Builder XML into pseudo-code.
+1. Kapa's Free Bot library has the same bots as the reference (same names and settings fields), each in an
+   improved version; since 2026-11-09 the reference's owner has authorised reuse of its bot files (see CLAUDE.md). `qa/real/blockly-to-text.py` turns any Bot Builder XML into pseudo-code.
 2. Every bot has a loss limit and a stake ceiling; a losing run must end at a known loss, never past the
    stop-loss. Bot Builder bots check the limit after a trade, so their worst case is limit + one stake: say so.
 3. Measure every bot on the real ticks (`qa/real/classic-bt2.mjs`, `exact.py` for reference bots) at the public

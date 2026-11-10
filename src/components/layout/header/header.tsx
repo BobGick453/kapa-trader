@@ -239,7 +239,7 @@ const AppHeader = observer(() => {
             >
                 <Wrapper variant='left'>
                     <MobileMenu onLogout={handleLogout} />
-                    <AppLogo />
+                    <AppLogo showOnMobile={!activeLoginid} />
                     {isDesktop && <KapaTicker />}
                     {isDesktop ? <MenuItems /> : renderAccountSection('left')}
                 </Wrapper>

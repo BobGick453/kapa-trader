@@ -2886,3 +2886,133 @@ body.theme--light .kapa-ai {
         }
     }
 }
+
+// ---- Section 2b: free summary, today's limit, Apex option, stop reasons ----
+.kapa-summary {
+    margin: 0.4rem 0 0;
+    color: var(--k-muted);
+    font-size: 1.25rem;
+
+    b {
+        color: var(--k-text);
+        font-weight: 600;
+    }
+
+    .kapa-link {
+        font-size: inherit;
+    }
+}
+
+.kapa-today {
+    display: block;
+    margin-top: 0.4rem;
+}
+
+.kapa-check {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin: 0.8rem 0 1.2rem;
+    padding: 1rem 1.2rem;
+    border: 1px solid var(--k-line);
+    border-radius: 1.2rem;
+    background: var(--k-panel-2);
+    cursor: pointer;
+
+    input {
+        width: 1.8rem;
+        height: 1.8rem;
+        margin-top: 0.2rem;
+        accent-color: var(--k-gold);
+        flex: none;
+    }
+
+    span {
+        display: grid;
+        gap: 0.2rem;
+    }
+
+    b {
+        color: var(--k-text);
+        font-weight: 600;
+    }
+
+    small {
+        color: var(--k-muted);
+    }
+}
+
+.kapa-stats__note {
+    display: block;
+    margin: 1.2rem 0 0.6rem;
+}
+
+.kapa-premium__ended {
+    margin: 0 0 0.8rem;
+    color: #fca5a5;
+}
+
+.kapa-result__why {
+    margin: 0.4rem auto 1.4rem;
+    max-width: 34rem;
+    color: var(--k-muted);
+    font-size: 1.3rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.kapa-runstat--stopped span {
+    font-size: 1.3rem;
+}
+
+// Desktop: the floating risk button (left) and AI orb (right) sit beside the Start/Stop bar, never on it
+@media (width >= 1280px) {
+    .kapa-dock .kapa-runbar {
+        margin-inline: 6.4rem 8.4rem;
+    }
+}
+
+// ---- Demo settlement check (JD100 "allow equals") ----
+.kapa-check-settle {
+    margin-top: 1.6rem;
+
+    &__result {
+        margin-top: 1.2rem;
+        padding: 1.2rem;
+        border: 1px solid var(--k-line);
+        border-radius: 1.2rem;
+        background: var(--k-panel-2);
+
+        .kapa-lab__row {
+            grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        }
+    }
+
+    &__verdict {
+        display: inline-block;
+        margin-bottom: 0.6rem;
+        padding: 0.3rem 1rem;
+        border-radius: 999px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        font-size: 1.2rem;
+        background: rgb(148 163 184 / 18%);
+        color: var(--k-text);
+    }
+
+    &__result--confirmed &__verdict {
+        background: rgb(34 197 122 / 18%);
+        color: #4ade80;
+    }
+
+    &__result--not-confirmed &__verdict {
+        background: rgb(239 68 88 / 18%);
+        color: #fca5a5;
+    }
+}
+
+.kapa-check-settle__actions .kapa-btn,
+.kapa-check-settle__result > .kapa-btn {
+    width: 100%;
+    margin: 0.6rem 0;
+}

@@ -72,32 +72,40 @@ $radius-pill: 999px;
     --kapa-header: linear-gradient(135deg, rgb(12 30 52 / 97%), rgb(7 20 38 / 96%));
     --kapa-header-line: rgb(96 165 250 / 12%);
     --kapa-header-shadow: 0 7px 22px rgb(0 5 14 / 40%);
+    --kapa-blue-soft: #60a5fa;
+    --kapa-blue-tint: #173f6d; // hover/selected fill (the reference's "soft blue light")
+    --kapa-strip: linear-gradient(135deg, #0f172a 0%, #1e3a8a 48%, #1d4ed8 78%, #2563eb 100%);
 }
 
 @mixin tokens-light {
-    --kapa-bg: #eef3f9;
+    // the reference bot's light theme ("soft" palette): pale blue-grey page, white raised surfaces
+    --kapa-bg: #edf2f8;
     --kapa-bg-glow:
         radial-gradient(circle at 12% 8%, rgb(37 99 235 / 8%) 0 8%, transparent 30%),
         radial-gradient(circle at 88% 92%, rgb(30 64 175 / 8%) 0 7%, transparent 28%);
-    --kapa-surface: linear-gradient(145deg, #ffffff 0%, #f6f9fd 54%, #edf2f8 100%);
-    --kapa-surface-flat: #ffffff;
-    --kapa-line: rgb(37 99 235 / 16%);
+    --kapa-surface: linear-gradient(145deg, #fff 0%, #f7f9fc 52%, #e7edf5 100%);
+    --kapa-surface-flat: #f6f9fc;
+    --kapa-line: rgb(148 163 184 / 28%);
     --kapa-line-strong: rgb(37 99 235 / 45%);
-    --kapa-shadow: -6px -6px 14px rgb(255 255 255 / 90%), 6px 6px 16px rgb(15 35 70 / 12%), inset 0 1px 0 #fff;
-    --kapa-shadow-deep: 0 12px 28px rgb(15 35 70 / 18%), 0 3px 10px rgb(37 99 235 / 14%);
-    --kapa-inset-bg: #e9eff7;
-    --kapa-inset-shadow: inset 3px 3px 8px rgb(15 35 70 / 14%), inset -3px -3px 8px rgb(255 255 255 / 90%);
-    --kapa-primary: linear-gradient(135deg, #1e40af 0%, #1d4ed8 50%, #2563eb 76%, #60a5fa 100%);
-    --kapa-lift: 0 10px 24px rgb(15 35 70 / 18%), 0 3px 10px rgb(37 99 235 / 22%);
+    --kapa-shadow: -0.8rem -0.8rem 1.8rem rgb(255 255 255 / 82%), 0.8rem 0.8rem 1.8rem rgb(148 163 184 / 24%),
+        inset 0 1px 0 rgb(255 255 255 / 90%);
+    --kapa-shadow-deep: 0 1.2rem 3rem rgb(15 39 66 / 14%), 0 0.3rem 0.8rem rgb(37 99 235 / 8%);
+    --kapa-inset-bg: #e9eff6;
+    --kapa-inset-shadow: inset 0.4rem 0.4rem 1rem rgb(148 163 184 / 22%), inset -0.4rem -0.4rem 1rem rgb(255 255 255 / 88%);
+    --kapa-primary: linear-gradient(135deg, #102a56 0%, #1e3a8a 44%, #2563eb 78%, #60a5fa 100%);
+    --kapa-lift: 0 1.2rem 3rem rgb(15 39 66 / 14%), 0 0.3rem 0.8rem rgb(37 99 235 / 8%);
     --kapa-lift-sm: 0 8px 18px rgb(37 99 235 / 22%), inset 0 1px 0 rgb(255 255 255 / 36%);
-    --kapa-text-1: #0f1b2d;
-    --kapa-text-2: #44546b;
-    --kapa-text-3: #5f6f86;
-    --kapa-link: #1d4ed8;
+    --kapa-text-1: #0f2742;
+    --kapa-text-2: #66788d;
+    --kapa-text-3: #66788d;
+    --kapa-link: #163e78;
     --kapa-gold: #a87508;
     --kapa-gold-eyebrow: #9a6a00;
     --kapa-gold-cta: linear-gradient(135deg, #f0c85e, #c79426);
-    --kapa-header: linear-gradient(135deg, rgb(255 255 255 / 97%), rgb(246 249 253 / 96%));
-    --kapa-header-line: rgb(37 99 235 / 12%);
-    --kapa-header-shadow: 0 6px 18px rgb(15 35 70 / 8%);
+    --kapa-header: linear-gradient(135deg, rgb(255 255 255 / 97%), rgb(246 249 252 / 96%));
+    --kapa-header-line: rgb(148 163 184 / 22%);
+    --kapa-header-shadow: 0 6px 18px rgb(15 39 66 / 8%);
+    --kapa-blue-soft: #2563eb;
+    --kapa-blue-tint: #60a5fa;
+    --kapa-strip: linear-gradient(135deg, #0f172a 0%, #1e3a8a 48%, #1d4ed8 78%, #2563eb 100%);
 }

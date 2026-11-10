@@ -7,7 +7,8 @@ import { BASE_PATH } from '@/utils/base-path';
 import { BrandLogo } from './BrandLogo';
 import './app-logo.scss';
 
-export const AppLogo = () => {
+/** On phones the logo shows only to visitors (logged in, the account switcher takes its place), like the reference bot. */
+export const AppLogo = ({ showOnMobile = false }: { showOnMobile?: boolean }) => {
     const { isDesktop } = useDevice();
 
     // Get logo configuration from brand.config.json
@@ -15,11 +16,14 @@ export const AppLogo = () => {
     // '/' means the app's home, which may be a sub-folder (e.g. GitHub Pages)
     const logoUrl = logoConfig.link_url && logoConfig.link_url !== '/' ? logoConfig.link_url : BASE_PATH;
 
-    // Only render the logo on desktop screens
-    if (!isDesktop) return null;
+    if (!isDesktop && !showOnMobile) return null;
 
     return (
-        <a href={logoUrl} className='app-header__logo' aria-label={localize('Home')}>
+        <a
+            href={logoUrl}
+            className={`app-header__logo${isDesktop ? '' : ' app-header__logo--mobile'}`}
+            aria-label={localize('Home')}
+        >
             {/* [AI] Use configurable brand logo from brand.config.json */}
             <BrandLogo width={120} height={32} fill='var(--text-general)' />
             {/* [/AI] */}

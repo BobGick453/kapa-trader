@@ -9,12 +9,12 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   await pg.goto('http://localhost:8770/kapa-trader/'); await pg.waitForTimeout(4500); await pg.click('.kapa-login .kapa-btn'); await pg.waitForTimeout(6000);
   for (const t of ['Skip', 'Close']) { const x = pg.getByRole('button', { name: t, exact: true }).first(); if (await x.isVisible().catch(() => false)) await x.click().catch(() => {}); }
   const expect = { switcher: /DIGIT(UNDER|OVER)/, printer: /DIGITOVER/, goldoe: /DIGIT(EVEN|ODD)/, profitmaker: /DIGITOVER|DIGITUNDER|DIGIT(EVEN|ODD)/ };
-  const names = { switcher: 'Digit Switcher', printer: 'Dollar Printer', goldoe: 'Gold Premium Odd/Even', profitmaker: 'Profit Maker' };
+  const names = { switcher: 'Digit Switcher Bot (1)', printer: 'Dollar Printer (1)', goldoe: 'Gold Premium Odd And Even', profitmaker: 'Profit Maker Bot (1)' };
   let shot = false;
   for (const key of Object.keys(names)) {
     await pg.click('#id-free-bot'); await pg.waitForTimeout(800);
-    if (!shot) { await pg.locator('.free-bot__section').first().scrollIntoViewIfNeeded(); await pg.screenshot({ path: 'x/freebot-classic.png' }); shot = true; }
-    await pg.locator('.free-bot__card', { hasText: names[key] }).locator('.free-bot__load').first().click();
+    if (!shot) { await pg.locator('.free-bot__grid').first().scrollIntoViewIfNeeded(); await pg.screenshot({ path: 'x/freebot-classic.png' }); shot = true; }
+    await pg.locator('.free-bot__card', { hasText: names[key] }).locator('.free-bot__btn--ai').first().click();
     await pg.waitForTimeout(1500);
     const msg = await pg.textContent('.kapa-scanmsg').catch(() => '');
     ok(/loaded from Free Bot/.test(msg), `${names[key]}: opens KAPA AI with the bot loaded`);

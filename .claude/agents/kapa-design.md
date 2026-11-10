@@ -10,8 +10,8 @@ Your area (in `../kapa-platform`): SCSS and presentational TSX across `src/` —
 
 How you work:
 1. The owner wants the look of the reference bot (goldstandardmarket.site): study it (it can be fetched and
-   rendered locally with a fake Deriv), then rebuild the look in Kapa's own code and assets. Never copy its
-   code, images, videos or the "Pegasus" brand; Kapa keeps its name and logo.
+   rendered locally with a fake Deriv), then match it closely. Since 2026-11-09 its owner has authorised reuse of its look, animations and visual
+   assets (see CLAUDE.md); Kapa keeps its own name and logo, never "Pegasus"/"GSM" or the reference's logo.
 2. Phones get the phone layout; the browser's desktop-site mode and computers get the wide layout. Check
    360, 412 (Pixel 7), 768 and 1366 px, light and dark themes, and that nothing overflows horizontally.
 3. Compare before/after with screenshots (Playwright is installed; `qa/browser/layouts.js` is a starting

@@ -19,7 +19,7 @@
  *    to trade when even that one is priced much worse than usual;
  * 2. starts a recovery cycle only when every stake of the whole cycle fits under the stop-loss and
  *    the maximum stake, so a losing run ends at a known loss instead of a stake it can't afford;
- * 3. for Pegasus, stakes what one win needs to reach the take-profit ("bold play"). Dubins and
+ * 3. for KAPA Target, stakes what one win needs to reach the take-profit ("bold play"). Dubins and
  *    Savage proved that, when every bet pays less than its odds, bold play gives the highest chance
  *    of reaching a goal before losing a budget; it also stakes the least in total on the way.
  *
@@ -48,7 +48,7 @@ export const DEFAULT_PRESETS = {
     // before the stop-loss, computed exactly from Deriv's live prices (see apexChoice)
     apex: { mode: 'target', group: 'all', martingale: 1, maxLosses: 30 },
     // Bold play towards the take-profit on the best-priced 50% contract
-    pegasus: { mode: 'target', group: 'half', martingale: 1, maxLosses: 20 },
+    target: { mode: 'target', group: 'half', martingale: 1, maxLosses: 20 },
     // Stake ×2.1 after a loss (one win then covers the cycle), only for cycles that fit the stop-loss
     martingale: { mode: 'double', group: 'half', martingale: 2.1, maxLosses: 6 },
     // After a loss, the stake one win needs to get back every loss of the cycle plus the base profit
@@ -56,11 +56,12 @@ export const DEFAULT_PRESETS = {
 };
 
 /**
- * Below this expected result per 1 staked (a margin above 5%), KAPA AI doesn't trade. Deriv's public
- * price on 50% contracts keeps 2.35%; a connection that pays much less (for example because of an app
+ * Below this expected result per 1 staked (a margin above 12%, the default of "maximum Deriv margin"),
+ * KAPA AI doesn't trade. Deriv's public price keeps 1.4% to 2.35% on the contracts KAPA AI trades (10.7% on
+ * the rare 10% contracts); a connection that pays much less (for example because of an app
  * markup) makes every strategy lose several times faster, so KAPA AI stops and says why.
  */
-export const MIN_EXPECTED = -0.05;
+export const MIN_EXPECTED = -0.12;
 
 /** Settings of the Premium bots in the Free Bot library; only members receive them. */
 export const DEFAULT_BOTS = {
@@ -68,7 +69,10 @@ export const DEFAULT_BOTS = {
     'odd-oscars': { xml: 'oscars_grind', symbol: 'R_25', tradetype: 'evenodd', type: 'DIGITODD', stake: 1, unit: 1, profit: 5, loss: 15, maxStake: 4, duration: 1 },
 };
 
-const PRESET_KEYS = ['apex', 'pegasus', 'martingale', 'recover'];
+const PRESET_KEYS = ['apex', 'target', 'martingale', 'recover'];
+/** Older names still sent by saved settings or kept in PREMIUM_RULES ("Pegasus" was renamed KAPA Target). */
+export const PRESET_ALIASES = { pegasus: 'target' };
+export const presetKey = k => (typeof k === 'string' && Object.hasOwn(PRESET_ALIASES, k) ? PRESET_ALIASES[k] : k);
 /**
  * Most losses in a row a session may take. Apex's default (30) is the value its real-tick backtests use;
  * a run that long is rare, and every stake still fits under the stop-loss whatever this limit is.
@@ -89,7 +93,8 @@ export const loadRules = env => {
     }
     const presets = { ...DEFAULT_PRESETS };
     for (const k of PRESET_KEYS) {
-        const p = custom.presets?.[k];
+        const old = Object.keys(PRESET_ALIASES).find(o => PRESET_ALIASES[o] === k);
+        const p = custom.presets?.[k] ?? (old ? custom.presets?.[old] : undefined);
         if (!p) continue;
         const ok =
             MODES.includes(p.mode) &&
@@ -153,7 +158,7 @@ export const cleanRatios = r => {
 
 /** Validates settings sent by the website. Returns { settings } or { error }. Limits are enforced here, not in the browser. */
 export const validateSettings = (body, presets = DEFAULT_PRESETS) => {
-    const preset = body?.preset;
+    const preset = presetKey(body?.preset);
     let rules;
     if (preset === 'custom') {
         const c = body.custom || {};
@@ -548,7 +553,7 @@ export const labStrategies = (presets, { stake, takeProfit, stopLoss, capital })
     };
     return {
         apex: { ...preset('apex'), apex: true },
-        pegasus: preset('pegasus'),
+        target: preset('target'),
         martingale: preset('martingale'),
         recover: preset('recover'),
         fixed: { ...base, mode: 'none', base: GROUPS.half, rec: GROUPS.half, martingale: 1, filter: false, stake, stopLoss, maxStake: stopLoss, maxLosses: 5 },

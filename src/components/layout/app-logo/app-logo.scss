@@ -11,3 +11,16 @@
         }
     }
 }
+
+// Phones and the 980px layout, visitors only: a smaller logo next to the menu button
+.app-header__logo--mobile {
+    min-width: 0;
+    height: 3.8rem;
+    padding-inline: 0.6rem;
+
+    svg {
+        width: max(9rem, min(28vw, 12rem));
+        max-width: 100%;
+        height: auto;
+    }
+}

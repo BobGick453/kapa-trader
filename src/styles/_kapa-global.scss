@@ -40,19 +40,23 @@ html:root {
     font-family: var(--brand-font-primary);
 }
 
-// ---- Page background: deep navy with two soft glows (top-left, bottom-right) ----
+// ---- Page background: deep navy with two soft glows (top-left, bottom-right) on the body; the app area itself
+// is the flat page colour, like the reference bot ----
 body.theme--dark,
 body.theme--light {
     background: var(--kapa-bg-glow), var(--kapa-bg);
+
+    .main,
+    .bot-dashboard.bot {
+        background: var(--kapa-bg);
+    }
 }
 
 body.theme--dark,
 body.theme--light {
-    .main,
     .main__container,
     .dc-tabs--main__tabs,
-    .dc-tabs__content--main__tabs,
-    .tab__dashboard__content {
+    .dc-tabs__content--main__tabs {
         background: transparent;
     }
 
@@ -73,6 +77,28 @@ body.theme--light {
         opacity: 1;
         transform: none;
     }
+}
+
+// Tab switch: the page that comes in fades and rises (the reference's "page enter"); inner tabs (Summary,
+// Transactions, Journal, Tutorials sections) do the same, quicker. The fill mode is "backwards" so no transform stays
+// on the page once it has arrived (a transform would re-anchor position: fixed children such as the run bar).
+@keyframes kapa-page-enter {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.992);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.dc-tabs__content > * {
+    animation: kapa-page-enter 0.3s k.$ease backwards;
+}
+
+.dc-tabs--main__tabs > .dc-tabs__content > * {
+    animation-duration: 0.48s;
 }
 
 @keyframes kapa-fade {
@@ -240,4 +266,451 @@ body .dc-progress-bar-tracker-rectangle {
 // KAPA AI page: no rectangle of its own over the page background
 body .kapa-ai {
     background: radial-gradient(900px 420px at 50% 0, rgb(17 37 92 / 45%) 0%, transparent 70%);
+}
+
+// ============================================================================
+// Second pass after the reference bot (authorised reuse of its look): light theme, motion of buttons and
+// windows, Bot Builder toolbar and blocks menu, run panel drawer, scrollbars. Values follow the reference.
+// ============================================================================
+
+// ---- Light theme: the template's colour set on the soft light palette ----
+:root .theme--light {
+    --general-main-1: #f6f9fc;
+    --general-main-2: #fff;
+    --general-main-3: #edf2f8;
+    --general-main-4: rgb(255 255 255 / 70%);
+    --general-section-1: #e6ecf3;
+    --general-section-2: #edf2f7;
+    --general-section-3: #fafafa;
+    --general-section-4: #f5f7fa;
+    --general-section-5: #e9eff6;
+    --general-hover: #e3eaf3;
+    --general-active: #dbe7f6;
+    --text-general: #66788d;
+    --text-less-prominent: #66788d;
+    --text-prominent: #0f2742;
+    --button-primary-hover: #163e78;
+    --button-secondary-default: #73869a;
+    --shadow-menu: rgb(15 39 66 / 18%);
+    --shadow-box: rgb(15 39 66 / 12%);
+    --state-normal: #f6f9fc;
+    --state-hover: #e4ebf4;
+    --state-active: #d8e6f7;
+    --border-normal: #ced9e5;
+    --border-normal-1: #ced9e5;
+    --border-normal-2: #d8e1eb;
+    --border-divider: #dfe7ef;
+}
+
+// ---- Selection and scrollbars ----
+::selection {
+    color: #fff;
+    background: var(--kapa-blue-soft);
+}
+
+body.theme--dark {
+    scrollbar-color: rgb(96 165 250 / 30%) transparent;
+
+    ::-webkit-scrollbar-thumb {
+        border: 0.2rem solid transparent;
+        border-radius: 999px;
+        background: rgb(96 165 250 / 26%) padding-box;
+    }
+}
+
+body.theme--light {
+    scrollbar-color: rgb(100 116 139 / 36%) transparent;
+
+    ::-webkit-scrollbar-thumb {
+        border: 0.2rem solid transparent;
+        border-radius: 999px;
+        background: rgb(100 116 139 / 30%) padding-box;
+    }
+}
+
+// ---- Buttons: smooth state changes, a small press ----
+.dc-btn {
+    transition:
+        color 0.22s ease,
+        background-color 0.22s ease,
+        border-color 0.22s ease,
+        box-shadow 0.22s ease,
+        filter 0.22s ease,
+        opacity 0.22s ease,
+        transform 0.22s k.$ease;
+}
+
+button:not(:disabled) {
+    -webkit-tap-highlight-color: transparent;
+}
+
+// (the floating buttons keep their own transform: they can be dragged)
+button:not(:disabled, [class*='kapa-fab']) {
+    &:active {
+        transform: translateY(1px) scale(0.985);
+    }
+}
+
+// ---- Windows: rise and settle in (template dialogs and modals) ----
+.dc-dialog__wrapper {
+    transition: opacity 0.32s;
+}
+
+.dc-dialog__dialog,
+.dc-modal__container {
+    transition:
+        transform 0.38s k.$ease,
+        opacity 0.32s ease;
+}
+
+.dc-dialog__wrapper--enter .dc-dialog__dialog,
+.dc-dialog__wrapper--exit .dc-dialog__dialog,
+.dc-modal__container--enter,
+.dc-modal__container--exit {
+    opacity: 0;
+    transform: translateY(10px) scale(0.975);
+}
+
+.dc-dialog__wrapper--enter-done .dc-dialog__dialog,
+.dc-modal__container--enter-done {
+    opacity: 1;
+    transform: none;
+}
+
+// ---- Bot Builder: toolbar, blocks menu, flyout ----
+.toolbar {
+    color: var(--kapa-text-1);
+}
+
+.toolbar__btn {
+    border-radius: var(--kapa-radius-btn) !important;
+    background: var(--kapa-primary) !important;
+    box-shadow: var(--kapa-shadow);
+}
+
+.toolbar__icon {
+    fill: var(--kapa-text-1);
+}
+
+.toolbar__group {
+    height: 4rem;
+    border: 1px solid var(--kapa-line) !important;
+    border-radius: var(--kapa-radius-btn) !important;
+    background: var(--kapa-surface) !important;
+    box-shadow: var(--kapa-shadow);
+}
+
+.toolbar__group-btn {
+    height: 4rem;
+    padding: 0 1.2rem;
+    border-radius: var(--kapa-radius-btn);
+    background: none;
+    color: var(--kapa-text-1);
+
+    &:hover {
+        background: var(--kapa-blue-tint);
+    }
+
+    &:active {
+        background: var(--kapa-inset-bg);
+        box-shadow: var(--kapa-inset-shadow);
+    }
+}
+
+.toolbar__wrapper {
+    @include mobile-or-tablet-screen {
+        background: var(--kapa-surface) !important;
+        box-shadow: var(--kapa-lift);
+    }
+}
+
+.vertical-divider {
+    width: 0.1rem;
+    height: 1.7rem;
+    margin: 0.8rem;
+    background-color: var(--kapa-line);
+}
+
+.db-toolbox {
+    color: var(--kapa-text-1);
+    background: var(--kapa-bg);
+    box-shadow: var(--kapa-lift);
+
+    &__content {
+        border: 1px solid var(--kapa-line);
+        border-radius: var(--kapa-radius-card);
+        background: var(--kapa-surface);
+        box-shadow: var(--kapa-shadow);
+        overflow: hidden;
+    }
+
+    &__header {
+        background-color: var(--kapa-inset-bg);
+        box-shadow: var(--kapa-inset-shadow);
+        color: var(--kapa-text-1);
+    }
+
+    &__title {
+        border-radius: var(--kapa-radius-btn);
+        background: var(--kapa-surface);
+        box-shadow: var(--kapa-shadow);
+        color: var(--kapa-text-1);
+    }
+
+    &__search-field .dc-input__container {
+        height: 3.2rem;
+        border-color: var(--kapa-line);
+        border-radius: var(--kapa-radius-btn);
+        background: var(--kapa-inset-bg);
+        box-shadow: var(--kapa-inset-shadow);
+
+        &:focus-within {
+            border-color: var(--kapa-blue-soft);
+        }
+    }
+
+    &__search-field .dc-input__field {
+        color: var(--kapa-text-1);
+    }
+
+    &__item {
+        color: var(--kapa-text-1);
+
+        &:hover {
+            background-color: var(--kapa-blue-tint);
+            color: var(--kapa-link);
+        }
+    }
+
+    &__description {
+        color: var(--kapa-text-2);
+    }
+
+    &__row {
+        border-top: 1px solid var(--kapa-line);
+
+        &:last-of-type {
+            border-bottom: 1px solid var(--kapa-line);
+        }
+
+        &--active,
+        .db-toolbox__category--selected {
+            background-color: var(--kapa-blue-tint);
+            color: var(--kapa-link);
+        }
+
+        .db-toolbox__category--selected {
+            box-shadow: var(--kapa-inset-shadow);
+        }
+
+        &--pending {
+            background-color: var(--kapa-inset-bg);
+            box-shadow: var(--kapa-inset-shadow);
+            opacity: 0.8;
+        }
+    }
+
+    &__sub-category-row:hover,
+    &__sub-category-row--active {
+        background-color: var(--kapa-blue-tint);
+        color: var(--kapa-link);
+    }
+
+    &__button.dc-btn {
+        border-radius: var(--kapa-radius-btn);
+        background: var(--kapa-primary);
+        box-shadow: var(--kapa-shadow);
+        color: #fff;
+    }
+}
+
+// Blocks: a soft blue glow while dragging and when a block snaps in
+.blocklyBlockCanvas.blocklyCanvasTransitioning,
+.blocklyBubbleCanvas.blocklyCanvasTransitioning {
+    transition: transform 0.34s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.blocklyDragging > .blocklyPath {
+    filter: drop-shadow(0 5px 8px rgb(37 99 235 / 18%));
+    transition:
+        filter 0.22s ease,
+        fill-opacity 0.22s ease;
+}
+
+.blocklyHighlightedConnectionPath {
+    stroke: #60a5fa;
+    stroke-width: 4px;
+    filter: drop-shadow(0 0 4px rgb(59 130 246 / 45%));
+    animation: kapa-connection-pulse 0.7s ease-in-out infinite alternate;
+}
+
+.blocklyInsertionMarker > .blocklyPath {
+    stroke: #60a5fa;
+    stroke-width: 2px;
+    filter: drop-shadow(0 0 4px rgb(59 130 246 / 30%));
+}
+
+.blocklyBlockConnected > .blocklyPath {
+    animation: kapa-block-snap 0.5s k.$ease;
+}
+
+@keyframes kapa-connection-pulse {
+    to {
+        opacity: 0.58;
+    }
+}
+
+@keyframes kapa-block-snap {
+    from {
+        filter: brightness(1.18) drop-shadow(0 0 6px rgb(96 165 250 / 42%));
+    }
+    to {
+        filter: none;
+    }
+}
+
+// ---- Run panel drawer (desktop) and sheet (phones) ----
+.dc-drawer {
+    background: var(--kapa-surface);
+    box-shadow: var(--kapa-lift);
+    color: var(--kapa-text-1);
+}
+
+.dc-drawer__container {
+    background: var(--kapa-surface-flat);
+    box-shadow: var(--kapa-shadow);
+}
+
+.dc-drawer__toggle {
+    border-inline: 1px solid var(--kapa-line);
+    background: var(--kapa-surface) !important;
+    box-shadow: var(--kapa-shadow);
+
+    svg {
+        fill: var(--kapa-link);
+    }
+
+    @include mobile-or-tablet-screen {
+        border-top: 1px solid var(--kapa-line);
+        border-radius: var(--kapa-radius-btn) var(--kapa-radius-btn) 0 0;
+    }
+}
+
+.run-panel__container {
+    border-left: 1px solid var(--kapa-line);
+    background: var(--kapa-surface-flat) !important;
+}
+
+.run-panel__content {
+    background: var(--kapa-surface-flat);
+}
+
+.run-panel__footer-button {
+    border-radius: 999px !important;
+    background: var(--kapa-surface) !important;
+    box-shadow: var(--kapa-shadow);
+}
+
+.run-panel__stat {
+    border-top: 1px solid var(--kapa-line);
+    background: var(--kapa-inset-bg) !important;
+    box-shadow: inset 0 0.8rem 1.8rem rgb(0 5 14 / 20%);
+}
+
+.theme--light .run-panel__stat {
+    box-shadow: inset 0 0.8rem 1.8rem rgb(148 163 184 / 10%);
+}
+
+.run-panel__stat--info-item {
+    color: var(--kapa-link);
+    font-weight: 600;
+}
+
+// New rows in Transactions and Journal slide in
+.journal .ReactVirtualized__Grid__innerScrollContainer > :first-child,
+.transactions .ReactVirtualized__Grid__innerScrollContainer > :first-child {
+    animation: kapa-row-enter 0.32s k.$ease forwards;
+}
+
+@keyframes kapa-row-enter {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+// ---- Admin: the shared surfaces (styles only; the page lives in pages/admin) ----
+body .kapa-admin {
+    color: var(--kapa-text-1);
+    padding: 3.2rem 2rem 4rem;
+    animation: kapa-page-enter 0.48s k.$ease backwards;
+
+    .kapa-admin__card {
+        @include k.surface;
+
+        padding: 2.4rem;
+
+        h2 {
+            color: var(--kapa-gold);
+        }
+
+        p {
+            color: var(--kapa-text-2);
+        }
+
+        input {
+            border: 1px solid var(--kapa-line);
+            border-radius: var(--kapa-radius-btn);
+            background: var(--kapa-inset-bg);
+            box-shadow: var(--kapa-inset-shadow);
+            color: var(--kapa-text-1);
+
+            &:focus {
+                border-color: var(--kapa-blue-soft);
+                outline: none;
+            }
+        }
+    }
+
+    // Gold button: the reference's gold gradient, clearly a button even before the field is filled
+    .kapa-admin__gold {
+        border-radius: var(--kapa-radius-btn);
+        background: var(--kapa-gold-cta);
+        color: #111827;
+        font-weight: 800;
+        box-shadow: 0 10px 24px rgb(217 165 44 / 25%);
+        transition:
+            transform 0.22s k.$ease,
+            filter 0.22s ease,
+            opacity 0.22s ease;
+
+        &:hover:not(:disabled) {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+        }
+
+        &:disabled {
+            opacity: 0.72;
+            filter: saturate(0.75);
+            box-shadow: none;
+        }
+    }
+
+    .kapa-admin__ghost {
+        border: 1px solid var(--kapa-line);
+        border-radius: 999px;
+        background: var(--kapa-surface-flat);
+        box-shadow: var(--kapa-shadow);
+        color: var(--kapa-link);
+    }
+
+    .kapa-admin__kpis div {
+        @include k.inset(var(--kapa-radius-btn));
+
+        border: 1px solid var(--kapa-line);
+    }
 }
